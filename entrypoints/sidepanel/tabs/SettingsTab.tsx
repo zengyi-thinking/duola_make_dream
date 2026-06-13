@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
+import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import type { MemorySummary, RuntimeConfig } from '@/lib/agent/types';
 import { createMemoryDeleteMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
 import { getRuntimeConfig, updateRuntimeConfig } from '@/lib/storage/local';
@@ -67,6 +68,16 @@ export default function SettingsTab(props: SettingsTabProps) {
 
   return (
     <div className="tab-panel">
+      {/* ===== 封面（星澈 PocketAgent）===== */}
+      <section className="settings-cover">
+        <PocketBuddyAvatar avatar="xingche-3d" mood="idle" size={64} />
+        <div className="settings-cover__copy">
+          <p className="section-label">PocketAgent</p>
+          <h2>设置中心</h2>
+          <p className="soft-text">配置你的 AI 供应商，查看 Agent 的记忆与工作历史。</p>
+        </div>
+      </section>
+
       {/* ===== LLM 供应商 ===== */}
       <section className="panel-card">
         <div className="panel-head"><h2>LLM 供应商</h2>

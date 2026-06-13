@@ -379,6 +379,31 @@ button, textarea, input, select { font: inherit; }
 .tab-panel::-webkit-scrollbar-track { background: transparent; }
 .tab-panel::-webkit-scrollbar-thumb { background: var(--pb-primary); border-radius: 2px; }
 
+/* ===== Settings Cover（星澈封面）===== */
+.settings-cover {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(221,236,255,0.6));
+  border: 1px solid var(--pb-line);
+}
+
+.settings-cover__copy h2 { margin: 2px 0 4px; font-size: 17px; }
+.settings-cover__copy .section-label { margin: 0; }
+
+/* ===== Empty Avatar（空状态 chibi）===== */
+.panel-card--empty {
+  text-align: center;
+}
+
+.empty-avatar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
 /* ===== Settings Tab ===== */
 .settings-section { margin-top: 2px; }
 .settings-section label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 3px; }

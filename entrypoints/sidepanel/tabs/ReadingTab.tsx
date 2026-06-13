@@ -296,7 +296,7 @@ export default function ReadingTab(props: ReadingTabProps) {
           </ResultCard>
         </div>
       ) : (
-        <EmptyCard title="先读取，再分析" body="当前阶段只在你主动点击后读取当前页。分析结果会包括摘要、关键观点、产品机会和可记住信息。" />
+        <EmptyCard avatar title="先读取，再分析" body="点击「读取当前页」，小口袋云云会帮你提炼摘要、关键观点、产品机会和可记住信息。" />
       )}
     </div>
   );

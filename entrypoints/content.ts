@@ -31,11 +31,7 @@ export default defineContentScript({
         display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2147483647; transition: transform 120ms ease;
       }
       .pb-fab:hover { transform: translateY(-2px); }
-      .pb-pocket-glyph { width: 26px; height: 18px; border: 2px solid #15304a; border-top: 0; border-radius: 0 0 14px 14px; position: relative; background: rgba(167, 216, 255, 0.6); }
-      .pb-pocket-glyph::before {
-        content: ""; position: absolute; left: 50%; top: -10px; width: 22px; height: 10px; transform: translateX(-50%);
-        border: 2px solid #15304a; border-bottom: 0; border-radius: 12px 12px 0 0; background: #fff;
-      }
+      .pb-fab__img { width: 100%; height: 100%; border-radius: 18px; object-fit: cover; display: block; pointer-events: none; }
       .pb-pocket-btn {
         position: fixed; display: none; padding: 8px 12px; border-radius: 999px; border: 2px solid #15304a; background: #ffffff; color: #15304a;
         font-size: 12px; font-weight: 700; cursor: pointer; z-index: 2147483647; box-shadow: 0 10px 24px rgba(18, 89, 139, 0.16);
@@ -55,8 +51,13 @@ export default defineContentScript({
     fab.className = 'pb-fab';
     fab.type = 'button';
     fab.title = 'PocketBuddy';
-    // privacy-check: allow — 注入已知安全的 SVG glyph 到 Shadow DOM
-    fab.innerHTML = '<span class="pb-pocket-glyph"></span>';
+
+    // 用蓝白口袋精灵头像作为浮动按钮图标
+    const fabImg = document.createElement('img');
+    fabImg.src = (browser.runtime as unknown as { getURL: (path: string) => string }).getURL('/avatars/pocketbuddy-lanling-icon.png');
+    fabImg.alt = '';
+    fabImg.className = 'pb-fab__img';
+    fab.append(fabImg);
 
     const pocketButton = document.createElement('button');
     pocketButton.className = 'pb-pocket-btn';

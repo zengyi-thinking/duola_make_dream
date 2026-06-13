@@ -1,30 +1,93 @@
 .pocket-buddy-avatar {
-  width: 62px;
-  height: 62px;
+  position: relative;
   flex-shrink: 0;
-  filter: drop-shadow(0 14px 18px rgba(37, 87, 218, 0.12));
+  border-radius: 18px;
+  overflow: visible;
+  filter: drop-shadow(0 8px 16px rgba(37, 87, 218, 0.18));
 }
 
-.pocket-buddy-avatar__svg {
+.pocket-buddy-avatar__img {
   width: 100%;
   height: 100%;
   display: block;
-  transition: transform 160ms ease, filter 160ms ease;
+  object-fit: contain;
+  border-radius: 18px;
+  transition: transform 200ms ease, filter 200ms ease;
 }
 
-.pocket-buddy-avatar[data-mood='thinking'] .pocket-buddy-avatar__svg {
-  transform: rotate(-5deg) translateY(1px);
+/* ===== Mood 动画（叠加在头像上，传递情绪）===== */
+
+/* 思考：轻微左右摇摆 + 三点省略号 */
+.pocket-buddy-avatar[data-mood='thinking'] .pocket-buddy-avatar__img {
+  animation: pb-thinking 1.6s ease-in-out infinite;
 }
 
-.pocket-buddy-avatar[data-mood='spark'] .pocket-buddy-avatar__svg {
-  transform: translateY(-1px) scale(1.04);
-  filter: brightness(1.03);
+@keyframes pb-thinking {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
 }
 
-.pocket-buddy-avatar[data-mood='idle'] .pocket-buddy-avatar__svg {
-  opacity: 0.94;
+/* 灵感火花：放大 + 轻微发光 */
+.pocket-buddy-avatar[data-mood='spark'] .pocket-buddy-avatar__img {
+  animation: pb-spark 0.5s ease;
+  filter: brightness(1.06) drop-shadow(0 0 8px rgba(37, 87, 218, 0.4));
 }
 
-.pocket-buddy-avatar:hover .pocket-buddy-avatar__svg {
-  transform: translateY(-1px) scale(1.03);
+@keyframes pb-spark {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1.05); }
+}
+
+/* 闲置：缓慢呼吸 */
+.pocket-buddy-avatar[data-mood='idle'] .pocket-buddy-avatar__img {
+  animation: pb-breathe 3s ease-in-out infinite;
+}
+
+@keyframes pb-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.03); opacity: 1; }
+}
+
+/* 温暖（默认）：悬浮时上浮 */
+.pocket-buddy-avatar[data-mood='warm'] {
+  animation: pb-float 2.5s ease-in-out infinite;
+}
+
+@keyframes pb-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+.pocket-buddy-avatar:hover .pocket-buddy-avatar__img {
+  transform: scale(1.06);
+}
+
+/* ===== 思考状态的三点省略号 ===== */
+.pocket-buddy-avatar__dots {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 3px 5px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(37, 87, 218, 0.2);
+}
+
+.pocket-buddy-avatar__dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #2557da;
+  animation: pb-dot 1.2s ease-in-out infinite;
+}
+
+.pocket-buddy-avatar__dots span:nth-child(2) { animation-delay: 0.2s; }
+.pocket-buddy-avatar__dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pb-dot {
+  0%, 60%, 100% { transform: scale(0.6); opacity: 0.5; }
+  30% { transform: scale(1); opacity: 1; }
 }

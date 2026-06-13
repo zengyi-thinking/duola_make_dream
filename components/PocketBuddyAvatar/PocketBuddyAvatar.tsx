@@ -1,140 +1,55 @@
 import type { PocketBuddyMood } from '@/lib/agent/types';
+import { pocketAvatars } from '@/lib/brand/avatars';
 import './PocketBuddyAvatar.css';
 
 interface PocketBuddyAvatarProps {
   mood?: PocketBuddyMood;
+  /** 使用哪个头像，默认主形象云屿 */
+  avatar?: 'yunyu-main' | 'yunyun-chibi' | 'lanling-icon' | 'xingche-3d';
+  /** 显示尺寸 px */
+  size?: number;
+  /** 思考时是否切到 chibi 加载动画 */
+  useChibiWhenThinking?: boolean;
+  className?: string;
 }
 
+/**
+ * PocketBuddy 头像组件（PNG 版）。
+ *
+ * 温度感设计：
+ * - 主形象显示对应头像
+ * - mood 通过 CSS 动画叠加（thinking 摇摆、spark 发光、idle 呼吸）
+ * - useChibiWhenThinking：思考时自动切到小口袋云云 + 弹跳加载动画
+ */
 export default function PocketBuddyAvatar({
   mood = 'warm',
+  avatar = 'yunyu-main',
+  size = 56,
+  useChibiWhenThinking = false,
+  className = '',
 }: PocketBuddyAvatarProps) {
+  // 思考时切到 chibi 做加载动画
+  const effectiveAvatar = useChibiWhenThinking && mood === 'thinking' ? 'yunyun-chibi' : avatar;
+  const meta = pocketAvatars[effectiveAvatar];
+
   return (
-    <div className="pocket-buddy-avatar" data-mood={mood} aria-hidden="true">
-      <svg
-        className="pocket-buddy-avatar__svg"
-        viewBox="0 0 128 128"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <circle cx="64" cy="68" r="54" fill="#F2F8FF" />
-        <ellipse cx="64" cy="112" rx="35" ry="7" fill="#DCEEFF" />
-
-        <path
-          d="M63.8 17.2C63.8 14.2 65.4 11.8 67.6 11.8C69.8 11.8 71.4 14.2 71.4 17.2C71.4 19.9 69.8 22.2 67.6 22.2C65.4 22.2 63.8 19.9 63.8 17.2Z"
-          fill="#FFFFFF"
-          stroke="#2557DA"
-          strokeWidth="2.6"
-        />
-        <path d="M67.6 22.4V27.8" stroke="#2557DA" strokeWidth="2.6" strokeLinecap="round" />
-
-        <path
-          d="M64 24C81.3 24 95.4 30.8 102.4 43.2C108.5 54 109.4 70.4 106 84C102.5 98 92.4 109 64 109C35.6 109 25.5 98 22 84C18.6 70.4 19.5 54 25.6 43.2C32.6 30.8 46.7 24 64 24Z"
-          fill="#FFFFFF"
-          stroke="#2557DA"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        <path
-          d="M87.4 34.6C96.1 42.6 99.2 54.8 98.5 72.4C97.8 89 89.8 101.1 72.9 105.8C89.6 107.8 100.4 100.1 104.6 85.8C108.2 73.4 107 56.6 102 44.8C98.6 37 93.7 32.2 87.4 34.6Z"
-          fill="#DDECFF"
-        />
-        <path
-          d="M37.8 33.7C40.8 30.4 45.2 28.2 50.8 27.2"
-          stroke="#FFFFFF"
-          strokeWidth="4.2"
-          strokeLinecap="round"
-          opacity="0.95"
-        />
-
-        <path
-          d="M28.6 65.2C23.8 67.4 20.7 71.2 19.4 76.5C18.9 78.8 20.4 81 22.5 81.4C24.6 81.8 26.7 80.4 27.3 78.2C28.2 74.7 30.3 72.1 33.8 70.2"
-          fill="#D9EBFF"
-        />
-        <path
-          d="M28.6 65.2C23.8 67.4 20.7 71.2 19.4 76.5C18.9 78.8 20.4 81 22.5 81.4C24.6 81.8 26.7 80.4 27.3 78.2C28.2 74.7 30.3 72.1 33.8 70.2"
-          stroke="#2557DA"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        <path
-          d="M95.6 63.8C101.4 65.6 106.3 69.4 109.2 75.2C110.2 77.2 109.4 79.7 107.4 80.8C105.4 81.8 102.9 81 101.9 79C100 75.1 96.9 72.4 92.4 70.8"
-          fill="#D9EBFF"
-        />
-        <path
-          d="M95.6 63.8C101.4 65.6 106.3 69.4 109.2 75.2C110.2 77.2 109.4 79.7 107.4 80.8C105.4 81.8 102.9 81 101.9 79C100 75.1 96.9 72.4 92.4 70.8"
-          stroke="#2557DA"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        <path
-          d="M42.2 102.8C39.8 104 38.1 106 37.4 108.4C36.8 110.4 37.8 112.4 39.7 113C41.7 113.6 43.8 112.5 44.4 110.6C44.7 109.6 45.5 108.7 46.8 108"
-          fill="#D9EBFF"
-        />
-        <path
-          d="M42.2 102.8C39.8 104 38.1 106 37.4 108.4C36.8 110.4 37.8 112.4 39.7 113C41.7 113.6 43.8 112.5 44.4 110.6C44.7 109.6 45.5 108.7 46.8 108"
-          stroke="#2557DA"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        <path
-          d="M80.6 108.1C82 108.8 82.9 109.8 83.2 110.9C83.8 112.8 85.9 113.9 87.8 113.3C89.8 112.7 90.8 110.7 90.2 108.7C89.5 106.2 87.8 104.2 85.3 103"
-          fill="#D9EBFF"
-        />
-        <path
-          d="M80.6 108.1C82 108.8 82.9 109.8 83.2 110.9C83.8 112.8 85.9 113.9 87.8 113.3C89.8 112.7 90.8 110.7 90.2 108.7C89.5 106.2 87.8 104.2 85.3 103"
-          stroke="#2557DA"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        <ellipse cx="45.5" cy="60.4" rx="5.2" ry="4.3" fill="#FFCAD8" />
-        <ellipse cx="89.5" cy="60.4" rx="5.2" ry="4.3" fill="#FFCAD8" />
-        <circle cx="54.2" cy="55.6" r="4.2" fill="#2557DA" />
-        <circle cx="80.8" cy="55.6" r="4.2" fill="#2557DA" />
-
-        <path
-          d="M57.4 69C57.4 63.9 62 61.6 67.4 61.6C72.8 61.6 77.4 63.9 77.4 69V72.2C77.4 78.2 72.3 82.8 67.4 82.8C62.5 82.8 57.4 78.2 57.4 72.2V69Z"
-          fill="#2557DA"
-        />
-        <path
-          d="M60.8 69.1C63 71 65.3 72 67.5 72C69.7 72 72 71 74.2 69.1"
-          stroke="#FFFFFF"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-        />
-        <path
-          d="M67.4 72.6C70 72.6 72 74.2 72 76.2C72 78.2 70 79.8 67.4 79.8C64.8 79.8 62.8 78.2 62.8 76.2C62.8 74.2 64.8 72.6 67.4 72.6Z"
-          fill="#FFB3C7"
-        />
-
-        <path
-          d="M49.8 84.4H84.2V95.2C84.2 101.3 79.2 106.2 67 106.2C54.8 106.2 49.8 101.3 49.8 95.2V84.4Z"
-          fill="#B7DCFF"
-          stroke="#2557DA"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M54.6 84.4H79.4"
-          stroke="#2557DA"
-          strokeWidth="2.3"
-          strokeLinecap="round"
-          strokeDasharray="2.8 4"
-        />
-        <path d="M67 89.4V100.6" stroke="#2557DA" strokeWidth="2.4" strokeLinecap="round" />
-        <path d="M58.7 92.3V99.4" stroke="#2557DA" strokeWidth="2.2" strokeLinecap="round" opacity="0.86" />
-        <path d="M75.3 92.3V99.4" stroke="#2557DA" strokeWidth="2.2" strokeLinecap="round" opacity="0.86" />
-      </svg>
+    <div
+      className={`pocket-buddy-avatar ${className}`}
+      data-mood={mood}
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <img
+        className="pocket-buddy-avatar__img"
+        src={meta.path}
+        alt={meta.name}
+        draggable={false}
+      />
+      {mood === 'thinking' && (
+        <span className="pocket-buddy-avatar__dots" aria-hidden="true">
+          <span /><span /><span />
+        </span>
+      )}
     </div>
   );
 }

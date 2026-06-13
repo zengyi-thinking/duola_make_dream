@@ -158,7 +158,7 @@ export default function CreativeTab(props: CreativeTabProps) {
           </ResultCard>
         </div>
       ) : (
-        <EmptyCard title="输入想法开始" body="输入一句话，生成产品概念、图片 Prompt 和 MVP 计划。" />
+        <EmptyCard avatar title="输入想法开始" body="小口袋云云已就位，输入一句话就能生成产品概念、图片 Prompt 和 MVP 计划。" />
       )}
     </div>
   );

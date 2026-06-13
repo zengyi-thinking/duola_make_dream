@@ -81,7 +81,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="hero-card">
-        <PocketBuddyAvatar mood={mood} />
+        <PocketBuddyAvatar mood={mood} size={52} useChibiWhenThinking />
         <div className="hero-copy">
           <h1>PocketBuddy</h1>
           <p className="hero-text">{statusText}</p>
