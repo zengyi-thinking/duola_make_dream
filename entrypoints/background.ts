@@ -1,142 +1,272 @@
-import type { AgentMessage, IntentType } from '@/lib/agent/types';
-import { DORA_PERSONALITY } from '@/lib/agent/personality';
-import type { MessageRequest, MessageResponse } from '@/lib/messaging/types';
-
-/**
- * Background Service Worker — Agent 的核心大脑
- *
- * 职责：
- * 1. 监听来自 Popup 和 Content Script 的消息
- * 2. 调度 Agent 任务（意图识别 → 路由 → 工具调用）
- * 3. 管理记忆和用户画像
- */
+import { browser } from 'wxt/browser';
+import { defineBackground } from 'wxt/utils/define-background';
+import { processIdeaSubmission } from '@/lib/agent/core';
+import { buildHarnessPatchFromFeedback } from '@/lib/agent/harness';
+import type {
+  ContextCaptureResult,
+  FeedbackRecordResult,
+  IdeaSubmitResult,
+  MemorySummary,
+} from '@/lib/agent/types';
+import {
+  applyFeedbackToProfile,
+  deleteMemory,
+  ensureProfile,
+  getMemorySummary,
+  saveContextSnippet,
+  saveFeedback,
+  saveHarnessPatch,
+  saveProfile,
+} from '@/lib/memory';
+import { readStorage } from '@/lib/storage/local';
+import type {
+  AppMessage,
+  AppMessageResponse,
+  ContextCaptureSelectionRequest,
+} from '@/lib/messaging/types';
 
 export default defineBackground(() => {
-  console.log('[DoraAgent] 🤖 哆啦造梦 Agent 已启动', { id: browser.runtime.id });
-
-  // 监听来自 Popup / Content Script 的消息
-  browser.runtime.onMessage.addListener(
-    (message: MessageRequest, sender, sendResponse) => {
-      handleMessage(message, sender)
-        .then(sendResponse)
-        .catch((err) => {
-          console.error('[DoraAgent] 消息处理出错:', err);
-          sendResponse({ success: false, error: String(err) } as MessageResponse);
-        });
-
-      // 返回 true 表示异步响应
-      return true;
-    },
-  );
+  browser.runtime.onMessage.addListener((message: AppMessage) => handleMessage(message));
 });
 
-/**
- * 处理入站消息，分发给对应的处理器
- */
-async function handleMessage(
-  message: MessageRequest,
-  _sender: browser.Runtime.MessageSender,
-): Promise<MessageResponse> {
-  console.log('[DoraAgent] 收到消息:', message.type);
+async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
+  try {
+    switch (message.type) {
+      case 'idea.submit': {
+        const payload = await handleIdeaSubmit(message.payload.text);
+        return {
+          type: 'idea.submit',
+          requestId: message.requestId,
+          source: 'background',
+          success: true,
+          payload,
+        };
+      }
 
-  switch (message.type) {
-    case 'chat':
-      return handleChat(message.payload as AgentMessage);
+      case 'feedback.record': {
+        const payload = await handleFeedbackRecord(message.payload.artifactId, message.payload.action);
+        return {
+          type: 'feedback.record',
+          requestId: message.requestId,
+          source: 'background',
+          success: true,
+          payload,
+        };
+      }
 
-    case 'get_profile':
-      return handleGetProfile();
+      case 'memory.get': {
+        const payload = await getMemorySummary();
+        return {
+          type: 'memory.get',
+          requestId: message.requestId,
+          source: 'background',
+          success: true,
+          payload,
+        };
+      }
 
-    case 'page_context':
-      return handlePageContext(message.payload);
+      case 'memory.delete': {
+        const payload = await deleteMemory(message.payload.scope);
+        return {
+          type: 'memory.delete',
+          requestId: message.requestId,
+          source: 'background',
+          success: true,
+          payload,
+        };
+      }
 
-    default:
-      return { success: false, error: '未知的消息类型' };
+      case 'context.captureSelection': {
+        const payload = await handleContextCapture(message.payload);
+        return {
+          type: 'context.captureSelection',
+          requestId: message.requestId,
+          source: 'background',
+          success: true,
+          payload,
+        };
+      }
+    }
+  } catch (error) {
+    return createErrorResponse(
+      message,
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 
-/**
- * 处理聊天消息 — Agent 核心流程
- * TODO: Phase 2 接入 LLM
- */
-async function handleChat(userMessage: AgentMessage): Promise<MessageResponse> {
-  // 1. 意图识别（骨架）
-  const intent: IntentType = recognizeIntent(userMessage.content);
+async function handleIdeaSubmit(text: string): Promise<IdeaSubmitResult> {
+  return processIdeaSubmission({
+    text,
+    source: 'popup',
+  });
+}
 
-  // 2. 根据意图路由到对应处理器（骨架）
-  const response = await routeToHandler(intent, userMessage);
+async function handleFeedbackRecord(
+  artifactId: string,
+  action: Parameters<typeof applyFeedbackToProfile>[1],
+): Promise<FeedbackRecordResult> {
+  const feedback = {
+    id: crypto.randomUUID(),
+    artifactId,
+    action,
+    createdAt: Date.now(),
+  };
 
-  // 3. 记录到记忆系统（骨架）
-  // await saveToMemory(userMessage, response);
+  await saveFeedback(feedback);
+
+  const currentProfile = await ensureProfile();
+  const nextProfile = applyFeedbackToProfile(currentProfile, action);
+  await saveProfile(nextProfile);
+
+  const patch = buildHarnessPatchFromFeedback(action);
+  if (patch) {
+    await saveHarnessPatch(patch);
+  }
 
   return {
-    success: true,
-    data: {
-      id: `dora-${Date.now()}`,
-      role: 'dora',
-      content: response,
-      emotion: resolveEmotion(intent),
-      timestamp: Date.now(),
-    },
+    feedback,
+    memorySummary: await getMemorySummary(),
   };
 }
 
-/**
- * 简单的意图识别（关键词匹配，后续替换为 LLM）
- */
-function recognizeIntent(content: string): IntentType {
-  const lower = content.toLowerCase();
-
-  if (/画|图片|生成|设计|做/.test(lower)) return 'create';
-  if (/玩|游戏|猜|讲|笑话/.test(lower)) return 'play';
-  if (/什么|为什么|怎么|如何|查/.test(lower)) return 'knowledge';
-  return 'chat';
-}
-
-/**
- * 路由到对应的处理器
- * TODO: Phase 2 实现各处理器
- */
-async function routeToHandler(
-  intent: IntentType,
-  _message: AgentMessage,
-): Promise<string> {
-  const templates = DORA_PERSONALITY.responseTemplates[intent];
-  return templates[Math.floor(Math.random() * templates.length)];
-}
-
-/**
- * 根据意图映射哆啦A梦的表情
- */
-function resolveEmotion(intent: IntentType) {
-  const map: Record<IntentType, string> = {
-    create: 'surprised',
-    play: 'happy',
-    knowledge: 'thinking',
-    chat: 'default',
+async function handleContextCapture(
+  payload: ContextCaptureSelectionRequest['payload'],
+): Promise<ContextCaptureResult> {
+  const runtimeConfig = await readStorage('runtimeConfig');
+  const snippet = {
+    id: crypto.randomUUID(),
+    origin: payload.origin,
+    pageTitle: payload.pageTitle.trim().slice(0, 100),
+    selectedText: payload.selectedText.trim().slice(0, runtimeConfig.maxSelectionChars),
+    source: 'content' as const,
+    createdAt: Date.now(),
   };
-  return map[intent] || 'default';
-}
 
-/**
- * 获取用户画像
- * TODO: Phase 3 实现用户画像
- */
-async function handleGetProfile(): Promise<MessageResponse> {
+  await saveContextSnippet(snippet);
+
   return {
-    success: true,
-    data: {
-      name: '大雄',
-      createdAt: Date.now(),
-      preferences: {},
-    },
+    snippet,
+    memorySummary: await getMemorySummary(),
   };
 }
 
-/**
- * 处理页面上下文信息（来自 Content Script）
- * TODO: Phase 2 实现页面理解
- */
-async function handlePageContext(payload: unknown): Promise<MessageResponse> {
-  console.log('[DoraAgent] 收到页面上下文:', payload);
-  return { success: true };
+function createErrorResponse(
+  message: AppMessage,
+  error: string,
+): AppMessageResponse {
+  const memorySummary: MemorySummary = emptyMemorySummary();
+
+  switch (message.type) {
+    case 'idea.submit':
+      return {
+        type: 'idea.submit',
+        requestId: message.requestId,
+        source: 'background',
+        success: false,
+        error,
+        payload: {
+          artifact: {
+            id: '',
+            ideaId: '',
+            intent: 'productivity-tool',
+            concept: {
+              name: '',
+              tagline: '',
+              positioning: '',
+              coreProblem: '',
+              targetUser: '',
+              valueProposition: '',
+              features: [],
+              visualDirection: [],
+            },
+            imagePrompt: '',
+            mvpPlan: [],
+            nextTasks: [],
+            appliedGadgets: [],
+            createdAt: 0,
+          },
+          assistantSummary: '',
+          memorySummary,
+        },
+      };
+
+    case 'feedback.record':
+      return {
+        type: 'feedback.record',
+        requestId: message.requestId,
+        source: 'background',
+        success: false,
+        error,
+        payload: {
+          feedback: {
+            id: '',
+            artifactId: '',
+            action: 'more-minimal',
+            createdAt: 0,
+          },
+          memorySummary,
+        },
+      };
+
+    case 'context.captureSelection':
+      return {
+        type: 'context.captureSelection',
+        requestId: message.requestId,
+        source: 'background',
+        success: false,
+        error,
+        payload: {
+          snippet: {
+            id: '',
+            origin: '',
+            pageTitle: '',
+            selectedText: '',
+            source: 'content',
+            createdAt: 0,
+          },
+          memorySummary,
+        },
+      };
+
+    case 'memory.delete':
+      return {
+        type: 'memory.delete',
+        requestId: message.requestId,
+        source: 'background',
+        success: false,
+        error,
+        payload: memorySummary,
+      };
+
+    case 'memory.get':
+      return {
+        type: 'memory.get',
+        requestId: message.requestId,
+        source: 'background',
+        success: false,
+        error,
+        payload: memorySummary,
+      };
+  }
+}
+
+function emptyMemorySummary(): MemorySummary {
+  return {
+    profile: {
+      visualLikes: [],
+      visualDislikes: [],
+      tonePreference: '',
+      productPreferences: [],
+      recentThemes: [],
+      lastUpdated: 0,
+    },
+    recentContextSnippets: [],
+    pendingPatches: [],
+    counts: {
+      ideas: 0,
+      artifacts: 0,
+      feedback: 0,
+    },
+  };
 }

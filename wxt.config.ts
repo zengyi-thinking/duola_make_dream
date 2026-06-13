@@ -3,8 +3,12 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
-    name: '哆啦造梦',
-    description: '你的 AI 伙伴，像哆啦A梦一样帮你把想法变成现实',
-    permissions: ['storage', 'activeTab'],
+    name: 'PocketBuddy',
+    short_name: 'PocketBuddy',
+    description: '把一个模糊想法放进口袋，拿出产品概念、视觉方向和 MVP 草图',
+    permissions: ['storage'],
+    action: {
+      default_title: 'PocketBuddy',
+    },
   },
 });

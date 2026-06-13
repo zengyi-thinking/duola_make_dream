@@ -1,32 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" stroke="#2C3E50" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-  <!-- 头部 -->
-  <circle cx="64" cy="54" r="42" fill="#0099DD"/>
-  <circle cx="64" cy="54" r="42"/>
-  <!-- 脸部 -->
-  <ellipse cx="64" cy="65" rx="34" ry="32" fill="#FFFFFF"/>
-  <ellipse cx="64" cy="65" rx="34" ry="32"/>
-  <!-- 眼睛 -->
-  <ellipse cx="54" cy="52" rx="8" ry="9" fill="#FFFFFF"/>
-  <ellipse cx="74" cy="52" rx="8" ry="9" fill="#FFFFFF"/>
-  <circle cx="55" cy="52" r="3.5" fill="#2C3E50"/>
-  <circle cx="75" cy="52" r="3.5" fill="#2C3E50"/>
-  <!-- 鼻子 -->
-  <circle cx="64" cy="62" r="5" fill="#E83A3A"/>
-  <circle cx="64" cy="62" r="5"/>
-  <line x1="64" y1="67" x2="64" y2="75"/>
-  <!-- 嘴巴 -->
-  <path d="M 48 78 Q 64 90 80 78" fill="none"/>
-  <!-- 胡须 -->
-  <line x1="26" y1="62" x2="46" y2="65"/>
-  <line x1="26" y1="70" x2="46" y2="70"/>
-  <line x1="82" y1="65" x2="102" y2="62"/>
-  <line x1="82" y1="70" x2="102" y2="70"/>
-  <!-- 项圈 -->
-  <path d="M 34 90 Q 64 104 94 90" fill="#E83A3A" stroke="#E83A3A"/>
-  <path d="M 34 90 Q 64 104 94 90"/>
-  <!-- 铃铛 -->
-  <circle cx="64" cy="100" r="6" fill="#FFD93D"/>
-  <circle cx="64" cy="100" r="6"/>
-  <line x1="60" y1="98" x2="68" y2="98" stroke-width="2"/>
-  <circle cx="64" cy="101" r="1.5" fill="#2C3E50" stroke="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect x="14" y="18" width="100" height="92" rx="28" fill="#F7FBFF" stroke="#15304A" stroke-width="4"/>
+  <path d="M36 38H92" stroke="#15304A" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="48" cy="56" r="7" fill="#15304A"/>
+  <circle cx="80" cy="56" r="7" fill="#15304A"/>
+  <path d="M41 78C49 87.333 57 92 64 92C71 92 79 87.333 87 78" stroke="#15304A" stroke-width="4" stroke-linecap="round"/>
+  <path d="M36 88C36 73.641 48.536 62 64 62C79.464 62 92 73.641 92 88V103H36V88Z" fill="#A7D8FF" stroke="#15304A" stroke-width="4"/>
+  <path d="M49 80H79" stroke="#15304A" stroke-width="4" stroke-linecap="round"/>
+  <path d="M54 8L64 18L74 8" stroke="#0C7BC1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -1,6 +1,6 @@
 {
-  "name": "dora-make-dream",
-  "description": "哆啦造梦 — 一个有温度的 AI 伙伴 Chrome 扩展",
+  "name": "pocketbuddy-agent",
+  "description": "PocketBuddy — 把模糊想法放进口袋，再拿出一个小产品雏形",
   "private": true,
   "version": "0.1.0",
   "type": "module",

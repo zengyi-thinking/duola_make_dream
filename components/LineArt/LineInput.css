@@ -1,12 +1,12 @@
 .line-input {
   flex: 1;
   padding: 8px 12px;
-  border: 2px solid var(--dora-line);
+  border: 2px solid var(--pb-ink);
   border-radius: 20px;
   font-size: 13px;
   outline: none;
-  background: var(--dora-white);
-  color: var(--dora-line);
+  background: #fff;
+  color: var(--pb-ink);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -15,6 +15,6 @@
 }
 
 .line-input:focus {
-  border-color: var(--dora-blue);
-  box-shadow: 0 0 0 3px var(--dora-shadow);
+  border-color: var(--pb-primary);
+  box-shadow: 0 0 0 3px rgba(120, 193, 241, 0.28);
 }

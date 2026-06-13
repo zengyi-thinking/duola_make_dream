@@ -4,7 +4,7 @@ import type { ToolDefinition, ToolExecutor, ToolResult } from './types';
  * 百宝袋工具注册表
  *
  * 管理所有可用工具的注册、查找和执行
- * 类比哆啦A梦的四次元百宝袋 — 按需取出道具
+ * 类比 Wonder Pocket 的道具层 —— 按需取出能力
  */
 
 /** 已注册的工具 */

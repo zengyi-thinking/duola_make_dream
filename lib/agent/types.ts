@@ -1,86 +1,128 @@
-/**
- * Agent 系统核心类型定义
- */
+export type PocketBuddyMood = 'idle' | 'warm' | 'thinking' | 'spark';
 
-/** 哆啦A梦表情类型 */
-export type DoraEmotion = 'default' | 'happy' | 'thinking' | 'surprised';
+export type AgentIntent = 'browser-extension' | 'productivity-tool' | 'creator-tool' | 'learning-tool' | 'playful-tool';
 
-/** 意图类型 */
-export type IntentType = 'create' | 'play' | 'knowledge' | 'chat';
+export type IdeaSource = 'popup' | 'selection';
 
-/** 消息角色 */
-export type MessageRole = 'user' | 'dora' | 'system';
+export type FeedbackAction =
+  | 'more-minimal'
+  | 'cuter'
+  | 'more-productized'
+  | 'more-tech'
+  | 'dislike-direction';
 
-/** 聊天消息 */
-export interface ChatMessage {
+export type HarnessPatchTarget =
+  | 'prompt'
+  | 'tool-router'
+  | 'memory-rule'
+  | 'ui-copy'
+  | 'core-code';
+
+export type HarnessPatchRisk = 'low' | 'medium' | 'high';
+
+export type HarnessPatchStatus = 'pending' | 'approved' | 'rejected' | 'applied';
+
+export interface HarnessPatch {
   id: string;
-  role: MessageRole;
-  content: string;
-  emotion?: DoraEmotion;
-  timestamp: number;
-  /** 关联的工具调用 ID */
-  toolCallId?: string;
-}
-
-/** Agent 消息（用于内部通信） */
-export interface AgentMessage {
-  content: string;
-  metadata?: Record<string, unknown>;
-}
-
-/** Agent 运行状态 */
-export interface AgentState {
-  status: 'idle' | 'thinking' | 'executing' | 'error';
-  currentIntent?: IntentType;
-  lastActivity: number;
-}
-
-/** 对话上下文 */
-export interface ConversationContext {
-  messages: ChatMessage[];
-  pageInfo?: PageContext;
-  userProfile?: UserProfile;
-}
-
-/** 页面上下文（来自 Content Script） */
-export interface PageContext {
-  title: string;
-  url: string;
-  description?: string;
-  keywords?: string;
-  mainText?: string;
-  imageCount: number;
-}
-
-/** 用户画像 */
-export interface UserProfile {
-  name: string;
+  target: HarnessPatchTarget;
+  scope: 'runtime-config' | 'source-code';
+  reason: string;
+  before: string;
+  after: string;
+  riskLevel: HarnessPatchRisk;
+  requireUserApproval: boolean;
+  status: HarnessPatchStatus;
   createdAt: number;
-  preferences: UserPreferences;
-  stats: UserStats;
+  rollbackSnapshotId?: string;
 }
 
-/** 用户偏好 */
-export interface UserPreferences {
-  /** 偏好的创作风格 */
-  creativeStyle?: string;
-  /** 常用工具 ID 列表 */
-  favoriteTools?: string[];
-  /** 喜欢的话题标签 */
-  interests?: string[];
+export interface ContextSnippet {
+  id: string;
+  origin: string;
+  pageTitle: string;
+  selectedText: string;
+  source: 'content';
+  createdAt: number;
 }
 
-/** 用户统计数据 */
-export interface UserStats {
-  totalMessages: number;
-  totalCreations: number;
-  streakDays: number;
-  lastActiveDate: string;
+export interface IdeaRecord {
+  id: string;
+  rawInput: string;
+  source: IdeaSource;
+  contextSnippetId?: string;
+  createdAt: number;
 }
 
-/** Agent 响应 */
-export interface AgentResponse {
-  message: ChatMessage;
-  suggestedTools?: string[];
-  stateUpdate?: Partial<AgentState>;
+export interface ProductConcept {
+  name: string;
+  tagline: string;
+  positioning: string;
+  coreProblem: string;
+  targetUser: string;
+  valueProposition: string;
+  features: string[];
+  visualDirection: string[];
+}
+
+export interface ProductArtifact {
+  id: string;
+  ideaId: string;
+  intent: AgentIntent;
+  concept: ProductConcept;
+  imagePrompt: string;
+  mvpPlan: string[];
+  nextTasks: string[];
+  appliedGadgets: string[];
+  contextSnippetId?: string;
+  createdAt: number;
+}
+
+export interface FeedbackRecord {
+  id: string;
+  artifactId: string;
+  action: FeedbackAction;
+  createdAt: number;
+}
+
+export interface UserProfile {
+  visualLikes: string[];
+  visualDislikes: string[];
+  tonePreference: string;
+  productPreferences: string[];
+  recentThemes: string[];
+  lastUpdated: number;
+}
+
+export interface RuntimeConfig {
+  agentName: string;
+  defaultTone: string;
+  maxSelectionChars: number;
+  futurePermissionMode: 'all_urls-dev' | 'activeTab-ready';
+}
+
+export interface MemorySummary {
+  profile: UserProfile;
+  recentContextSnippets: ContextSnippet[];
+  pendingPatches: HarnessPatch[];
+  counts: {
+    ideas: number;
+    artifacts: number;
+    feedback: number;
+  };
+}
+
+export interface IdeaSubmitResult {
+  artifact: ProductArtifact;
+  assistantSummary: string;
+  memorySummary: MemorySummary;
+}
+
+export interface ContextCaptureResult {
+  snippet: ContextSnippet;
+  memorySummary: MemorySummary;
+}
+
+export interface FeedbackRecordResult {
+  feedback: FeedbackRecord;
+  memorySummary: MemorySummary;
 }

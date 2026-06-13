@@ -1,0 +1,68 @@
+import { browser } from 'wxt/browser';
+import type { StorageSchema } from './schema';
+import { STORAGE_KEYS, createDefaultStorageState } from './schema';
+
+type StorageKey = keyof StorageSchema;
+
+const DEFAULT_STATE = createDefaultStorageState();
+
+export async function readStorage<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {
+  const result = await browser.storage.local.get(key);
+  return (result[key] as StorageSchema[K] | undefined) ?? DEFAULT_STATE[key];
+}
+
+export async function writeStorage<K extends StorageKey>(
+  key: K,
+  value: StorageSchema[K],
+): Promise<void> {
+  await browser.storage.local.set({ [key]: value });
+}
+
+export async function readStorageSnapshot(): Promise<StorageSchema> {
+  const result = await browser.storage.local.get(Object.values(STORAGE_KEYS));
+
+  return {
+    profile: (result.profile as StorageSchema['profile'] | undefined) ?? DEFAULT_STATE.profile,
+    ideaHistory: (result.ideaHistory as StorageSchema['ideaHistory'] | undefined) ?? [],
+    artifactHistory: (result.artifactHistory as StorageSchema['artifactHistory'] | undefined) ?? [],
+    feedbackLog: (result.feedbackLog as StorageSchema['feedbackLog'] | undefined) ?? [],
+    contextSnippets: (result.contextSnippets as StorageSchema['contextSnippets'] | undefined) ?? [],
+    harnessPatches: (result.harnessPatches as StorageSchema['harnessPatches'] | undefined) ?? [],
+    runtimeConfig: (result.runtimeConfig as StorageSchema['runtimeConfig'] | undefined)
+      ?? DEFAULT_STATE.runtimeConfig,
+  };
+}
+
+export async function resetStorageScope(scope: keyof StorageSchema | 'all'): Promise<StorageSchema> {
+  if (scope === 'all') {
+    const next = createDefaultStorageState();
+    await browser.storage.local.set(next);
+    return next;
+  }
+
+  const snapshot = await readStorageSnapshot();
+  const next = createDefaultStorageState()[scope];
+  const merged = {
+    ...snapshot,
+    [scope]: next,
+  } satisfies StorageSchema;
+
+  await browser.storage.local.set({ [scope]: next });
+  return merged;
+}
+
+export async function appendLimited<K extends StorageKey>(
+  key: K,
+  item: StorageSchema[K] extends Array<infer T> ? T : never,
+  limit: number,
+): Promise<StorageSchema[K]> {
+  const current = await readStorage(key);
+
+  if (!Array.isArray(current)) {
+    throw new Error(`${key} 不是数组类型，无法追加`);
+  }
+
+  const next = [item, ...current].slice(0, limit) as StorageSchema[K];
+  await writeStorage(key, next);
+  return next;
+}

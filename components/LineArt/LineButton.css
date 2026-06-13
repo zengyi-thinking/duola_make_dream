@@ -1,44 +1,44 @@
 .line-btn {
   padding: 6px 14px;
-  border: 2px solid var(--dora-line);
-  border-radius: 8px;
+  border: 2px solid var(--pb-ink);
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  background: var(--dora-white);
-  color: var(--dora-line);
+  background: #fff;
+  color: var(--pb-ink);
 }
 
 .line-btn--primary {
-  background: var(--dora-blue);
-  color: var(--dora-white);
-  border-color: var(--dora-blue);
+  background: var(--pb-primary);
+  color: #fff;
+  border-color: var(--pb-primary);
 }
 
 .line-btn--primary:hover {
-  background: var(--dora-line);
-  border-color: var(--dora-line);
+  background: var(--pb-ink);
+  border-color: var(--pb-ink);
 }
 
 .line-btn--secondary {
-  background: var(--dora-light-blue);
-  border-color: var(--dora-blue);
-  color: var(--dora-blue);
+  background: rgba(226, 244, 255, 0.9);
+  border-color: var(--pb-primary);
+  color: var(--pb-primary);
 }
 
 .line-btn--secondary:hover {
-  background: var(--dora-blue);
-  color: var(--dora-white);
+  background: var(--pb-primary);
+  color: #fff;
 }
 
 .line-btn--ghost {
-  border-color: transparent;
+  border-color: rgba(21, 48, 74, 0.15);
   background: transparent;
 }
 
 .line-btn--ghost:hover {
-  background: var(--dora-light-blue);
+  background: rgba(226, 244, 255, 0.9);
 }
 
 .line-btn:active {

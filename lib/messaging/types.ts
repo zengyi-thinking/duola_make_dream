@@ -1,65 +1,91 @@
-/**
- * 消息通信 — 类型定义
- *
- * Popup ↔ Background ↔ Content Script 之间的消息协议
- */
+import type {
+  ContextCaptureResult,
+  FeedbackAction,
+  FeedbackRecordResult,
+  IdeaSubmitResult,
+  MemorySummary,
+} from '@/lib/agent/types';
 
-/** 消息类型枚举 */
+export type MessageSource = 'popup' | 'content' | 'background';
+
 export type MessageType =
-  | 'chat'          // 聊天消息
-  | 'get_profile'   // 获取用户画像
-  | 'page_context'  // 页面上下文
-  | 'tool_execute'  // 执行工具
-  | 'feedback';     // 用户反馈
+  | 'idea.submit'
+  | 'feedback.record'
+  | 'memory.get'
+  | 'memory.delete'
+  | 'context.captureSelection';
 
-/** 通用消息请求 */
-export interface MessageRequest {
-  type: MessageType;
-  payload?: unknown;
+interface MessageEnvelope<TType extends MessageType, TPayload> {
+  type: TType;
+  requestId: string;
+  source: MessageSource;
+  payload: TPayload;
 }
 
-/** 通用消息响应 */
-export interface MessageResponse {
+export type MemoryDeleteScope =
+  | 'all'
+  | 'profile'
+  | 'ideaHistory'
+  | 'artifactHistory'
+  | 'feedbackLog'
+  | 'contextSnippets'
+  | 'harnessPatches';
+
+export type IdeaSubmitRequest = MessageEnvelope<
+  'idea.submit',
+  {
+    text: string;
+  }
+>;
+
+export type FeedbackRecordRequest = MessageEnvelope<
+  'feedback.record',
+  {
+    artifactId: string;
+    action: FeedbackAction;
+  }
+>;
+
+export type MemoryGetRequest = MessageEnvelope<'memory.get', Record<string, never>>;
+
+export type MemoryDeleteRequest = MessageEnvelope<
+  'memory.delete',
+  {
+    scope: MemoryDeleteScope;
+  }
+>;
+
+export type ContextCaptureSelectionRequest = MessageEnvelope<
+  'context.captureSelection',
+  {
+    origin: string;
+    pageTitle: string;
+    selectedText: string;
+  }
+>;
+
+export type AppMessage =
+  | IdeaSubmitRequest
+  | FeedbackRecordRequest
+  | MemoryGetRequest
+  | MemoryDeleteRequest
+  | ContextCaptureSelectionRequest;
+
+interface ResponseEnvelope<TType extends MessageType, TPayload> {
+  type: TType;
+  requestId: string;
+  source: 'background';
   success: boolean;
-  data?: unknown;
+  payload: TPayload;
   error?: string;
 }
 
-/** 聊天请求 */
-export interface ChatRequest extends MessageRequest {
-  type: 'chat';
-  payload: {
-    content: string;
-    context?: {
-      pageUrl?: string;
-      pageTitle?: string;
-    };
-  };
-}
+export type MessageResponseMap = {
+  'idea.submit': ResponseEnvelope<'idea.submit', IdeaSubmitResult>;
+  'feedback.record': ResponseEnvelope<'feedback.record', FeedbackRecordResult>;
+  'memory.get': ResponseEnvelope<'memory.get', MemorySummary>;
+  'memory.delete': ResponseEnvelope<'memory.delete', MemorySummary>;
+  'context.captureSelection': ResponseEnvelope<'context.captureSelection', ContextCaptureResult>;
+};
 
-/** 聊天响应数据 */
-export interface ChatResponseData {
-  id: string;
-  role: 'dora';
-  content: string;
-  emotion: string;
-  timestamp: number;
-}
-
-/** 工具执行请求 */
-export interface ToolExecuteRequest extends MessageRequest {
-  type: 'tool_execute';
-  payload: {
-    toolId: string;
-    params: Record<string, unknown>;
-  };
-}
-
-/** 反馈请求 */
-export interface FeedbackRequest extends MessageRequest {
-  type: 'feedback';
-  payload: {
-    messageId: string;
-    feedbackType: 'like' | 'dislike' | 'skip';
-  };
-}
+export type AppMessageResponse = MessageResponseMap[MessageType];

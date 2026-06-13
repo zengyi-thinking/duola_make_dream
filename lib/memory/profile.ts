@@ -1,95 +1,53 @@
-import type { UserProfile, UserPreferences, UserStats } from '../agent/types';
+import type { FeedbackAction, UserProfile } from '@/lib/agent/types';
+import { DEFAULT_PROFILE } from '@/lib/storage/schema';
 
-/**
- * 用户画像管理
- *
- * 构建和维护用户偏好模型
- * 让哆啦A梦越来越懂"大雄"
- */
-
-/** 默认用户画像 */
-const DEFAULT_PROFILE: UserProfile = {
-  name: '大雄',
-  createdAt: Date.now(),
-  preferences: {
-    creativeStyle: undefined,
-    favoriteTools: [],
-    interests: [],
-  },
-  stats: {
-    totalMessages: 0,
-    totalCreations: 0,
-    streakDays: 0,
-    lastActiveDate: new Date().toISOString().split('T')[0],
-  },
-};
-
-/**
- * 创建新的用户画像
- */
-export function createProfile(name?: string): UserProfile {
+export function createProfile(): UserProfile {
   return {
     ...DEFAULT_PROFILE,
-    name: name || DEFAULT_PROFILE.name,
-    createdAt: Date.now(),
+    lastUpdated: Date.now(),
   };
 }
 
-/**
- * 更新用户偏好
- */
-export function updatePreferences(
-  profile: UserProfile,
-  updates: Partial<UserPreferences>,
-): UserProfile {
+export function mergeRecentThemes(profile: UserProfile, themes: string[]): UserProfile {
   return {
     ...profile,
-    preferences: {
-      ...profile.preferences,
-      ...updates,
-      favoriteTools: updates.favoriteTools
-        ? [...new Set([...(profile.preferences.favoriteTools || []), ...updates.favoriteTools])]
-        : profile.preferences.favoriteTools,
-      interests: updates.interests
-        ? [...new Set([...(profile.preferences.interests || []), ...updates.interests])]
-        : profile.preferences.interests,
-    },
+    recentThemes: [...new Set([...themes, ...profile.recentThemes])].slice(0, 8),
+    lastUpdated: Date.now(),
   };
 }
 
-/**
- * 更新用户统计数据
- */
-export function updateStats(
+export function applyFeedbackToProfile(
   profile: UserProfile,
-  updates: Partial<UserStats>,
+  action: FeedbackAction,
 ): UserProfile {
-  return {
-    ...profile,
-    stats: {
-      ...profile.stats,
-      ...updates,
-    },
-  };
-}
+  const next = { ...profile };
 
-/**
- * 记录一次活跃（更新连续天数）
- */
-export function recordActivity(profile: UserProfile): UserProfile {
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-  let streakDays = profile.stats.streakDays;
-  if (profile.stats.lastActiveDate === yesterday) {
-    streakDays += 1;
-  } else if (profile.stats.lastActiveDate !== today) {
-    streakDays = 1;
+  if (action === 'more-minimal') next.visualLikes = mergeStringList(next.visualLikes, ['极简']);
+  if (action === 'cuter') next.visualLikes = mergeStringList(next.visualLikes, ['可爱']);
+  if (action === 'more-tech') next.visualLikes = mergeStringList(next.visualLikes, ['科技感']);
+  if (action === 'more-productized') {
+    next.productPreferences = mergeStringList(next.productPreferences, ['更强产品感']);
+  }
+  if (action === 'dislike-direction') {
+    next.visualDislikes = mergeStringList(next.visualDislikes, ['当前方向过于松散']);
   }
 
-  return updateStats(profile, {
-    totalMessages: profile.stats.totalMessages + 1,
-    lastActiveDate: today,
-    streakDays,
-  });
+  next.lastUpdated = Date.now();
+  return next;
+}
+
+export function extractThemesFromIdea(text: string): string[] {
+  const candidates = [
+    { label: '浏览器插件', rule: /插件|extension|chrome/i },
+    { label: '效率工具', rule: /效率|整理|任务|计划|时间/i },
+    { label: '创作辅助', rule: /创作|灵感|设计|prompt|图片/i },
+    { label: '学习工具', rule: /学习|记忆|课程|知识/i },
+    { label: 'AI 产品', rule: /ai|agent|智能|模型/i },
+  ];
+
+  return candidates.filter((item) => item.rule.test(text)).map((item) => item.label);
+}
+
+function mergeStringList(base: string[], incoming: string[]): string[] {
+  return [...new Set([...base, ...incoming])];
 }

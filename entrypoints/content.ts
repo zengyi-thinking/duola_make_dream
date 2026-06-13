@@ -1,113 +1,228 @@
-/**
- * Content Script — 哆啦A梦的眼睛
- *
- * 职责：
- * 1. 感知当前页面内容（标题、关键文本、图片等）
- * 2. 注入浮动哆啦A梦入口按钮
- * 3. 采集用户行为数据（浏览偏好）
- * 4. 与 Background Agent 通信
- */
+import { defineContentScript } from 'wxt/utils/define-content-script';
+import { createContextCaptureMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
+
+const HOST_ID = 'pocketbuddy-content-root';
+const MAX_SELECTION_CHARS = 280;
 
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
 
-  main(_ctx) {
-    console.log('[DoraContent] 👁️ 哆啦造梦 Content Script 已加载');
+  main() {
+    if (document.getElementById(HOST_ID)) return;
 
-    // 1. 提取页面基本信息
-    const pageInfo = extractPageInfo();
-    console.log('[DoraContent] 页面信息:', pageInfo);
+    const host = document.createElement('div');
+    host.id = HOST_ID;
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    document.documentElement.appendChild(host);
 
-    // 2. 注入浮动入口按钮
-    injectFloatingButton();
+    const style = document.createElement('style');
+    style.textContent = `
+      :host { all: initial; }
+      .pb-fab,
+      .pb-pocket-btn,
+      .pb-toast {
+        font-family: "Avenir Next", "Trebuchet MS", "PingFang SC", sans-serif;
+        box-sizing: border-box;
+      }
+      .pb-fab {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        width: 54px;
+        height: 54px;
+        border-radius: 20px;
+        border: 2px solid #15304a;
+        background: linear-gradient(180deg, #ffffff, #e7f5ff);
+        box-shadow: 0 12px 30px rgba(18, 89, 139, 0.18);
+        color: #15304a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2147483647;
+        transition: transform 120ms ease;
+      }
+      .pb-fab:hover { transform: translateY(-2px); }
+      .pb-pocket-glyph {
+        width: 26px;
+        height: 18px;
+        border: 2px solid #15304a;
+        border-top: 0;
+        border-radius: 0 0 14px 14px;
+        position: relative;
+        background: rgba(167, 216, 255, 0.6);
+      }
+      .pb-pocket-glyph::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -10px;
+        width: 22px;
+        height: 10px;
+        transform: translateX(-50%);
+        border: 2px solid #15304a;
+        border-bottom: 0;
+        border-radius: 12px 12px 0 0;
+        background: #fff;
+      }
+      .pb-pocket-btn {
+        position: fixed;
+        display: none;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 2px solid #15304a;
+        background: #ffffff;
+        color: #15304a;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        z-index: 2147483647;
+        box-shadow: 0 10px 24px rgba(18, 89, 139, 0.16);
+      }
+      .pb-pocket-btn[data-visible="true"] {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pb-pocket-btn::before {
+        content: "";
+        width: 12px;
+        height: 9px;
+        border: 2px solid #15304a;
+        border-top: 0;
+        border-radius: 0 0 9px 9px;
+        background: rgba(167, 216, 255, 0.75);
+      }
+      .pb-toast {
+        position: fixed;
+        right: 20px;
+        bottom: 86px;
+        max-width: 240px;
+        padding: 10px 12px;
+        border-radius: 18px;
+        border: 2px solid #15304a;
+        background: rgba(255, 255, 255, 0.98);
+        color: #15304a;
+        font-size: 12px;
+        line-height: 1.45;
+        display: none;
+        z-index: 2147483647;
+      }
+      .pb-toast[data-visible="true"] { display: block; }
+    `;
 
-    // 3. 通知 Background 当前页面上下文
-    notifyBackground(pageInfo);
+    const fab = document.createElement('button');
+    fab.className = 'pb-fab';
+    fab.type = 'button';
+    fab.title = 'PocketBuddy';
+    fab.innerHTML = '<span class="pb-pocket-glyph"></span>';
+
+    const pocketButton = document.createElement('button');
+    pocketButton.className = 'pb-pocket-btn';
+    pocketButton.type = 'button';
+    pocketButton.textContent = '放进口袋';
+
+    const toast = document.createElement('div');
+    toast.className = 'pb-toast';
+
+    shadowRoot.append(style, fab, pocketButton, toast);
+
+    let toastTimer: number | undefined;
+
+    const showToast = (message: string) => {
+      toast.textContent = message;
+      toast.dataset.visible = 'true';
+      if (toastTimer) {
+        window.clearTimeout(toastTimer);
+      }
+      toastTimer = window.setTimeout(() => {
+        toast.dataset.visible = 'false';
+      }, 1800);
+    };
+
+    const updateSelectionButton = () => {
+      if (isSensitiveSelection()) {
+        pocketButton.dataset.visible = 'false';
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.getRangeAt(0).collapsed) {
+        pocketButton.dataset.visible = 'false';
+        return;
+      }
+
+      const rect = selection.getRangeAt(0).getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) {
+        pocketButton.dataset.visible = 'false';
+        return;
+      }
+
+      pocketButton.style.left = `${Math.min(window.innerWidth - 152, Math.max(12, rect.left + rect.width / 2 - 68))}px`;
+      pocketButton.style.top = `${Math.max(12, rect.top - 44)}px`;
+      pocketButton.dataset.visible = 'true';
+    };
+
+    const captureSelection = async () => {
+      if (isSensitiveSelection()) {
+        showToast('PocketBuddy 不会读取表单内容。');
+        pocketButton.dataset.visible = 'false';
+        return;
+      }
+
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().replace(/\s+/g, ' ').trim() ?? '';
+      if (!selectedText) {
+        showToast('先划一段文字，再放进口袋。');
+        pocketButton.dataset.visible = 'false';
+        return;
+      }
+
+      const response = await sendRuntimeMessage(createContextCaptureMessage({
+        origin: location.origin,
+        pageTitle: document.title,
+        selectedText: selectedText.slice(0, MAX_SELECTION_CHARS),
+      }));
+
+      if (response.success) {
+        showToast('这段灵感已经放进口袋。');
+      } else {
+        showToast(response.error ?? '这次没有保存成功。');
+      }
+
+      pocketButton.dataset.visible = 'false';
+    };
+
+    fab.addEventListener('click', () => {
+      void captureSelection();
+    });
+
+    pocketButton.addEventListener('click', () => {
+      void captureSelection();
+    });
+
+    const scheduleSelectionUpdate = () => {
+      window.setTimeout(updateSelectionButton, 0);
+    };
+
+    document.addEventListener('mouseup', scheduleSelectionUpdate, true);
+    document.addEventListener('keyup', scheduleSelectionUpdate, true);
+    document.addEventListener('scroll', () => {
+      if (pocketButton.dataset.visible === 'true') {
+        updateSelectionButton();
+      }
+    }, true);
   },
 });
 
-/**
- * 提取当前页面的关键信息
- */
-function extractPageInfo() {
-  return {
-    title: document.title,
-    url: location.href,
-    description: getMetaContent('description'),
-    keywords: getMetaContent('keywords'),
-    mainText: getMainText(),
-    imageCount: document.images.length,
-    timestamp: Date.now(),
-  };
-}
+function isSensitiveSelection(): boolean {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
 
-function getMetaContent(name: string): string {
-  const meta = document.querySelector(`meta[name="${name}"]`) ||
-    document.querySelector(`meta[property="og:${name}"]`);
-  return meta?.getAttribute('content') || '';
-}
+  const node = selection.anchorNode;
+  if (!node) return false;
 
-function getMainText(): string {
-  const body = document.body?.innerText || '';
-  return body.slice(0, 500);
-}
-
-/**
- * 注入页面右下角的浮动哆啦A梦入口
- */
-function injectFloatingButton() {
-  // 避免重复注入
-  if (document.getElementById('dora-fab')) return;
-
-  const fab = document.createElement('div');
-  fab.id = 'dora-fab';
-  fab.innerHTML = '🔵';
-  fab.title = '哆啦造梦';
-  Object.assign(fab.style, {
-    position: 'fixed',
-    bottom: '24px',
-    right: '24px',
-    width: '44px',
-    height: '44px',
-    borderRadius: '50%',
-    background: '#FFFFFF',
-    border: '2px solid #2C3E50',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '22px',
-    cursor: 'pointer',
-    zIndex: '999999',
-    boxShadow: '0 2px 12px rgba(0,153,221,0.25)',
-    transition: 'transform 0.15s ease',
-    userSelect: 'none',
-  });
-
-  fab.addEventListener('mouseenter', () => {
-    fab.style.transform = 'scale(1.1)';
-  });
-  fab.addEventListener('mouseleave', () => {
-    fab.style.transform = 'scale(1)';
-  });
-  fab.addEventListener('click', () => {
-    // TODO: 点击后打开 sidepanel 或发送消息给 popup
-    console.log('[DoraContent] 浮动按钮被点击');
-  });
-
-  document.body.appendChild(fab);
-}
-
-/**
- * 通知 Background 当前页面上下文
- */
-function notifyBackground(pageInfo: ReturnType<typeof extractPageInfo>) {
-  try {
-    browser.runtime.sendMessage({
-      type: 'page_context',
-      payload: pageInfo,
-    });
-  } catch {
-    // 扩展上下文可能已失效（如页面刷新时）
-  }
+  const element = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+  return Boolean(element?.closest('input, textarea, [contenteditable=""], [contenteditable="true"]'));
 }
