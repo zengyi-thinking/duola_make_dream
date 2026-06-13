@@ -49,7 +49,7 @@ export interface IdeaRecord {
   id: string;
   rawInput: string;
   source: IdeaSource;
-  contextSnippetId?: string;
+  selectedContextIds: string[];
   createdAt: number;
 }
 
@@ -73,7 +73,7 @@ export interface ProductArtifact {
   mvpPlan: string[];
   nextTasks: string[];
   appliedGadgets: string[];
-  contextSnippetId?: string;
+  selectedContextIds: string[];
   createdAt: number;
 }
 

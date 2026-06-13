@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { processIdeaSubmission } from '@/lib/agent/core';
-import { buildHarnessPatchFromFeedback } from '@/lib/agent/harness';
+import { buildHarnessPatchFromFeedback, shouldCreateHarnessPatch } from '@/lib/agent/harness';
 import type {
   ContextCaptureResult,
   FeedbackRecordResult,
@@ -12,6 +12,8 @@ import {
   applyFeedbackToProfile,
   deleteMemory,
   ensureProfile,
+  getFeedbackLog,
+  getHarnessPatches,
   getMemorySummary,
   saveContextSnippet,
   saveFeedback,
@@ -26,14 +28,25 @@ import type {
 } from '@/lib/messaging/types';
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener((message: AppMessage) => handleMessage(message));
+  browser.runtime.onMessage.addListener((message: AppMessage, _sender, sendResponse) => {
+    handleMessage(message)
+      .then((response) => sendResponse(response))
+      .catch((error) => {
+        sendResponse(createErrorResponse(
+          message,
+          error instanceof Error ? error.message : String(error),
+        ));
+      });
+
+    return true;
+  });
 });
 
 async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
   try {
     switch (message.type) {
       case 'idea.submit': {
-        const payload = await handleIdeaSubmit(message.payload.text);
+        const payload = await handleIdeaSubmit(message.payload.text, message.payload.selectedContextIds);
         return {
           type: 'idea.submit',
           requestId: message.requestId,
@@ -95,10 +108,11 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
   }
 }
 
-async function handleIdeaSubmit(text: string): Promise<IdeaSubmitResult> {
+async function handleIdeaSubmit(text: string, selectedContextIds: string[]): Promise<IdeaSubmitResult> {
   return processIdeaSubmission({
     text,
     source: 'popup',
+    selectedContextIds,
   });
 }
 
@@ -119,8 +133,10 @@ async function handleFeedbackRecord(
   const nextProfile = applyFeedbackToProfile(currentProfile, action);
   await saveProfile(nextProfile);
 
+  const feedbackLog = await getFeedbackLog();
+  const pendingPatches = await getHarnessPatches();
   const patch = buildHarnessPatchFromFeedback(action);
-  if (patch) {
+  if (patch && shouldCreateHarnessPatch(action, feedbackLog, pendingPatches)) {
     await saveHarnessPatch(patch);
   }
 
@@ -184,6 +200,7 @@ function createErrorResponse(
             mvpPlan: [],
             nextTasks: [],
             appliedGadgets: [],
+            selectedContextIds: [],
             createdAt: 0,
           },
           assistantSummary: '',

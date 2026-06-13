@@ -1,6 +1,9 @@
 export {
   deleteMemory,
   ensureProfile,
+  getContextSnippetsByIds,
+  getFeedbackLog,
+  getHarnessPatches,
   getLatestContextSnippet,
   getMemorySummary,
   saveArtifact,

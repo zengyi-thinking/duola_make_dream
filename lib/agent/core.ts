@@ -2,7 +2,7 @@ import {
   applyFeedbackToProfile,
   ensureProfile,
   extractThemesFromIdea,
-  getLatestContextSnippet,
+  getContextSnippetsByIds,
   getMemorySummary,
   mergeRecentThemes,
   saveArtifact,
@@ -17,6 +17,7 @@ import { runAnywhereDoor, runIdeaLens, runMemoryBread, runProductCamera, runShri
 interface IdeaSubmissionInput {
   text: string;
   source?: IdeaSource;
+  selectedContextIds?: string[];
 }
 
 export async function processIdeaSubmission(
@@ -28,15 +29,16 @@ export async function processIdeaSubmission(
   }
 
   const profile = await ensureProfile();
-  const latestContext = await getLatestContextSnippet();
+  const selectedContextIds = input.selectedContextIds ?? [];
+  const selectedContexts = await getContextSnippetsByIds(selectedContextIds);
   const intent = routeIdeaIntent(ideaText);
-  const contextLine = runAnywhereDoor(latestContext);
+  const contextLine = runAnywhereDoor(selectedContexts);
 
   const idea = {
     id: crypto.randomUUID(),
     rawInput: ideaText,
     source: input.source ?? 'popup',
-    contextSnippetId: latestContext?.id,
+    selectedContextIds,
     createdAt: Date.now(),
   };
 
@@ -57,7 +59,7 @@ export async function processIdeaSubmission(
     mvpPlan: shrinkResult.mvpPlan,
     nextTasks: shrinkResult.nextTasks,
     appliedGadgets: ['IdeaLens', 'ProductCamera', 'ShrinkLight', 'MemoryBread', 'AnywhereDoor'],
-    contextSnippetId: latestContext?.id,
+    selectedContextIds,
     createdAt: Date.now(),
   };
 
@@ -69,7 +71,7 @@ export async function processIdeaSubmission(
   const memoryHints = runMemoryBread(themedProfile);
   const memorySummary = await getMemorySummary();
   const assistantSummary = [
-    latestContext ? POCKET_AGENT_VOICE.summaries.withContext : POCKET_AGENT_VOICE.summaries.withoutContext,
+    selectedContexts.length > 0 ? POCKET_AGENT_VOICE.summaries.withContext : POCKET_AGENT_VOICE.summaries.withoutContext,
     `我先把它收束成了一个 ${labelIntent(intent)} 方向：${artifact.concept.name}。`,
     memoryHints[0] ? `我也记得你最近的偏好是“${memoryHints[0]}”。` : '',
   ]

@@ -7,19 +7,32 @@ type StorageKey = keyof StorageSchema;
 const DEFAULT_STATE = createDefaultStorageState();
 
 export async function readStorage<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {
-  const result = await browser.storage.local.get(key);
-  return (result[key] as StorageSchema[K] | undefined) ?? DEFAULT_STATE[key];
+  try {
+    const result = await browser.storage.local.get(key);
+    return (result[key] as StorageSchema[K] | undefined) ?? DEFAULT_STATE[key];
+  } catch (error) {
+    throw new Error(`读取 storage(${String(key)}) 失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export async function writeStorage<K extends StorageKey>(
   key: K,
   value: StorageSchema[K],
 ): Promise<void> {
-  await browser.storage.local.set({ [key]: value });
+  try {
+    await browser.storage.local.set({ [key]: value });
+  } catch (error) {
+    throw new Error(`写入 storage(${String(key)}) 失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export async function readStorageSnapshot(): Promise<StorageSchema> {
-  const result = await browser.storage.local.get(Object.values(STORAGE_KEYS));
+  let result: Record<string, unknown>;
+  try {
+    result = await browser.storage.local.get(Object.values(STORAGE_KEYS));
+  } catch (error) {
+    throw new Error(`读取 storage 快照失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   return {
     profile: (result.profile as StorageSchema['profile'] | undefined) ?? DEFAULT_STATE.profile,
@@ -47,7 +60,11 @@ export async function resetStorageScope(scope: keyof StorageSchema | 'all'): Pro
     [scope]: next,
   } satisfies StorageSchema;
 
-  await browser.storage.local.set({ [scope]: next });
+  try {
+    await browser.storage.local.set({ [scope]: next });
+  } catch (error) {
+    throw new Error(`重置 storage(${String(scope)}) 失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
   return merged;
 }
 

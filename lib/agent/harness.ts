@@ -1,4 +1,4 @@
-import type { FeedbackAction, HarnessPatch } from './types';
+import type { FeedbackAction, FeedbackRecord, HarnessPatch } from './types';
 
 export function buildHarnessPatchFromFeedback(action: FeedbackAction): HarnessPatch | null {
   if (action !== 'dislike-direction') {
@@ -17,4 +17,28 @@ export function buildHarnessPatchFromFeedback(action: FeedbackAction): HarnessPa
     status: 'pending',
     createdAt: Date.now(),
   };
+}
+
+export function shouldCreateHarnessPatch(
+  action: FeedbackAction,
+  feedbackLog: FeedbackRecord[],
+  pendingPatches: HarnessPatch[],
+): boolean {
+  if (action !== 'dislike-direction') {
+    return false;
+  }
+
+  const hasPendingPromptPatch = pendingPatches.some(
+    (patch) => patch.status === 'pending' && patch.target === 'prompt',
+  );
+
+  if (hasPendingPromptPatch) {
+    return false;
+  }
+
+  const recentFive = feedbackLog.slice(0, 5).filter((item) => item.action === 'dislike-direction').length;
+  const lastThree = feedbackLog.slice(0, 3);
+  const threeConsecutive = lastThree.length === 3 && lastThree.every((item) => item.action === 'dislike-direction');
+
+  return threeConsecutive || recentFive >= 3;
 }

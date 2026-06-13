@@ -55,6 +55,24 @@ export async function getLatestContextSnippet(): Promise<ContextSnippet | undefi
   return snippets[0];
 }
 
+export async function getContextSnippetsByIds(ids: string[]): Promise<ContextSnippet[]> {
+  if (ids.length === 0) return [];
+
+  const snippets = await readStorage('contextSnippets');
+  const lookup = new Set(ids);
+  return snippets.filter((snippet) => lookup.has(snippet.id));
+}
+
+export async function getFeedbackLog(limit = 60): Promise<FeedbackRecord[]> {
+  const log = await readStorage('feedbackLog');
+  return log.slice(0, limit);
+}
+
+export async function getHarnessPatches(limit = 20): Promise<HarnessPatch[]> {
+  const patches = await readStorage('harnessPatches');
+  return patches.slice(0, limit);
+}
+
 export async function getMemorySummary(): Promise<MemorySummary> {
   const snapshot = await readStorageSnapshot();
 

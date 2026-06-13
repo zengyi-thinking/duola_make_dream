@@ -32,6 +32,8 @@ export default function App() {
   const [statusText, setStatusText] = useState<string>(POCKET_AGENT_VOICE.intro);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<string>('');
+  const [errorText, setErrorText] = useState<string>('');
+  const [selectedContextIds, setSelectedContextIds] = useState<string[]>([]);
 
   useEffect(() => {
     void refreshMemory();
@@ -43,21 +45,27 @@ export default function App() {
     const response = await sendRuntimeMessage(createMemoryGetMessage());
     if (response.success) {
       setMemory(response.payload);
+      return;
     }
+
+    setErrorText(response.error ?? '读取本地记忆失败。');
   }
 
   async function handleSubmit() {
     if (!ideaText.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
+    setErrorText('');
     setStatusText('PocketAgent 正在把这句话展开成一个可讨论的小产品草图。');
     setLastFeedback('');
 
-    const response = await sendRuntimeMessage(createIdeaSubmitMessage(ideaText));
+    const response = await sendRuntimeMessage(createIdeaSubmitMessage(ideaText, selectedContextIds));
     setIsSubmitting(false);
 
     if (!response.success) {
-      setStatusText(response.error ?? '这次没有成功放进口袋，请再试一次。');
+      const message = response.error ?? '这次没有成功放进口袋，请再试一次。';
+      setStatusText(message);
+      setErrorText(message);
       return;
     }
 
@@ -65,6 +73,7 @@ export default function App() {
     setMemory(response.payload.memorySummary);
     setStatusText(response.payload.assistantSummary);
     setIdeaText('');
+    setSelectedContextIds([]);
   }
 
   async function handleFeedback(action: FeedbackAction) {
@@ -72,7 +81,7 @@ export default function App() {
 
     const response = await sendRuntimeMessage(createFeedbackMessage(artifact.id, action));
     if (!response.success) {
-      setLastFeedback(response.error ?? '反馈没有记录成功。');
+      setErrorText(response.error ?? '反馈没有记录成功。');
       return;
     }
 
@@ -87,7 +96,22 @@ export default function App() {
       setArtifact(null);
       setStatusText('口袋已经清空。新的想法可以重新开始。');
       setLastFeedback('');
+      setSelectedContextIds([]);
+      setErrorText('');
+      return;
     }
+
+    setErrorText(response.error ?? '清空本地记忆失败。');
+  }
+
+  function toggleContext(id: string) {
+    setSelectedContextIds((current) => {
+      if (current.includes(id)) {
+        return current.filter((item) => item !== id);
+      }
+
+      return [...current, id];
+    });
   }
 
   return (
@@ -112,12 +136,41 @@ export default function App() {
           onChange={(event) => setIdeaText(event.target.value)}
           placeholder="例如：我想做一个能把网页划词灵感自动拆成插件创意和 MVP 的小工具"
         />
+        <div className="context-select-panel">
+          <div className="context-select-head">
+            <span className="section-label">本次要带上的网页片段</span>
+            <span className="context-count">
+              {selectedContextIds.length > 0 ? `已选择 ${selectedContextIds.length} 条` : '默认不带入任何片段'}
+            </span>
+          </div>
+          <div className="context-chip-wrap">
+            {memory?.recentContextSnippets.length ? (
+              memory.recentContextSnippets.map((snippet) => {
+                const isSelected = selectedContextIds.includes(snippet.id);
+                return (
+                  <button
+                    key={snippet.id}
+                    type="button"
+                    className={`context-chip ${isSelected ? 'context-chip--selected' : ''}`}
+                    onClick={() => toggleContext(snippet.id)}
+                  >
+                    <span className="context-chip__title">{snippet.pageTitle}</span>
+                    <span className="context-chip__text">{snippet.selectedText}</span>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="context-empty">还没有片段。先去网页里划词，再点“放进口袋”。</p>
+            )}
+          </div>
+        </div>
         <div className="idea-actions">
           <span className="idea-hint">第一阶段使用本地 mock Agent，不会调用真实模型。</span>
           <LineButton variant="primary" onClick={handleSubmit} disabled={isSubmitting || !ideaText.trim()}>
             {isSubmitting ? 'PocketAgent 思考中' : '生成产品雏形'}
           </LineButton>
         </div>
+        {errorText ? <p className="error-banner">{errorText}</p> : null}
       </section>
 
       <section className="tool-panel">
@@ -220,11 +273,7 @@ export default function App() {
           </div>
           <div>
             <span className="memory-label">最近放进口袋</span>
-            <p>
-              {memory?.recentContextSnippets[0]
-                ? `${memory.recentContextSnippets[0].pageTitle} / ${memory.recentContextSnippets[0].selectedText}`
-                : '还没有来自网页的主动片段'}
-            </p>
+            <p>{memory?.recentContextSnippets[0] ? '可在上方选择带入本次想法' : '还没有来自网页的主动片段'}</p>
           </div>
         </div>
         <div className="memory-footer">

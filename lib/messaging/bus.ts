@@ -22,12 +22,16 @@ async function sendRuntimeMessage<T extends AppMessage>(
   return browser.runtime.sendMessage(message) as Promise<MessageResponseMap[T['type']]>;
 }
 
-export function createIdeaSubmitMessage(text: string, source: MessageSource = 'popup'): IdeaSubmitRequest {
+export function createIdeaSubmitMessage(
+  text: string,
+  selectedContextIds: string[] = [],
+  source: MessageSource = 'popup',
+): IdeaSubmitRequest {
   return {
     type: 'idea.submit',
     requestId: createRequestId('idea.submit'),
     source,
-    payload: { text },
+    payload: { text, selectedContextIds },
   };
 }
 

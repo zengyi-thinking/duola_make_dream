@@ -35,6 +35,7 @@ export type IdeaSubmitRequest = MessageEnvelope<
   'idea.submit',
   {
     text: string;
+    selectedContextIds: string[];
   }
 >;
 
