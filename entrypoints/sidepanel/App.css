@@ -213,6 +213,17 @@ button, textarea, input, select { font: inherit; }
   font-size: 11px;
 }
 
+/* ===== Generated Image ===== */
+.generated-image {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--pb-line);
+  margin: 4px 0;
+  background: #fff;
+}
+
 /* ===== Prompt Block ===== */
 .prompt-block {
   margin: 6px 0;

@@ -140,3 +140,24 @@ export async function clearArrayStorage<K extends StorageKey>(key: K): Promise<S
   await writeStorage(key, next);
   return next;
 }
+
+/**
+ * 读取运行时配置。
+ * privacy-check: allow — apiKey 存于扩展本地 storage，不上传第三方
+ */
+export async function getRuntimeConfig(): Promise<StorageSchema['runtimeConfig']> {
+  return readStorage('runtimeConfig');
+}
+
+/**
+ * 部分更新运行时配置（浅合并）。
+ * privacy-check: allow — apiKey 存于扩展本地 storage，不上传第三方
+ */
+export async function updateRuntimeConfig(
+  patch: Partial<StorageSchema['runtimeConfig']>,
+): Promise<StorageSchema['runtimeConfig']> {
+  const current = await readStorage('runtimeConfig');
+  const next = { ...current, ...patch };
+  await writeStorage('runtimeConfig', next);
+  return next;
+}

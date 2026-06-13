@@ -1,6 +1,8 @@
 import type { AgentIntent, ProductConcept, UserProfile } from '../types';
+import type { LlmClient } from '@/lib/llm';
+import { extractJson } from '@/lib/llm/json';
 
-interface IdeaLensInput {
+export interface IdeaLensInput {
   idea: string;
   intent: AgentIntent;
   profile: UserProfile;
@@ -35,12 +37,77 @@ const INTENT_LABELS: Record<AgentIntent, { suffix: string; audience: string; anc
   },
 };
 
-export function runIdeaLens(input: IdeaLensInput): ProductConcept {
+/**
+ * 把想法收束为产品概念。
+ * - 有 client（真实 LLM）→ 构造 prompt 调用，解析 JSON
+ * - 无 client（mock）→ 走模板逻辑
+ * 任何 LLM 失败都降级到模板，保证不崩。
+ */
+export async function runIdeaLens(input: IdeaLensInput, client?: LlmClient): Promise<ProductConcept> {
+  if (client && client.kind !== 'mock') {
+    try {
+      const concept = await generateConceptWithLlm(input, client);
+      if (concept) return concept;
+    } catch (err) {
+      console.warn('[IdeaLens] LLM 调用失败，降级到模板:', err);
+    }
+  }
+  return buildTemplateConcept(input);
+}
+
+async function generateConceptWithLlm(input: IdeaLensInput, client: LlmClient): Promise<ProductConcept | null> {
+  const styleCue = input.profile.visualLikes.slice(0, 3).join('、') || '蓝白线条';
+  const products = input.profile.productPreferences.slice(0, 2).join('、') || '轻量工具';
+
+  const system = [
+    '你是一位资深产品经理，擅长把模糊想法快速收束为一个清晰、可讨论的产品概念。',
+    '只输出一个 JSON 对象，不要任何解释文字、不要 markdown 代码块标记。',
+    'JSON 字段：name(产品名,中文,2-8字)、tagline(一句话定位,中文)、positioning(定位描述,中文,1-2句)、',
+    'coreProblem(核心问题,中文)、targetUser(目标用户,中文)、valueProposition(价值主张,中文)、',
+    'features(数组,4条中文短句)、visualDirection(数组,3条中文短句,描述视觉风格)。',
+  ].join('');
+
+  const userContent = [
+    `想法：${input.idea}`,
+    `方向类型：${labelIntent(input.intent)}`,
+    input.contextLine ? `相关上下文：${input.contextLine}` : '',
+    `用户偏好视觉：${styleCue}`,
+    `用户常做产品方向：${products}`,
+    '请基于以上把这个想法收束成一个产品概念，严格输出 JSON。',
+  ].filter(Boolean).join('\n');
+
+  const response = await client.generate({
+    system,
+    messages: [{ role: 'user', content: userContent }],
+    maxTokens: 1200,
+  });
+
+  const parsed = extractJson<Partial<ProductConcept>>(response.text);
+  if (!parsed) return null;
+
+  // 字段完整性校验，缺失关键字段则回退
+  if (!parsed.name || !parsed.tagline || !Array.isArray(parsed.features)) {
+    return null;
+  }
+
+  return {
+    name: parsed.name,
+    tagline: parsed.tagline,
+    positioning: parsed.positioning ?? '',
+    coreProblem: parsed.coreProblem ?? '',
+    targetUser: parsed.targetUser ?? '',
+    valueProposition: parsed.valueProposition ?? '',
+    features: parsed.features ?? [],
+    visualDirection: parsed.visualDirection ?? [],
+  };
+}
+
+function buildTemplateConcept(input: IdeaLensInput): ProductConcept {
   const sourceLine = INTENT_LABELS[input.intent];
   const keywords = pickKeywords(input.idea);
   const primaryKeyword = keywords[0] ?? 'Idea';
   const styleCue = input.profile.visualLikes.slice(0, 2).join('、') || '蓝白线条';
-  const contextTail = input.contextLine ? `，并借用了“${input.contextLine}”里的情境` : '';
+  const contextTail = input.contextLine ? `，并借用了"${input.contextLine}"里的情境` : '';
 
   return {
     name: buildProductName(primaryKeyword, sourceLine.suffix),
@@ -73,7 +140,7 @@ function pickKeywords(input: string): string[] {
 
 function buildProductName(primaryKeyword: string, suffix: string): string {
   const cleaned = primaryKeyword
-    .replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')
+    .replace(/[^a-zA-Z0-9一-龥]/g, '')
     .slice(0, 8);
 
   if (!cleaned) {
@@ -93,15 +160,10 @@ function capitalize(input: string): string {
 
 function labelIntent(intent: AgentIntent): string {
   switch (intent) {
-    case 'browser-extension':
-      return '浏览器插件';
-    case 'creator-tool':
-      return '创作工具';
-    case 'learning-tool':
-      return '学习工具';
-    case 'playful-tool':
-      return '陪伴型小工具';
-    default:
-      return '效率工具';
+    case 'browser-extension': return '浏览器插件';
+    case 'creator-tool': return '创作工具';
+    case 'learning-tool': return '学习工具';
+    case 'playful-tool': return '陪伴型小工具';
+    default: return '效率工具';
   }
 }

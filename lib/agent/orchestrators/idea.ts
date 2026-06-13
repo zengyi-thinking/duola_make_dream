@@ -9,6 +9,7 @@ import {
   saveIdea,
   saveProfile,
 } from '@/lib/memory';
+import { getLlmClient } from '@/lib/llm';
 import { POCKET_AGENT_VOICE } from '../personality';
 import { routeIdeaIntent } from '../router';
 import type { IdeaSubmitResult, IdeaSource, ProductArtifact } from '../types';
@@ -53,14 +54,15 @@ export async function processIdeaSubmission(
     createdAt: Date.now(),
   };
 
-  const concept = runIdeaLens({
+  const client = await getLlmClient();
+  const concept = await runIdeaLens({
     idea: ideaText,
     intent,
     profile,
     contextLine,
-  });
-  const imagePrompt = runProductCamera(concept);
-  const shrinkResult = runShrinkLight(concept);
+  }, client);
+  const imagePrompt = await runProductCamera(concept, client);
+  const shrinkResult = await runShrinkLight(concept, client);
   const artifact: ProductArtifact = {
     id: crypto.randomUUID(),
     ideaId: idea.id,

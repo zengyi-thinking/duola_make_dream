@@ -167,9 +167,18 @@ export interface RuntimeConfig {
   maxMainTextChars: number;
   maxPageExcerptChars: number;
   futurePermissionMode: 'all_urls-dev' | 'activeTab-ready';
+
+  // LLM 配置
+  llmProvider: 'mock' | 'minimax' | 'anthropic' | 'custom';
+  llmModel: string;
+  llmApiKey: string;
+  llmEndpoint: string;
+
+  // 图片生成配置
   imageMode: 'mock' | 'proxy';
   imageModel: string;
   imageProxyEndpoint: string;
+  imageApiKey: string;
 }
 
 export interface MemorySummary {

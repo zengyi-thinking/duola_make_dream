@@ -62,9 +62,16 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   maxMainTextChars: 3000,
   maxPageExcerptChars: 500,
   futurePermissionMode: 'all_urls-dev',
+
+  llmProvider: 'mock',
+  llmModel: 'MiniMax-M2.7',
+  llmApiKey: '',
+  llmEndpoint: 'https://api.minimaxi.com/anthropic',
+
   imageMode: 'mock',
   imageModel: 'gpt-image-2',
-  imageProxyEndpoint: '',
+  imageProxyEndpoint: 'https://api.apimart.ai/v1/images/generations',
+  imageApiKey: '',
 };
 
 export function createDefaultStorageState(): StorageSchema {

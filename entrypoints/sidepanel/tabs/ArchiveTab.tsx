@@ -308,6 +308,9 @@ export default function ArchiveTab(props: ArchiveTabProps) {
                 <strong>{item.model ?? 'gpt-image-2'}</strong>
                 <span className={`status-pill status-pill--${item.status}`}>{item.status}</span>
               </div>
+              {item.imageUrl ? (
+                <img src={item.imageUrl} alt={item.prompt.slice(0, 40)} className="generated-image" />
+              ) : null}
               <pre className="prompt-block">{item.prompt}</pre>
               <p className="soft-text">{item.previewText}</p>
               <div className="inline-actions">
