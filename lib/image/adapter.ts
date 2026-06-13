@@ -73,52 +73,118 @@ export async function generateImageWithAdapter(
   }
 }
 
+const IMAGE_POLL_INTERVAL_MS = 4000;
+const IMAGE_MAX_POLLS = 45; // 45 × 4s = 180s，覆盖 2k 的 ~100s 预估 + 余量
+const IMAGE_FETCH_TIMEOUT_MS = 20000;
+
 /**
- * 调用 OpenAI 兼容的 images/generations 端点。
- * 兼容 apimart.ai（GPT Image）及类似代理。
+ * 调用 apimart gpt-image-2 等「异步任务式」图片端点。
+ * 协议：POST /v1/images/generations 提交 → 返回 task_id → 轮询 GET /v1/tasks/{task_id} 至 completed。
+ * 同时兼容少数同步直接返回 url 的端点（pickImageUrl 兜底）。
+ *
+ * privacy-check: allow — 仅发送 prompt 文本，轮询任务状态，不附带本地其它用户数据
  */
 async function callImageApi(prompt: string, config: RuntimeConfig): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60000);
+  const origin = new URL(config.imageProxyEndpoint).origin;
 
+  // 1. 提交任务
+  const submit = await postJson(config.imageProxyEndpoint, config.imageApiKey, {
+    // apimart gpt-image-2 接受宽高比（如 '16:9'）+ resolution，而非 OpenAI 像素格式。
+    model: config.imageModel,
+    prompt,
+    n: 1,
+    size: '16:9',
+    resolution: '2k',
+  }, 30000);
+
+  // 兜底：个别端点可能同步直接返回图片
+  const directUrl = pickImageUrl(submit);
+  if (directUrl) return directUrl;
+
+  // 提交返回 task_id（apimart: data[0].task_id；个别端点: data.task_id）
+  const taskId: unknown = submit?.data?.[0]?.task_id ?? submit?.data?.task_id;
+  if (typeof taskId !== 'string' || !taskId) {
+    throw new Error('图片 API 未返回 task_id（异步任务标识）');
+  }
+
+  // 2. 轮询任务结果
+  const tasksUrl = `${origin}/v1/tasks/${taskId}`;
+  for (let i = 0; i < IMAGE_MAX_POLLS; i++) {
+    await sleep(IMAGE_POLL_INTERVAL_MS);
+    const polled = await getJson(tasksUrl, config.imageApiKey);
+    const task = polled?.data;
+    const status = task?.status;
+
+    if (status === 'completed' || status === 'succeeded') {
+      const url = pickImageUrl(task);
+      if (url) return url;
+      throw new Error('图片任务已完成但未返回图片地址');
+    }
+    if (status === 'failed' || status === 'error') {
+      throw new Error(`图片任务执行失败：${task?.error ?? status}`);
+    }
+    // pending / processing → 继续轮询
+  }
+  throw new Error(`图片生成超时（轮询 ${(IMAGE_MAX_POLLS * IMAGE_POLL_INTERVAL_MS) / 1000}s 未完成）`);
+}
+
+async function postJson(url: string, apiKey: string, body: unknown, timeoutMs: number): Promise<any> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(config.imageProxyEndpoint, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': `Bearer ${config.imageApiKey}`, // privacy-check: allow
+        authorization: `Bearer ${apiKey}`, // privacy-check: allow
       },
-      body: JSON.stringify({
-        model: config.imageModel,
-        prompt,
-        n: 1,
-        size: '1024x1024',
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
-
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       throw new Error(`[${res.status}] ${errText.slice(0, 200)}`);
     }
-
-    const data = await res.json() as {
-      data?: Array<{ url?: string; b64_json?: string }>;
-    };
-
-    const item = data.data?.[0];
-    if (!item) throw new Error('图片 API 返回为空');
-
-    if (item.url) return item.url;
-    if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
-
-    throw new Error('图片 API 未返回 url 或 b64_json');
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('图片请求超时（60s）');
-    }
-    throw err;
+    return await res.json();
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function getJson(url: string, apiKey: string): Promise<any> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { authorization: `Bearer ${apiKey}` }, // privacy-check: allow
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`[${res.status}] ${errText.slice(0, 200)}`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 从任务对象或同步响应里提取图片地址，兼容多种字段命名（apimart: result.images[].url[]）。 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pickImageUrl(node: any): string | null {
+  if (!node) return null;
+  const images = node?.result?.images ?? node?.images ?? node?.data?.result?.images;
+  const first = Array.isArray(images) ? images[0] : images;
+  let url: unknown = first?.url ?? first?.image_url;
+  if (Array.isArray(url)) url = url[0];
+  if (typeof url === 'string' && url) return url;
+  const b64: unknown = first?.b64_json;
+  if (typeof b64 === 'string' && b64) {
+    return b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`;
+  }
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

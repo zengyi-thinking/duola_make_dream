@@ -80,7 +80,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   futurePermissionMode: 'all_urls-dev',
 
   llmProvider: 'mock',
-  llmModel: 'MiniMax-M2.7',
+  llmModel: 'MiniMax-M3',
   llmApiKey: '',
   llmEndpoint: 'https://api.minimaxi.com/anthropic',
 
