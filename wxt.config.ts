@@ -6,7 +6,7 @@ export default defineConfig({
     name: 'PocketBuddy',
     short_name: 'PocketBuddy',
     description: '把一个模糊想法放进口袋，拿出产品概念、视觉方向和 MVP 草图',
-    permissions: ['storage'],
+    permissions: ['storage', 'activeTab'],
     action: {
       default_title: 'PocketBuddy',
     },

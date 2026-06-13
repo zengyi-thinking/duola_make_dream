@@ -1,6 +1,30 @@
+import type {
+  GeneratedImageRecord,
+  ImageGenerationRequest,
+  ImageGenerationSourceType,
+  ImageGenerationStyle,
+} from '@/lib/image/types';
+import type { MindmapRecord, MindmapResult } from '@/lib/mindmap/types';
+import type {
+  PageAnalysisResult,
+  PageContextRecord,
+  PageReadMode,
+  PageReadResult,
+  PageType,
+} from '@/lib/page/types';
+
+export type { ImageGenerationRequest, ImageGenerationSourceType, ImageGenerationStyle } from '@/lib/image/types';
+export type { MindmapNode, MindmapRecord, MindmapResult } from '@/lib/mindmap/types';
+export type { PageAnalysisResult, PageContextRecord, PageReadMode, PageReadResult, PageType } from '@/lib/page/types';
+
 export type PocketBuddyMood = 'idle' | 'warm' | 'thinking' | 'spark';
 
-export type AgentIntent = 'browser-extension' | 'productivity-tool' | 'creator-tool' | 'learning-tool' | 'playful-tool';
+export type AgentIntent =
+  | 'browser-extension'
+  | 'productivity-tool'
+  | 'creator-tool'
+  | 'learning-tool'
+  | 'playful-tool';
 
 export type IdeaSource = 'popup' | 'selection';
 
@@ -19,7 +43,6 @@ export type HarnessPatchTarget =
   | 'core-code';
 
 export type HarnessPatchRisk = 'low' | 'medium' | 'high';
-
 export type HarnessPatchStatus = 'pending' | 'approved' | 'rejected' | 'applied';
 
 export interface HarnessPatch {
@@ -50,6 +73,7 @@ export interface IdeaRecord {
   rawInput: string;
   source: IdeaSource;
   selectedContextIds: string[];
+  selectedArchiveNoteIds: string[];
   createdAt: number;
 }
 
@@ -74,6 +98,7 @@ export interface ProductArtifact {
   nextTasks: string[];
   appliedGadgets: string[];
   selectedContextIds: string[];
+  selectedArchiveNoteIds: string[];
   createdAt: number;
 }
 
@@ -93,21 +118,80 @@ export interface UserProfile {
   lastUpdated: number;
 }
 
+export type MemoryCandidateCategory = 'interest' | 'project-link' | 'topic' | 'style' | 'knowledge';
+export type MemoryCandidateSourceType = 'paper' | 'article' | 'idea';
+
+export type MemoryCandidate = {
+  id: string;
+  sourceType: MemoryCandidateSourceType;
+  category: MemoryCandidateCategory;
+  title: string;
+  content: string;
+  reason: string;
+  relatedNoteId?: string;
+  relatedContextId?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+};
+
+export type ApprovedMemory = {
+  id: string;
+  category: MemoryCandidateCategory;
+  title: string;
+  content: string;
+  sourceType: MemoryCandidateSourceType;
+  reason: string;
+  relatedNoteId?: string;
+  relatedContextId?: string;
+  createdAt: number;
+};
+
+export type ArchiveNote = {
+  id: string;
+  sourceType: 'paper' | 'article' | 'idea';
+  title: string;
+  sourceTitle: string;
+  origin: string;
+  summary: string;
+  bullets: string[];
+  tags: string[];
+  createdAt: number;
+  savedByUser: boolean;
+  relatedContextIds: string[];
+};
+
 export interface RuntimeConfig {
   agentName: string;
   defaultTone: string;
   maxSelectionChars: number;
+  maxMainTextChars: number;
+  maxPageExcerptChars: number;
   futurePermissionMode: 'all_urls-dev' | 'activeTab-ready';
+  imageMode: 'mock' | 'proxy';
+  imageModel: string;
+  imageProxyEndpoint: string;
 }
 
 export interface MemorySummary {
   profile: UserProfile;
   recentContextSnippets: ContextSnippet[];
+  recentPageContexts: PageContextRecord[];
+  archiveNotes: ArchiveNote[];
+  memoryCandidates: MemoryCandidate[];
+  approvedMemories: ApprovedMemory[];
+  generatedImages: GeneratedImageRecord[];
+  generatedMindmaps: MindmapRecord[];
   pendingPatches: HarnessPatch[];
   counts: {
     ideas: number;
     artifacts: number;
     feedback: number;
+    pageContexts: number;
+    notes: number;
+    memoryCandidates: number;
+    approvedMemories: number;
+    images: number;
+    mindmaps: number;
   };
 }
 
@@ -124,5 +208,45 @@ export interface ContextCaptureResult {
 
 export interface FeedbackRecordResult {
   feedback: FeedbackRecord;
+  memorySummary: MemorySummary;
+}
+
+export interface PageReadResponse {
+  page: PageReadResult;
+  savedContext: PageContextRecord;
+  memorySummary: MemorySummary;
+}
+
+export interface PageAnalyzeResponse {
+  page: PageReadResult;
+  savedContext: PageContextRecord;
+  analysis: PageAnalysisResult;
+  memorySummary: MemorySummary;
+}
+
+export interface ArchiveNoteSaveResult {
+  note: ArchiveNote;
+  memorySummary: MemorySummary;
+}
+
+export interface ArchiveNoteListResult {
+  notes: ArchiveNote[];
+  memorySummary: MemorySummary;
+}
+
+export interface MemoryCandidateMutationResult {
+  candidate: MemoryCandidate;
+  approvedMemory?: ApprovedMemory;
+  memorySummary: MemorySummary;
+}
+
+export interface ImageGenerationResult {
+  request: ImageGenerationRequest;
+  record: GeneratedImageRecord;
+  memorySummary: MemorySummary;
+}
+
+export interface MindmapGenerationResult {
+  record: MindmapRecord;
   memorySummary: MemorySummary;
 }

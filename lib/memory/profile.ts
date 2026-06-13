@@ -1,4 +1,9 @@
-import type { FeedbackAction, UserProfile } from '@/lib/agent/types';
+import type {
+  ApprovedMemory,
+  FeedbackAction,
+  MemoryCandidate,
+  UserProfile,
+} from '@/lib/agent/types';
 import { DEFAULT_PROFILE } from '@/lib/storage/schema';
 
 export function createProfile(): UserProfile {
@@ -46,6 +51,49 @@ export function extractThemesFromIdea(text: string): string[] {
   ];
 
   return candidates.filter((item) => item.rule.test(text)).map((item) => item.label);
+}
+
+export function createApprovedMemory(candidate: MemoryCandidate): ApprovedMemory {
+  return {
+    id: crypto.randomUUID(),
+    category: candidate.category,
+    title: candidate.title,
+    content: candidate.content,
+    sourceType: candidate.sourceType,
+    reason: candidate.reason,
+    relatedNoteId: candidate.relatedNoteId,
+    relatedContextId: candidate.relatedContextId,
+    createdAt: Date.now(),
+  };
+}
+
+export function applyApprovedMemoryToProfile(
+  profile: UserProfile,
+  candidate: MemoryCandidate,
+): UserProfile {
+  const next = { ...profile };
+
+  if (candidate.category === 'style') {
+    next.visualLikes = mergeStringList(next.visualLikes, [candidate.title]);
+    next.tonePreference = candidate.content || next.tonePreference;
+  }
+
+  if (candidate.category === 'topic') {
+    next.recentThemes = mergeStringList(next.recentThemes, [candidate.title]).slice(0, 8);
+  }
+
+  if (candidate.category === 'interest') {
+    next.productPreferences = mergeStringList(next.productPreferences, [candidate.title]);
+    next.recentThemes = mergeStringList(next.recentThemes, [candidate.title]).slice(0, 8);
+  }
+
+  if (candidate.category === 'project-link') {
+    next.productPreferences = mergeStringList(next.productPreferences, [candidate.title]);
+    next.recentThemes = mergeStringList(next.recentThemes, [candidate.content]).slice(0, 8);
+  }
+
+  next.lastUpdated = Date.now();
+  return next;
 }
 
 function mergeStringList(base: string[], incoming: string[]): string[] {

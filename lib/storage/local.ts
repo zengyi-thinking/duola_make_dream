@@ -40,6 +40,12 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
     artifactHistory: (result.artifactHistory as StorageSchema['artifactHistory'] | undefined) ?? [],
     feedbackLog: (result.feedbackLog as StorageSchema['feedbackLog'] | undefined) ?? [],
     contextSnippets: (result.contextSnippets as StorageSchema['contextSnippets'] | undefined) ?? [],
+    pageContexts: (result.pageContexts as StorageSchema['pageContexts'] | undefined) ?? [],
+    archiveNotes: (result.archiveNotes as StorageSchema['archiveNotes'] | undefined) ?? [],
+    memoryCandidates: (result.memoryCandidates as StorageSchema['memoryCandidates'] | undefined) ?? [],
+    approvedMemories: (result.approvedMemories as StorageSchema['approvedMemories'] | undefined) ?? [],
+    generatedImages: (result.generatedImages as StorageSchema['generatedImages'] | undefined) ?? [],
+    generatedMindmaps: (result.generatedMindmaps as StorageSchema['generatedMindmaps'] | undefined) ?? [],
     harnessPatches: (result.harnessPatches as StorageSchema['harnessPatches'] | undefined) ?? [],
     runtimeConfig: (result.runtimeConfig as StorageSchema['runtimeConfig'] | undefined)
       ?? DEFAULT_STATE.runtimeConfig,
@@ -80,6 +86,57 @@ export async function appendLimited<K extends StorageKey>(
   }
 
   const next = [item, ...current].slice(0, limit) as StorageSchema[K];
+  await writeStorage(key, next);
+  return next;
+}
+
+export async function removeById<K extends StorageKey>(
+  key: K,
+  id: string,
+): Promise<StorageSchema[K]> {
+  const current = await readStorage(key);
+
+  if (!Array.isArray(current)) {
+    throw new Error(`${key} 不是数组类型，无法删除记录`);
+  }
+
+  const next = current.filter((item) => {
+    if (!item || typeof item !== 'object' || !('id' in item)) return true;
+    return item.id !== id;
+  }) as StorageSchema[K];
+
+  await writeStorage(key, next);
+  return next;
+}
+
+export async function replaceArrayItem<K extends StorageKey>(
+  key: K,
+  id: string,
+  updater: (item: StorageSchema[K] extends Array<infer T> ? T : never) => StorageSchema[K] extends Array<infer T> ? T : never,
+): Promise<StorageSchema[K]> {
+  const current = await readStorage(key);
+
+  if (!Array.isArray(current)) {
+    throw new Error(`${key} 不是数组类型，无法更新记录`);
+  }
+
+  const next = current.map((item) => {
+    if (!item || typeof item !== 'object' || !('id' in item)) return item;
+    return item.id === id ? updater(item as never) : item;
+  }) as StorageSchema[K];
+
+  await writeStorage(key, next);
+  return next;
+}
+
+export async function clearArrayStorage<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {
+  const current = await readStorage(key);
+
+  if (!Array.isArray(current)) {
+    throw new Error(`${key} 不是数组类型，无法清空`);
+  }
+
+  const next = [] as unknown as StorageSchema[K];
   await writeStorage(key, next);
   return next;
 }

@@ -1,12 +1,18 @@
 import type {
+  ApprovedMemory,
+  ArchiveNote,
   ContextSnippet,
   FeedbackRecord,
   HarnessPatch,
   IdeaRecord,
+  MemoryCandidate,
   ProductArtifact,
   RuntimeConfig,
   UserProfile,
 } from '@/lib/agent/types';
+import type { GeneratedImageRecord } from '@/lib/image/types';
+import type { MindmapRecord } from '@/lib/mindmap/types';
+import type { PageContextRecord } from '@/lib/page/types';
 
 export const STORAGE_KEYS = {
   profile: 'profile',
@@ -14,6 +20,12 @@ export const STORAGE_KEYS = {
   artifactHistory: 'artifactHistory',
   feedbackLog: 'feedbackLog',
   contextSnippets: 'contextSnippets',
+  pageContexts: 'pageContexts',
+  archiveNotes: 'archiveNotes',
+  memoryCandidates: 'memoryCandidates',
+  approvedMemories: 'approvedMemories',
+  generatedImages: 'generatedImages',
+  generatedMindmaps: 'generatedMindmaps',
   harnessPatches: 'harnessPatches',
   runtimeConfig: 'runtimeConfig',
 } as const;
@@ -24,6 +36,12 @@ export interface StorageSchema {
   artifactHistory: ProductArtifact[];
   feedbackLog: FeedbackRecord[];
   contextSnippets: ContextSnippet[];
+  pageContexts: PageContextRecord[];
+  archiveNotes: ArchiveNote[];
+  memoryCandidates: MemoryCandidate[];
+  approvedMemories: ApprovedMemory[];
+  generatedImages: GeneratedImageRecord[];
+  generatedMindmaps: MindmapRecord[];
   harnessPatches: HarnessPatch[];
   runtimeConfig: RuntimeConfig;
 }
@@ -41,7 +59,12 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   agentName: 'PocketAgent',
   defaultTone: 'warm-product-designer',
   maxSelectionChars: 280,
+  maxMainTextChars: 3000,
+  maxPageExcerptChars: 500,
   futurePermissionMode: 'all_urls-dev',
+  imageMode: 'mock',
+  imageModel: 'gpt-image-2',
+  imageProxyEndpoint: '',
 };
 
 export function createDefaultStorageState(): StorageSchema {
@@ -51,6 +74,12 @@ export function createDefaultStorageState(): StorageSchema {
     artifactHistory: [],
     feedbackLog: [],
     contextSnippets: [],
+    pageContexts: [],
+    archiveNotes: [],
+    memoryCandidates: [],
+    approvedMemories: [],
+    generatedImages: [],
+    generatedMindmaps: [],
     harnessPatches: [],
     runtimeConfig: { ...DEFAULT_RUNTIME_CONFIG },
   };

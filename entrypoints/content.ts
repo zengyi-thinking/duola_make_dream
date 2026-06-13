@@ -1,5 +1,9 @@
+import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { createContextCaptureMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
+import type { InternalContentMessage } from '@/lib/messaging/types';
+import { extractCurrentPageContent, extractCurrentSelection } from '@/lib/page/extractor';
+import { readStorage } from '@/lib/storage/local';
 
 const HOST_ID = 'pocketbuddy-content-root';
 const MAX_SELECTION_CHARS = 280;
@@ -19,95 +23,30 @@ export default defineContentScript({
     const style = document.createElement('style');
     style.textContent = `
       :host { all: initial; }
-      .pb-fab,
-      .pb-pocket-btn,
-      .pb-toast {
-        font-family: "Avenir Next", "Trebuchet MS", "PingFang SC", sans-serif;
-        box-sizing: border-box;
-      }
+      .pb-fab, .pb-pocket-btn, .pb-toast { font-family: "Avenir Next", "Trebuchet MS", "PingFang SC", sans-serif; box-sizing: border-box; }
       .pb-fab {
-        position: fixed;
-        right: 20px;
-        bottom: 20px;
-        width: 54px;
-        height: 54px;
-        border-radius: 20px;
-        border: 2px solid #15304a;
-        background: linear-gradient(180deg, #ffffff, #e7f5ff);
-        box-shadow: 0 12px 30px rgba(18, 89, 139, 0.18);
-        color: #15304a;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 2147483647;
-        transition: transform 120ms ease;
+        position: fixed; right: 20px; bottom: 20px; width: 54px; height: 54px; border-radius: 20px;
+        border: 2px solid #15304a; background: linear-gradient(180deg, #ffffff, #e7f5ff);
+        box-shadow: 0 12px 30px rgba(18, 89, 139, 0.18); color: #15304a;
+        display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2147483647; transition: transform 120ms ease;
       }
       .pb-fab:hover { transform: translateY(-2px); }
-      .pb-pocket-glyph {
-        width: 26px;
-        height: 18px;
-        border: 2px solid #15304a;
-        border-top: 0;
-        border-radius: 0 0 14px 14px;
-        position: relative;
-        background: rgba(167, 216, 255, 0.6);
-      }
+      .pb-pocket-glyph { width: 26px; height: 18px; border: 2px solid #15304a; border-top: 0; border-radius: 0 0 14px 14px; position: relative; background: rgba(167, 216, 255, 0.6); }
       .pb-pocket-glyph::before {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: -10px;
-        width: 22px;
-        height: 10px;
-        transform: translateX(-50%);
-        border: 2px solid #15304a;
-        border-bottom: 0;
-        border-radius: 12px 12px 0 0;
-        background: #fff;
+        content: ""; position: absolute; left: 50%; top: -10px; width: 22px; height: 10px; transform: translateX(-50%);
+        border: 2px solid #15304a; border-bottom: 0; border-radius: 12px 12px 0 0; background: #fff;
       }
       .pb-pocket-btn {
-        position: fixed;
-        display: none;
-        padding: 8px 12px;
-        border-radius: 999px;
-        border: 2px solid #15304a;
-        background: #ffffff;
-        color: #15304a;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-        z-index: 2147483647;
-        box-shadow: 0 10px 24px rgba(18, 89, 139, 0.16);
+        position: fixed; display: none; padding: 8px 12px; border-radius: 999px; border: 2px solid #15304a; background: #ffffff; color: #15304a;
+        font-size: 12px; font-weight: 700; cursor: pointer; z-index: 2147483647; box-shadow: 0 10px 24px rgba(18, 89, 139, 0.16);
       }
-      .pb-pocket-btn[data-visible="true"] {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-      }
+      .pb-pocket-btn[data-visible="true"] { display: inline-flex; align-items: center; gap: 8px; }
       .pb-pocket-btn::before {
-        content: "";
-        width: 12px;
-        height: 9px;
-        border: 2px solid #15304a;
-        border-top: 0;
-        border-radius: 0 0 9px 9px;
-        background: rgba(167, 216, 255, 0.75);
+        content: ""; width: 12px; height: 9px; border: 2px solid #15304a; border-top: 0; border-radius: 0 0 9px 9px; background: rgba(167, 216, 255, 0.75);
       }
       .pb-toast {
-        position: fixed;
-        right: 20px;
-        bottom: 86px;
-        max-width: 240px;
-        padding: 10px 12px;
-        border-radius: 18px;
-        border: 2px solid #15304a;
-        background: rgba(255, 255, 255, 0.98);
-        color: #15304a;
-        font-size: 12px;
-        line-height: 1.45;
-        display: none;
-        z-index: 2147483647;
+        position: fixed; right: 20px; bottom: 86px; max-width: 260px; padding: 10px 12px; border-radius: 18px;
+        border: 2px solid #15304a; background: rgba(255, 255, 255, 0.98); color: #15304a; font-size: 12px; line-height: 1.45; display: none; z-index: 2147483647;
       }
       .pb-toast[data-visible="true"] { display: block; }
     `;
@@ -116,6 +55,7 @@ export default defineContentScript({
     fab.className = 'pb-fab';
     fab.type = 'button';
     fab.title = 'PocketBuddy';
+    // privacy-check: allow — 注入已知安全的 SVG glyph 到 Shadow DOM
     fab.innerHTML = '<span class="pb-pocket-glyph"></span>';
 
     const pocketButton = document.createElement('button');
@@ -133,16 +73,26 @@ export default defineContentScript({
     const showToast = (message: string) => {
       toast.textContent = message;
       toast.dataset.visible = 'true';
-      if (toastTimer) {
-        window.clearTimeout(toastTimer);
-      }
+      if (toastTimer) window.clearTimeout(toastTimer);
       toastTimer = window.setTimeout(() => {
         toast.dataset.visible = 'false';
-      }, 1800);
+      }, 2000);
     };
 
+    browser.runtime.onMessage.addListener((message: InternalContentMessage, _sender, sendResponse) => {
+      handleInternalContentMessage(message)
+        .then((response) => sendResponse(response))
+        .catch((error) => {
+          sendResponse({
+            __error: error instanceof Error ? error.message : String(error),
+          });
+        });
+
+      return true;
+    });
+
     const updateSelectionButton = () => {
-      if (isSensitiveSelection()) {
+      if (isSensitiveSelection() || isSensitiveActiveElement()) {
         pocketButton.dataset.visible = 'false';
         return;
       }
@@ -165,7 +115,7 @@ export default defineContentScript({
     };
 
     const captureSelection = async () => {
-      if (isSensitiveSelection()) {
+      if (isSensitiveSelection() || isSensitiveActiveElement()) {
         showToast('PocketBuddy 不会读取表单内容。');
         pocketButton.dataset.visible = 'false';
         return;
@@ -185,12 +135,7 @@ export default defineContentScript({
         selectedText: selectedText.slice(0, MAX_SELECTION_CHARS),
       }));
 
-      if (response.success) {
-        showToast('这段灵感已经放进口袋。');
-      } else {
-        showToast(response.error ?? '这次没有保存成功。');
-      }
-
+      showToast(response.success ? '这段灵感已经放进口袋。' : (response.error ?? '这次没有保存成功。'));
       pocketButton.dataset.visible = 'false';
     };
 
@@ -213,6 +158,20 @@ export default defineContentScript({
         updateSelectionButton();
       }
     }, true);
+
+    async function handleInternalContentMessage(message: InternalContentMessage) {
+      const runtimeConfig = await readStorage('runtimeConfig');
+
+      if (message.type === 'content.page.extract-current') {
+        return extractCurrentPageContent(document, message.mode, runtimeConfig);
+      }
+
+      if (isSensitiveSelection()) {
+        throw new Error('当前选区位于敏感输入区域，不能读取。');
+      }
+
+      return extractCurrentSelection(document, runtimeConfig);
+    }
   },
 });
 
@@ -224,5 +183,11 @@ function isSensitiveSelection(): boolean {
   if (!node) return false;
 
   const element = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
-  return Boolean(element?.closest('input, textarea, [contenteditable=""], [contenteditable="true"]'));
+  return Boolean(element?.closest('input, textarea, select, button, form, [contenteditable], [contenteditable="true"]'));
+}
+
+function isSensitiveActiveElement(): boolean {
+  const active = document.activeElement;
+  if (!active) return false;
+  return Boolean(active.closest('input, textarea, select, button, form, [contenteditable], [contenteditable="true"]'));
 }

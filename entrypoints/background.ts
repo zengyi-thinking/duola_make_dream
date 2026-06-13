@@ -1,30 +1,51 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
-import { processIdeaSubmission } from '@/lib/agent/core';
-import { buildHarnessPatchFromFeedback, shouldCreateHarnessPatch } from '@/lib/agent/harness';
-import type {
-  ContextCaptureResult,
-  FeedbackRecordResult,
-  IdeaSubmitResult,
-  MemorySummary,
-} from '@/lib/agent/types';
 import {
+  applyApprovedMemoryToProfile,
   applyFeedbackToProfile,
+  approveMemoryCandidate,
+  clearArchiveNotes,
+  convertCandidateToApprovedMemory,
+  deleteApprovedMemory,
+  deleteArchiveNote,
+  deleteGeneratedImage,
+  deleteGeneratedMindmap,
   deleteMemory,
+  deleteMemoryCandidate,
   ensureProfile,
+  getArchiveNotes,
   getFeedbackLog,
+  getGeneratedImages,
+  getGeneratedMindmaps,
   getHarnessPatches,
+  getMemoryCandidates,
   getMemorySummary,
+  rejectMemoryCandidate,
+  saveArchiveNote,
   saveContextSnippet,
   saveFeedback,
+  saveGeneratedImage,
+  saveGeneratedMindmap,
   saveHarnessPatch,
+  saveMemoryCandidates,
+  savePageContext,
   saveProfile,
 } from '@/lib/memory';
+import { buildArchiveNoteFromAnalysis, buildPageAnalysisResult } from '@/lib/agent/core';
+import { runImageGeneration } from '@/lib/image/service';
+import { generateMindmapRecord } from '@/lib/mindmap/service';
+import { toPageContextRecord } from '@/lib/page/extractor';
+import { buildHarnessPatchFromFeedback, shouldCreateHarnessPatch } from '@/lib/agent/harness';
+import { processIdeaSubmission } from '@/lib/agent/orchestrators/idea';
 import { readStorage } from '@/lib/storage/local';
+import { sendTabInternalMessage } from '@/lib/messaging/bus';
+import type { PageReadResult } from '@/lib/page/types';
 import type {
   AppMessage,
   AppMessageResponse,
   ContextCaptureSelectionRequest,
+  InternalContentMessage,
+  MessageSource,
 } from '@/lib/messaging/types';
 
 export default defineBackground(() => {
@@ -33,7 +54,8 @@ export default defineBackground(() => {
       .then((response) => sendResponse(response))
       .catch((error) => {
         sendResponse(createErrorResponse(
-          message,
+          message.type,
+          message.requestId,
           error instanceof Error ? error.message : String(error),
         ));
       });
@@ -43,83 +65,96 @@ export default defineBackground(() => {
 });
 
 async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
-  try {
-    switch (message.type) {
-      case 'idea.submit': {
-        const payload = await handleIdeaSubmit(message.payload.text, message.payload.selectedContextIds);
-        return {
-          type: 'idea.submit',
-          requestId: message.requestId,
-          source: 'background',
-          success: true,
-          payload,
-        };
-      }
+  switch (message.type) {
+    case 'idea.submit':
+      return successResponse('idea.submit', message.requestId, await processIdeaSubmission({
+        text: message.payload.text,
+        source: 'popup',
+        selectedContextIds: message.payload.selectedContextIds,
+        selectedArchiveNoteIds: message.payload.selectedArchiveNoteIds,
+      }));
 
-      case 'feedback.record': {
-        const payload = await handleFeedbackRecord(message.payload.artifactId, message.payload.action);
-        return {
-          type: 'feedback.record',
-          requestId: message.requestId,
-          source: 'background',
-          success: true,
-          payload,
-        };
-      }
+    case 'feedback.record':
+      return successResponse('feedback.record', message.requestId, await handleFeedbackRecord(
+        message.payload.artifactId,
+        message.payload.action,
+      ));
 
-      case 'memory.get': {
-        const payload = await getMemorySummary();
-        return {
-          type: 'memory.get',
-          requestId: message.requestId,
-          source: 'background',
-          success: true,
-          payload,
-        };
-      }
+    case 'memory.get':
+      return successResponse('memory.get', message.requestId, await getMemorySummary());
 
-      case 'memory.delete': {
-        const payload = await deleteMemory(message.payload.scope);
-        return {
-          type: 'memory.delete',
-          requestId: message.requestId,
-          source: 'background',
-          success: true,
-          payload,
-        };
-      }
+    case 'memory.delete':
+      return successResponse('memory.delete', message.requestId, await handleMemoryDelete(message.payload.scope, message.payload.id));
 
-      case 'context.captureSelection': {
-        const payload = await handleContextCapture(message.payload);
-        return {
-          type: 'context.captureSelection',
-          requestId: message.requestId,
-          source: 'background',
-          success: true,
-          payload,
-        };
-      }
-    }
-  } catch (error) {
-    return createErrorResponse(
-      message,
-      error instanceof Error ? error.message : String(error),
-    );
+    case 'context.captureSelection':
+      return successResponse('context.captureSelection', message.requestId, await handleContextCapture(message.payload));
+
+    case 'page.readCurrent':
+      return successResponse('page.readCurrent', message.requestId, await handlePageRead(message.payload.mode ?? 'current-page'));
+
+    case 'page.analyzeCurrent':
+      return successResponse('page.analyzeCurrent', message.requestId, await handlePageAnalyze(message.payload.mode ?? 'study-archive'));
+
+    case 'archive.note.save':
+      return successResponse('archive.note.save', message.requestId, await handleArchiveSave(message.payload.analysis, message.payload.sourceContext));
+
+    case 'archive.note.list':
+      return successResponse('archive.note.list', message.requestId, {
+        notes: await getArchiveNotes(),
+        memorySummary: await getMemorySummary(),
+      });
+
+    case 'archive.note.delete':
+      return successResponse('archive.note.delete', message.requestId, await deleteArchiveNote(message.payload.noteId));
+
+    case 'archive.note.clear':
+      return successResponse('archive.note.clear', message.requestId, await clearArchiveNotes());
+
+    case 'image.generate':
+      return successResponse('image.generate', message.requestId, await handleImageGenerate(message.payload));
+
+    case 'image.list':
+      return successResponse('image.list', message.requestId, {
+        records: await getGeneratedImages(),
+        memorySummary: await getMemorySummary(),
+      });
+
+    case 'image.delete':
+      return successResponse('image.delete', message.requestId, await deleteGeneratedImage(message.payload.imageId));
+
+    case 'mindmap.generate':
+      return successResponse('mindmap.generate', message.requestId, await handleMindmapGenerate(message.payload));
+
+    case 'mindmap.list':
+      return successResponse('mindmap.list', message.requestId, {
+        records: await getGeneratedMindmaps(),
+        memorySummary: await getMemorySummary(),
+      });
+
+    case 'mindmap.delete':
+      return successResponse('mindmap.delete', message.requestId, await deleteGeneratedMindmap(message.payload.mindmapId));
+
+    case 'memory.candidate.approve':
+      return successResponse('memory.candidate.approve', message.requestId, await handleMemoryCandidateApprove(message.payload.candidateId));
+
+    case 'memory.candidate.reject':
+      return successResponse('memory.candidate.reject', message.requestId, await handleMemoryCandidateReject(message.payload.candidateId));
+
+    case 'memory.candidate.list':
+      return successResponse('memory.candidate.list', message.requestId, {
+        candidates: await getMemoryCandidates(),
+        memorySummary: await getMemorySummary(),
+      });
+
+    case 'memory.candidate.delete':
+      return successResponse('memory.candidate.delete', message.requestId, await deleteMemoryCandidate(message.payload.candidateId));
   }
-}
-
-async function handleIdeaSubmit(text: string, selectedContextIds: string[]): Promise<IdeaSubmitResult> {
-  return processIdeaSubmission({
-    text,
-    source: 'popup',
-    selectedContextIds,
-  });
 }
 
 async function handleFeedbackRecord(
   artifactId: string,
   action: Parameters<typeof applyFeedbackToProfile>[1],
-): Promise<FeedbackRecordResult> {
+) {
   const feedback = {
     id: crypto.randomUUID(),
     artifactId,
@@ -148,7 +183,7 @@ async function handleFeedbackRecord(
 
 async function handleContextCapture(
   payload: ContextCaptureSelectionRequest['payload'],
-): Promise<ContextCaptureResult> {
+) {
   const runtimeConfig = await readStorage('runtimeConfig');
   const snippet = {
     id: crypto.randomUUID(),
@@ -167,109 +202,176 @@ async function handleContextCapture(
   };
 }
 
-function createErrorResponse(
-  message: AppMessage,
-  error: string,
-): AppMessageResponse {
-  const memorySummary: MemorySummary = emptyMemorySummary();
+async function handleMemoryDelete(scope: AppMessage['type'] extends never ? never : any, id?: string) {
+  if (!id) {
+    return deleteMemory(scope);
+  }
 
-  switch (message.type) {
-    case 'idea.submit':
-      return {
-        type: 'idea.submit',
-        requestId: message.requestId,
-        source: 'background',
-        success: false,
-        error,
-        payload: {
-          artifact: {
-            id: '',
-            ideaId: '',
-            intent: 'productivity-tool',
-            concept: {
-              name: '',
-              tagline: '',
-              positioning: '',
-              coreProblem: '',
-              targetUser: '',
-              valueProposition: '',
-              features: [],
-              visualDirection: [],
-            },
-            imagePrompt: '',
-            mvpPlan: [],
-            nextTasks: [],
-            appliedGadgets: [],
-            selectedContextIds: [],
-            createdAt: 0,
-          },
-          assistantSummary: '',
-          memorySummary,
-        },
-      };
+  if (scope === 'approvedMemories') {
+    return deleteApprovedMemory(id);
+  }
 
-    case 'feedback.record':
-      return {
-        type: 'feedback.record',
-        requestId: message.requestId,
-        source: 'background',
-        success: false,
-        error,
-        payload: {
-          feedback: {
-            id: '',
-            artifactId: '',
-            action: 'more-minimal',
-            createdAt: 0,
-          },
-          memorySummary,
-        },
-      };
+  if (scope === 'archiveNotes') {
+    return deleteArchiveNote(id);
+  }
 
-    case 'context.captureSelection':
-      return {
-        type: 'context.captureSelection',
-        requestId: message.requestId,
-        source: 'background',
-        success: false,
-        error,
-        payload: {
-          snippet: {
-            id: '',
-            origin: '',
-            pageTitle: '',
-            selectedText: '',
-            source: 'content',
-            createdAt: 0,
-          },
-          memorySummary,
-        },
-      };
+  if (scope === 'memoryCandidates') {
+    return deleteMemoryCandidate(id);
+  }
 
-    case 'memory.delete':
-      return {
-        type: 'memory.delete',
-        requestId: message.requestId,
-        source: 'background',
-        success: false,
-        error,
-        payload: memorySummary,
-      };
+  if (scope === 'generatedImages') {
+    return deleteGeneratedImage(id);
+  }
 
-    case 'memory.get':
-      return {
-        type: 'memory.get',
-        requestId: message.requestId,
-        source: 'background',
-        success: false,
-        error,
-        payload: memorySummary,
-      };
+  if (scope === 'generatedMindmaps') {
+    return deleteGeneratedMindmap(id);
+  }
+
+  throw new Error(`scope=${String(scope)} 不支持单条删除`);
+}
+
+async function handlePageRead(mode: 'current-page' | 'study-archive') {
+  const page = await requestPageExtraction({
+    type: 'content.page.extract-current',
+    mode,
+  });
+  const runtimeConfig = await readStorage('runtimeConfig');
+  const savedContext = await savePageContext(toPageContextRecord(page, runtimeConfig));
+
+  return {
+    page,
+    savedContext,
+    memorySummary: await getMemorySummary(),
+  };
+}
+
+async function handlePageAnalyze(mode: 'current-page' | 'study-archive') {
+  const page = await requestPageExtraction({
+    type: 'content.page.extract-current',
+    mode,
+  });
+  const runtimeConfig = await readStorage('runtimeConfig');
+  const savedContext = await savePageContext(toPageContextRecord(page, runtimeConfig));
+  const profile = await ensureProfile();
+  const analysis = buildPageAnalysisResult(page, savedContext, profile);
+  await saveMemoryCandidates(analysis.memoryCandidates);
+
+  return {
+    page,
+    savedContext,
+    analysis,
+    memorySummary: await getMemorySummary(),
+  };
+}
+
+async function handleArchiveSave(analysis: AppMessage extends never ? never : any, sourceContext: any) {
+  const note = buildArchiveNoteFromAnalysis(analysis, sourceContext);
+  await saveArchiveNote(note);
+  return {
+    note,
+    memorySummary: await getMemorySummary(),
+  };
+}
+
+async function handleImageGenerate(payload: AppMessage extends never ? never : any) {
+  const runtimeConfig = await readStorage('runtimeConfig');
+  const { request, record } = await runImageGeneration(payload, runtimeConfig);
+  await saveGeneratedImage(record);
+  return {
+    request,
+    record,
+    memorySummary: await getMemorySummary(),
+  };
+}
+
+async function handleMindmapGenerate(payload: AppMessage extends never ? never : any) {
+  const record = generateMindmapRecord(payload);
+  await saveGeneratedMindmap(record);
+  return {
+    record,
+    memorySummary: await getMemorySummary(),
+  };
+}
+
+async function handleMemoryCandidateApprove(candidateId: string) {
+  const candidate = await approveMemoryCandidate(candidateId);
+  const approvedMemory = await convertCandidateToApprovedMemory(candidateId);
+  const profile = await ensureProfile();
+  const nextProfile = applyApprovedMemoryToProfile(profile, candidate);
+  await saveProfile(nextProfile);
+
+  return {
+    candidate,
+    approvedMemory,
+    memorySummary: await getMemorySummary(),
+  };
+}
+
+async function handleMemoryCandidateReject(candidateId: string) {
+  const candidate = await rejectMemoryCandidate(candidateId);
+  return {
+    candidate,
+    memorySummary: await getMemorySummary(),
+  };
+}
+
+async function requestPageExtraction(message: InternalContentMessage) {
+  const tabId = await getActiveTabId();
+
+  try {
+    const page = await sendTabInternalMessage(tabId, message) as PageReadResult & { __error?: string };
+    if (page?.__error) {
+      throw new Error(page.__error);
+    }
+    if (!page?.id) {
+      throw new Error('内容提取结果为空。');
+    }
+    return page;
+  } catch (error) {
+    throw new Error(
+      `当前页面暂不支持自动读取，可先划词放入口袋或复制摘要。原始错误: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
-function emptyMemorySummary(): MemorySummary {
+/**
+ * 获取当前活动标签页的 tabId。
+ * 仅使用 activeTab 权限，不读取 tab.url / tab.title 等敏感字段。
+ * URL 可读性校验交给 content script 负责（它在页面上下文中执行）。
+ */
+async function getActiveTabId() {
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+
+  if (!activeTab?.id) {
+    throw new Error('没有找到当前活动标签页。');
+  }
+
+  return activeTab.id;
+}
+
+function successResponse(type: AppMessage['type'], requestId: string, payload: unknown) {
   return {
+    type,
+    requestId,
+    source: 'background' as MessageSource,
+    success: true,
+    payload,
+  } as AppMessageResponse;
+}
+
+function createErrorResponse(type: AppMessage['type'], requestId: string, error: string) {
+  return {
+    type,
+    requestId,
+    source: 'background' as MessageSource,
+    success: false,
+    error,
+    payload: buildEmptyPayload(type),
+  } as AppMessageResponse;
+}
+
+function buildEmptyPayload(type: AppMessage['type']) {
+  const emptySummary = {
     profile: {
       visualLikes: [],
       visualDislikes: [],
@@ -279,11 +381,248 @@ function emptyMemorySummary(): MemorySummary {
       lastUpdated: 0,
     },
     recentContextSnippets: [],
+    recentPageContexts: [],
+    archiveNotes: [],
+    memoryCandidates: [],
+    approvedMemories: [],
+    generatedImages: [],
+    generatedMindmaps: [],
     pendingPatches: [],
     counts: {
       ideas: 0,
       artifacts: 0,
       feedback: 0,
+      pageContexts: 0,
+      notes: 0,
+      memoryCandidates: 0,
+      approvedMemories: 0,
+      images: 0,
+      mindmaps: 0,
     },
   };
+
+  if (type === 'idea.submit') {
+    return {
+      artifact: {
+        id: '',
+        ideaId: '',
+        intent: 'productivity-tool',
+        concept: {
+          name: '',
+          tagline: '',
+          positioning: '',
+          coreProblem: '',
+          targetUser: '',
+          valueProposition: '',
+          features: [],
+          visualDirection: [],
+        },
+        imagePrompt: '',
+        mvpPlan: [],
+        nextTasks: [],
+        appliedGadgets: [],
+        selectedContextIds: [],
+        selectedArchiveNoteIds: [],
+        createdAt: 0,
+      },
+      assistantSummary: '',
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'feedback.record') {
+    return {
+      feedback: {
+        id: '',
+        artifactId: '',
+        action: 'more-minimal',
+        createdAt: 0,
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'context.captureSelection') {
+    return {
+      snippet: {
+        id: '',
+        origin: '',
+        pageTitle: '',
+        selectedText: '',
+        source: 'content',
+        createdAt: 0,
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'page.readCurrent') {
+    return {
+      page: {
+        id: '',
+        mode: 'current-page',
+        origin: '',
+        pageTitle: '',
+        pageType: 'generic',
+        headings: [],
+        mainText: '',
+        visibleTextSummary: '',
+        textExcerpt: '',
+        createdAt: 0,
+      },
+      savedContext: {
+        id: '',
+        origin: '',
+        pageTitle: '',
+        pageType: 'generic',
+        headings: [],
+        visibleTextSummary: '',
+        textExcerpt: '',
+        createdAt: 0,
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'page.analyzeCurrent') {
+    return {
+      page: {
+        id: '',
+        mode: 'study-archive',
+        origin: '',
+        pageTitle: '',
+        pageType: 'generic',
+        headings: [],
+        mainText: '',
+        visibleTextSummary: '',
+        textExcerpt: '',
+        createdAt: 0,
+      },
+      savedContext: {
+        id: '',
+        origin: '',
+        pageTitle: '',
+        pageType: 'generic',
+        headings: [],
+        visibleTextSummary: '',
+        textExcerpt: '',
+        createdAt: 0,
+      },
+      analysis: {
+        id: '',
+        sourceContextId: '',
+        pageType: 'generic',
+        pageSummary: '',
+        keyIdeas: [],
+        keyTakeaways: [],
+        usefulForCurrentIdea: [],
+        productOpportunities: [],
+        noteCard: {
+          title: '',
+          summary: '',
+          bullets: [],
+          tags: [],
+        },
+        memoryCandidates: [],
+        createdAt: 0,
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'archive.note.save') {
+    return {
+      note: {
+        id: '',
+        sourceType: 'article',
+        title: '',
+        sourceTitle: '',
+        origin: '',
+        summary: '',
+        bullets: [],
+        tags: [],
+        createdAt: 0,
+        savedByUser: true,
+        relatedContextIds: [],
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'archive.note.list') {
+    return { notes: [], memorySummary: emptySummary };
+  }
+
+  if (type === 'image.generate') {
+    return {
+      request: {
+        id: '',
+        sourceType: 'idea',
+        title: '',
+        content: '',
+        style: 'line-art',
+        createdAt: 0,
+      },
+      record: {
+        id: '',
+        requestId: '',
+        prompt: '',
+        status: 'failed',
+        previewText: '',
+        model: 'gpt-image-2',
+        createdAt: 0,
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'mindmap.generate') {
+    return {
+      record: {
+        id: '',
+        sourceId: '',
+        sourceType: 'article',
+        result: {
+          id: '',
+          title: '',
+          root: { id: '', label: '', children: [] },
+          sourceType: 'article',
+          createdAt: 0,
+        },
+        imagePrompt: '',
+        createdAt: 0,
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'memory.candidate.approve' || type === 'memory.candidate.reject') {
+    return {
+      candidate: {
+        id: '',
+        sourceType: 'article',
+        category: 'topic',
+        title: '',
+        content: '',
+        reason: '',
+        status: type === 'memory.candidate.approve' ? 'approved' : 'rejected',
+        createdAt: 0,
+      },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'image.list') {
+    return { records: [], memorySummary: emptySummary };
+  }
+
+  if (type === 'mindmap.list') {
+    return { records: [], memorySummary: emptySummary };
+  }
+
+  if (type === 'memory.candidate.list') {
+    return { candidates: [], memorySummary: emptySummary };
+  }
+
+  return emptySummary;
 }
