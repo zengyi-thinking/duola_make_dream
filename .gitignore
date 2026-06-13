@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# WXT build output
+.output/
+.wxt/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log

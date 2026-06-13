@@ -1,0 +1,20 @@
+.line-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid var(--dora-line);
+  border-radius: 20px;
+  font-size: 13px;
+  outline: none;
+  background: var(--dora-white);
+  color: var(--dora-line);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.line-input::placeholder {
+  color: #AAB4C2;
+}
+
+.line-input:focus {
+  border-color: var(--dora-blue);
+  box-shadow: 0 0 0 3px var(--dora-shadow);
+}

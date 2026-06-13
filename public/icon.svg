@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" stroke="#2C3E50" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 头部 -->
+  <circle cx="64" cy="54" r="42" fill="#0099DD"/>
+  <circle cx="64" cy="54" r="42"/>
+  <!-- 脸部 -->
+  <ellipse cx="64" cy="65" rx="34" ry="32" fill="#FFFFFF"/>
+  <ellipse cx="64" cy="65" rx="34" ry="32"/>
+  <!-- 眼睛 -->
+  <ellipse cx="54" cy="52" rx="8" ry="9" fill="#FFFFFF"/>
+  <ellipse cx="74" cy="52" rx="8" ry="9" fill="#FFFFFF"/>
+  <circle cx="55" cy="52" r="3.5" fill="#2C3E50"/>
+  <circle cx="75" cy="52" r="3.5" fill="#2C3E50"/>
+  <!-- 鼻子 -->
+  <circle cx="64" cy="62" r="5" fill="#E83A3A"/>
+  <circle cx="64" cy="62" r="5"/>
+  <line x1="64" y1="67" x2="64" y2="75"/>
+  <!-- 嘴巴 -->
+  <path d="M 48 78 Q 64 90 80 78" fill="none"/>
+  <!-- 胡须 -->
+  <line x1="26" y1="62" x2="46" y2="65"/>
+  <line x1="26" y1="70" x2="46" y2="70"/>
+  <line x1="82" y1="65" x2="102" y2="62"/>
+  <line x1="82" y1="70" x2="102" y2="70"/>
+  <!-- 项圈 -->
+  <path d="M 34 90 Q 64 104 94 90" fill="#E83A3A" stroke="#E83A3A"/>
+  <path d="M 34 90 Q 64 104 94 90"/>
+  <!-- 铃铛 -->
+  <circle cx="64" cy="100" r="6" fill="#FFD93D"/>
+  <circle cx="64" cy="100" r="6"/>
+  <line x1="60" y1="98" x2="68" y2="98" stroke-width="2"/>
+  <circle cx="64" cy="101" r="1.5" fill="#2C3E50" stroke="none"/>
+</svg>

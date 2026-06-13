@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#2C3E50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 头部（蓝色圆形） -->
+  <circle cx="50" cy="42" r="32" fill="#0099DD"/>
+  <circle cx="50" cy="42" r="32"/>
+  <!-- 脸部（白色椭圆） -->
+  <ellipse cx="50" cy="50" rx="26" ry="24" fill="#FFFFFF"/>
+  <ellipse cx="50" cy="50" rx="26" ry="24"/>
+  <!-- 开心眼睛（弯弯的笑眼） -->
+  <path d="M 37 40 Q 42 34 47 40" fill="none" stroke-width="2.5"/>
+  <path d="M 53 40 Q 58 34 63 40" fill="none" stroke-width="2.5"/>
+  <!-- 鼻子（红色圆形） -->
+  <circle cx="50" cy="48" r="4" fill="#E83A3A"/>
+  <circle cx="50" cy="48" r="4"/>
+  <!-- 鼻子下方线 -->
+  <line x1="50" y1="52" x2="50" y2="58"/>
+  <!-- 开心嘴巴（大笑） -->
+  <path d="M 36 58 Q 50 72 64 58" fill="none"/>
+  <path d="M 36 58 Q 50 72 64 58 Z" fill="#FFFFFF" stroke="none"/>
+  <path d="M 36 58 Q 50 72 64 58"/>
+  <!-- 胡须 -->
+  <line x1="22" y1="48" x2="36" y2="50"/>
+  <line x1="22" y1="54" x2="36" y2="53"/>
+  <line x1="64" y1="50" x2="78" y2="48"/>
+  <line x1="64" y1="53" x2="78" y2="54"/>
+  <!-- 腮红 -->
+  <circle cx="34" cy="52" r="4" fill="#FFB6C1" stroke="none" opacity="0.5"/>
+  <circle cx="66" cy="52" r="4" fill="#FFB6C1" stroke="none" opacity="0.5"/>
+  <!-- 项圈 -->
+  <path d="M 28 68 Q 50 78 72 68" fill="#E83A3A" stroke="#E83A3A"/>
+  <path d="M 28 68 Q 50 78 72 68"/>
+  <!-- 铃铛 -->
+  <circle cx="50" cy="76" r="5" fill="#FFD93D"/>
+  <circle cx="50" cy="76" r="5"/>
+  <line x1="47" y1="74" x2="53" y2="74" stroke-width="1.5"/>
+  <circle cx="50" cy="77" r="1" fill="#2C3E50" stroke="none"/>
+</svg>

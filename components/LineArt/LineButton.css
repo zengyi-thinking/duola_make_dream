@@ -1,0 +1,46 @@
+.line-btn {
+  padding: 6px 14px;
+  border: 2px solid var(--dora-line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: var(--dora-white);
+  color: var(--dora-line);
+}
+
+.line-btn--primary {
+  background: var(--dora-blue);
+  color: var(--dora-white);
+  border-color: var(--dora-blue);
+}
+
+.line-btn--primary:hover {
+  background: var(--dora-line);
+  border-color: var(--dora-line);
+}
+
+.line-btn--secondary {
+  background: var(--dora-light-blue);
+  border-color: var(--dora-blue);
+  color: var(--dora-blue);
+}
+
+.line-btn--secondary:hover {
+  background: var(--dora-blue);
+  color: var(--dora-white);
+}
+
+.line-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.line-btn--ghost:hover {
+  background: var(--dora-light-blue);
+}
+
+.line-btn:active {
+  transform: scale(0.96);
+}

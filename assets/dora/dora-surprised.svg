@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#2C3E50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 头部（蓝色圆形） -->
+  <circle cx="50" cy="42" r="32" fill="#0099DD"/>
+  <circle cx="50" cy="42" r="32"/>
+  <!-- 脸部（白色椭圆） -->
+  <ellipse cx="50" cy="50" rx="26" ry="24" fill="#FFFFFF"/>
+  <ellipse cx="50" cy="50" rx="26" ry="24"/>
+  <!-- 惊讶眼睛（大圆眼） -->
+  <circle cx="42" cy="40" r="7" fill="#FFFFFF"/>
+  <circle cx="58" cy="40" r="7" fill="#FFFFFF"/>
+  <circle cx="42" cy="40" r="3.5" fill="#2C3E50"/>
+  <circle cx="58" cy="40" r="3.5" fill="#2C3E50"/>
+  <!-- 眼睛高光 -->
+  <circle cx="44" cy="38" r="1.2" fill="#FFFFFF" stroke="none"/>
+  <circle cx="60" cy="38" r="1.2" fill="#FFFFFF" stroke="none"/>
+  <!-- 鼻子（红色圆形） -->
+  <circle cx="50" cy="48" r="4" fill="#E83A3A"/>
+  <circle cx="50" cy="48" r="4"/>
+  <!-- 鼻子下方线 -->
+  <line x1="50" y1="52" x2="50" y2="58"/>
+  <!-- 惊讶嘴巴（O形） -->
+  <ellipse cx="50" cy="64" rx="6" ry="5" fill="#FFFFFF"/>
+  <ellipse cx="50" cy="64" rx="6" ry="5"/>
+  <!-- 胡须 -->
+  <line x1="22" y1="48" x2="36" y2="50"/>
+  <line x1="22" y1="54" x2="36" y2="52"/>
+  <line x1="64" y1="50" x2="78" y2="48"/>
+  <line x1="64" y1="52" x2="78" y2="54"/>
+  <!-- 感叹号（惊讶标记） -->
+  <line x1="82" y1="10" x2="82" y2="22" stroke-width="3"/>
+  <circle cx="82" cy="27" r="2" fill="#2C3E50" stroke="none"/>
+  <!-- 项圈 -->
+  <path d="M 28 68 Q 50 78 72 68" fill="#E83A3A" stroke="#E83A3A"/>
+  <path d="M 28 68 Q 50 78 72 68"/>
+  <!-- 铃铛 -->
+  <circle cx="50" cy="76" r="5" fill="#FFD93D"/>
+  <circle cx="50" cy="76" r="5"/>
+  <line x1="47" y1="74" x2="53" y2="74" stroke-width="1.5"/>
+  <circle cx="50" cy="77" r="1" fill="#2C3E50" stroke="none"/>
+</svg>
