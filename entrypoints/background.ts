@@ -316,7 +316,7 @@ async function handleMemoryCandidateReject(candidateId: string) {
 }
 
 async function requestPageExtraction(message: InternalContentMessage) {
-  const tabId = await getActiveTabId();
+  const tabId = await getLastFocusedNormalTabId();
 
   try {
     const page = await sendTabInternalMessage(tabId, message) as PageReadResult & { __error?: string };
@@ -335,18 +335,23 @@ async function requestPageExtraction(message: InternalContentMessage) {
 }
 
 /**
- * 获取当前活动标签页的 tabId。
+ * 获取用户最近聚焦的正常窗口中的活动标签页 ID。
+ *
+ * popup 窗口的 currentWindow 是 popup 自身，不是用户正在浏览的网页窗口。
+ * 所以需要遍历所有窗口，找到最近聚焦的正常（normal）窗口中的活动标签页。
  * 仅使用 activeTab 权限，不读取 tab.url / tab.title 等敏感字段。
- * URL 可读性校验交给 content script 负责（它在页面上下文中执行）。
  */
-async function getActiveTabId() {
-  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+async function getLastFocusedNormalTabId(): Promise<number> {
+  // 优先尝试最后一个被聚焦的窗口
+  const [lastFocused] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+  if (lastFocused?.id) return lastFocused.id;
 
-  if (!activeTab?.id) {
-    throw new Error('没有找到当前活动标签页。');
-  }
+  // 回退：遍历所有窗口找正常窗口的活动标签页
+  const allActiveTabs = await browser.tabs.query({ active: true });
+  const normalTab = allActiveTabs.find((tab) => tab.id && !tab.url?.startsWith('chrome://'));
+  if (normalTab?.id) return normalTab.id;
 
-  return activeTab.id;
+  throw new Error('没有找到可读取的网页标签页。');
 }
 
 function successResponse(type: AppMessage['type'], requestId: string, payload: unknown) {
