@@ -22,6 +22,8 @@ export {
   getGeneratedImages,
   getGeneratedMindmaps,
   getHarnessPatches,
+  getActiveHarnessPatches,
+  markHarnessPatchesApplied,
   getMemoryCandidates,
   getMemorySummary,
   getPageContexts,

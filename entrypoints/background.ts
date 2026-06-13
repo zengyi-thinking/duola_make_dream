@@ -38,6 +38,8 @@ import { generateMindmapRecord } from '@/lib/mindmap/service';
 import { toPageContextRecord } from '@/lib/page/extractor';
 import { buildHarnessPatchFromFeedback, shouldCreateHarnessPatch } from '@/lib/agent/harness';
 import { processIdeaSubmission } from '@/lib/agent/orchestrators/idea';
+import { buildKnowledgeRecall } from '@/lib/agent/recall';
+import type { MemoryRecallResult } from '@/lib/agent/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
 import type { PageReadResult } from '@/lib/page/types';
@@ -217,7 +219,18 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
 
     case 'memory.candidate.delete':
       return successResponse('memory.candidate.delete', message.requestId, await deleteMemoryCandidate(message.payload.candidateId));
+
+    case 'memory.recall':
+      return successResponse('memory.recall', message.requestId, await handleMemoryRecall(message.payload.query, message.payload.limit));
   }
+}
+
+async function handleMemoryRecall(query: string, limit?: number): Promise<MemoryRecallResult> {
+  const memory = await getMemorySummary();
+  const artifacts = await getArtifactHistory();
+  const images = await getGeneratedImages();
+  const items = buildKnowledgeRecall({ query, memory, artifacts, images, limit });
+  return { query, items };
 }
 
 async function handleFeedbackRecord(

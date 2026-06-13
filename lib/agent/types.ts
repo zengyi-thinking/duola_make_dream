@@ -64,6 +64,7 @@ export interface HarnessPatch {
   requireUserApproval: boolean;
   status: HarnessPatchStatus;
   createdAt: number;
+  appliedAt?: number;
   rollbackSnapshotId?: string;
 }
 
@@ -287,4 +288,42 @@ export interface ImageGenerationResult {
 export interface MindmapGenerationResult {
   record: MindmapRecord;
   memorySummary: MemorySummary;
+}
+
+/** 召回条目类型（与记忆 kind 对齐） */
+export type RecallKind =
+  | 'context'
+  | 'page'
+  | 'note'
+  | 'memory'
+  | 'idea'
+  | 'artifact'
+  | 'image'
+  | 'mindmap';
+
+/** 结构化的「为什么召回」——由哪一层命中、命中了什么、被谁带出 */
+export interface RecallDetail {
+  via: 'literal' | 'theme' | 'graph';
+  evidence: string;
+  /** graph 层：被哪个命中节点沿关系边带出 */
+  linkedFrom?: { kind: RecallKind; title: string };
+}
+
+/** 召回结果条目（reason 字符串向后兼容 UI，recallDetail 为结构化原因） */
+export interface RecallItem {
+  id: string;
+  kind: RecallKind;
+  kindLabel: string;
+  title: string;
+  detail: string;
+  reason: string;
+  tags: string[];
+  score: number;
+  createdAt: number;
+  recallDetail?: RecallDetail;
+}
+
+export interface MemoryRecallResult {
+  query: string;
+  items: RecallItem[];
 }

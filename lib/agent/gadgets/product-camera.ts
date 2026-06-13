@@ -6,10 +6,10 @@ import type { LlmClient } from '@/lib/llm';
  * - 有真实 client → LLM 优化 prompt
  * - 无 client → 模板拼接
  */
-export async function runProductCamera(concept: ProductConcept, client?: LlmClient): Promise<string> {
+export async function runProductCamera(concept: ProductConcept, client?: LlmClient, hint?: string): Promise<string> {
   if (client && client.kind !== 'mock') {
     try {
-      const prompt = await generatePromptWithLlm(concept, client);
+      const prompt = await generatePromptWithLlm(concept, client, hint);
       if (prompt) return prompt;
     } catch (err) {
       console.warn('[ProductCamera] LLM 调用失败，降级到模板:', err);
@@ -18,8 +18,10 @@ export async function runProductCamera(concept: ProductConcept, client?: LlmClie
   return buildTemplatePrompt(concept);
 }
 
-async function generatePromptWithLlm(concept: ProductConcept, client: LlmClient): Promise<string | null> {
+async function generatePromptWithLlm(concept: ProductConcept, client: LlmClient, hint?: string): Promise<string | null> {
+  if (hint) console.log('[ProductCamera] 应用自学习提示:', hint.slice(0, 50));
   const system = [
+    hint,
     '你是图像生成 Prompt 专家。根据产品概念输出一段高质量的英文 image generation prompt。',
     '风格约束：极简线条插画、蓝白配色、口袋感、柔和纸质纹理、产品级构图。',
     '禁止：任何版权卡通形象、吉祥物、铃铛、胡须、圆胖猫轮廓。',

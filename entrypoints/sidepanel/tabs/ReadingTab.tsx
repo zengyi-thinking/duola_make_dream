@@ -23,6 +23,7 @@ import { ListBlock } from '../components/ListBlock';
 import { InfoBlock } from '../components/InfoBlock';
 import { useMemo } from 'react';
 import StaggerStack from '@/components/StaggerStack/StaggerStack';
+import { RecallPanel } from '../components/RecallPanel';
 
 interface ReadingTabProps {
   memory: MemorySummary | null;
@@ -371,32 +372,13 @@ export default function ReadingTab(props: ReadingTabProps) {
             </div>
           </ResultCard>
 
-          <ResultCard title="关联召回">
-            {recallItems.length > 0 ? (
-              <div className="stack">
-                {recallItems.map((item) => (
-                  <div key={`${item.kind}-${item.id}`} className="list-card">
-                    <div className="candidate-head">
-                      <strong>{item.title}</strong>
-                      <span className="status-pill status-pill--spark">{item.kindLabel}</span>
-                    </div>
-                    <p className="soft-text">{item.detail}</p>
-                    <p className="micro-copy">{item.reason}</p>
-                    <div className="token-list">
-                      {item.tags.map((tag, index) => <span key={`${tag}-${index}`} className="token-chip">{tag}</span>)}
-                    </div>
-                    <div className="inline-actions">
-                      <LineButton variant="secondary" onClick={() => sendRecallToCreative(item)}>
-                        发到发明页
-                      </LineButton>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="soft-text">等页面分析完成后，这里会给你更强的关联线索。</p>
-            )}
-          </ResultCard>
+          <RecallPanel
+            title="关联召回"
+            items={recallItems}
+            emptyText="等页面分析完成后，这里会给你更强的关联线索。"
+            sendLabel="发到发明页"
+            onSend={sendRecallToCreative}
+          />
         </StaggerStack>
       ) : (
         <EmptyCard avatar title="先读取，再喂养" body="点击「读取当前页」，小口袋云云会帮你提炼摘要、关键观点、产品机会和可记住信息。" />

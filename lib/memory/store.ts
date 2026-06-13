@@ -138,6 +138,22 @@ export async function getHarnessPatches(limit = 20): Promise<HarnessPatch[]> {
   return patches.slice(0, limit);
 }
 
+/** 读取有效（未拒绝）的 harness 补丁——这些会被注入 gadget 的 system prompt。 */
+export async function getActiveHarnessPatches(): Promise<HarnessPatch[]> {
+  const patches = await readStorage('harnessPatches');
+  return patches.filter((p) => p.status !== 'rejected');
+}
+
+/** 把指定补丁标记为已应用（status → applied，记录 appliedAt）。闭环消费的收尾。 */
+export async function markHarnessPatchesApplied(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const patches = await readStorage('harnessPatches');
+  const idSet = new Set(ids);
+  const now = Date.now();
+  const next = patches.map((p) => (idSet.has(p.id) ? { ...p, status: 'applied' as const, appliedAt: now } : p));
+  await writeStorage('harnessPatches', next);
+}
+
 export async function getArchiveNotes(limit = 40): Promise<ArchiveNote[]> {
   const notes = await readStorage('archiveNotes');
   return notes.slice(0, limit);

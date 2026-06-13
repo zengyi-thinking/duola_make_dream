@@ -42,3 +42,15 @@ export function shouldCreateHarnessPatch(
 
   return threeConsecutive || recentFive >= 3;
 }
+
+/**
+ * 把有效补丁转成 system prompt 提示片段，供 gadget 调真实 LLM 时注入。
+ * 有效 = status !== 'rejected'（pending/approved/applied 都视为生效）。
+ * MVP 阶段自动应用 pending 补丁；requireUserApproval 的「人工批准」留给后续前端优化。
+ * 这是 harness 自学习闭环的关键一环：补丁不再只存不消费，而是真正影响下次输出。
+ */
+export function buildHarnessHint(patches: HarnessPatch[]): string {
+  const active = patches.filter((p) => p.status !== 'rejected').slice(0, 3);
+  if (active.length === 0) return '';
+  return `【来自用户反馈的自学习提示】请遵循以下调整方向：${active.map((p) => p.after).join('；')}`;
+}

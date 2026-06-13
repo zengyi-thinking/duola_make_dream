@@ -21,6 +21,7 @@ import type {
   MemoryCandidateRejectRequest,
   MemoryDeleteRequest,
   MemoryGetRequest,
+  MemoryRecallRequest,
   MessageResponseMap,
   MessageSource,
   MessageType,
@@ -286,6 +287,19 @@ export function createMemoryCandidateListMessage(source: MessageSource = 'popup'
     requestId: createRequestId('memory.candidate.list'),
     source,
     payload: {},
+  };
+}
+
+export function createMemoryRecallMessage(
+  query: string,
+  limit?: number,
+  source: MessageSource = 'popup',
+): MemoryRecallRequest {
+  return {
+    type: 'memory.recall',
+    requestId: createRequestId('memory.recall'),
+    source,
+    payload: limit !== undefined ? { query, limit } : { query },
   };
 }
 

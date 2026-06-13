@@ -43,10 +43,10 @@ const INTENT_LABELS: Record<AgentIntent, { suffix: string; audience: string; anc
  * - 无 client（mock）→ 走模板逻辑
  * 任何 LLM 失败都降级到模板，保证不崩。
  */
-export async function runIdeaLens(input: IdeaLensInput, client?: LlmClient): Promise<ProductConcept> {
+export async function runIdeaLens(input: IdeaLensInput, client?: LlmClient, hint?: string): Promise<ProductConcept> {
   if (client && client.kind !== 'mock') {
     try {
-      const concept = await generateConceptWithLlm(input, client);
+      const concept = await generateConceptWithLlm(input, client, hint);
       if (concept) return concept;
     } catch (err) {
       console.warn('[IdeaLens] LLM 调用失败，降级到模板:', err);
@@ -55,11 +55,13 @@ export async function runIdeaLens(input: IdeaLensInput, client?: LlmClient): Pro
   return buildTemplateConcept(input);
 }
 
-async function generateConceptWithLlm(input: IdeaLensInput, client: LlmClient): Promise<ProductConcept | null> {
+async function generateConceptWithLlm(input: IdeaLensInput, client: LlmClient, hint?: string): Promise<ProductConcept | null> {
   const styleCue = input.profile.visualLikes.slice(0, 3).join('、') || '蓝白线条';
   const products = input.profile.productPreferences.slice(0, 2).join('、') || '轻量工具';
 
+  if (hint) console.log('[IdeaLens] 应用自学习提示:', hint.slice(0, 50));
   const system = [
+    hint,
     '你是一位资深产品经理，擅长把模糊想法快速收束为一个清晰、可讨论的产品概念。',
     '只输出一个 JSON 对象，不要任何解释文字、不要 markdown 代码块标记。',
     'JSON 字段：name(产品名,中文,2-8字)、tagline(一句话定位,中文)、positioning(定位描述,中文,1-2句)、',

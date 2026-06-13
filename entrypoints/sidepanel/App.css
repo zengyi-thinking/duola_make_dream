@@ -382,6 +382,107 @@ button, textarea, input, select { font: inherit; }
 /* ===== Detail Grid ===== */
 .detail-grid { display: grid; gap: 8px; }
 
+/* ===== Collapsible Card ===== */
+.collapsible-card {
+  padding: 0;
+}
+
+.collapsible-card > summary {
+  list-style: none;
+  padding: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.collapsible-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-card__summary h2 {
+  margin: 2px 0 0;
+}
+
+.collapsible-card__summary .soft-text {
+  max-width: 320px;
+}
+
+.collapsible-card__body {
+  padding: 0 14px 14px;
+}
+
+/* ===== Signal Board ===== */
+.signal-board__meta {
+  margin-bottom: 10px;
+}
+
+.signal-rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: rgba(221, 236, 255, 0.55);
+  color: var(--pb-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.signal-rail__arrow {
+  color: var(--pb-muted);
+}
+
+.signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.signal-column {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--pb-line);
+  background: #fff;
+}
+
+.signal-column strong {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.signal-meter {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(21, 48, 74, 0.08);
+  overflow: hidden;
+  margin: 8px 0 6px;
+}
+
+.signal-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pb-primary), #7db0ff);
+}
+
+.signal-column--feed .signal-meter span {
+  background: linear-gradient(90deg, #2f6fed, #7db0ff);
+}
+
+.signal-column--change .signal-meter span {
+  background: linear-gradient(90deg, #7c4dff, #b58cff);
+}
+
+.signal-column--output .signal-meter span {
+  background: linear-gradient(90deg, #1d9b6c, #76c89c);
+}
+
 /* ===== Archive Grid ===== */
 .archive-grid { display: flex; gap: 10px; margin-top: 8px; }
 .archive-list { flex-shrink: 0; width: 140px; display: flex; flex-direction: column; gap: 4px; }

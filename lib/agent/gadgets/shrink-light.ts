@@ -12,10 +12,10 @@ interface ShrinkResult {
  * - 有真实 client → LLM 生成
  * - 无 client → 模板
  */
-export async function runShrinkLight(concept: ProductConcept, client?: LlmClient): Promise<ShrinkResult> {
+export async function runShrinkLight(concept: ProductConcept, client?: LlmClient, hint?: string): Promise<ShrinkResult> {
   if (client && client.kind !== 'mock') {
     try {
-      const result = await generateWithLlm(concept, client);
+      const result = await generateWithLlm(concept, client, hint);
       if (result) return result;
     } catch (err) {
       console.warn('[ShrinkLight] LLM 调用失败，降级到模板:', err);
@@ -24,8 +24,10 @@ export async function runShrinkLight(concept: ProductConcept, client?: LlmClient
   return buildTemplate(concept);
 }
 
-async function generateWithLlm(concept: ProductConcept, client: LlmClient): Promise<ShrinkResult | null> {
+async function generateWithLlm(concept: ProductConcept, client: LlmClient, hint?: string): Promise<ShrinkResult | null> {
+  if (hint) console.log('[ShrinkLight] 应用自学习提示:', hint.slice(0, 50));
   const system = [
+    hint,
     '你是 MVP 规划专家。把产品概念压缩成可立即执行的最小可行计划。',
     '只输出一个 JSON 对象，不要解释、不要 markdown 标记。',
     '字段：mvpPlan(数组,3条中文,每条一个具体可执行步骤)、nextTasks(数组,3条中文,后续优化方向)。',

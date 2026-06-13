@@ -11,6 +11,7 @@ import type { GeneratedImageRecord } from '@/lib/image/types';
 import { ResultCard, EmptyCard } from '../components/ResultCard';
 import { ListBlock } from '../components/ListBlock';
 import { SelectionGroup, toggleSelection } from '../components/ContextSelector';
+import { RecallPanel } from '../components/RecallPanel';
 
 const FEEDBACK_OPTIONS: Array<{ label: string; action: FeedbackAction }> = [
   { label: '更极简', action: 'more-minimal' },
@@ -167,6 +168,10 @@ export default function CreativeTab(props: CreativeTabProps) {
     setNoticeText('已把关联线索放进想法输入框。');
   }
 
+  function copyRecallItem(item: RecallItem) {
+    onCopy(`${item.title}\n${item.detail}`, '关联线索已复制。');
+  }
+
   return (
     <div className="tab-panel">
       <section className="panel-card">
@@ -209,35 +214,15 @@ export default function CreativeTab(props: CreativeTabProps) {
           }))}
         />
 
-        <ResultCard title="关联召回">
-          {recallItems.length > 0 ? (
-            <div className="stack">
-              {recallItems.map((item) => (
-                <div key={`${item.kind}-${item.id}`} className="list-card">
-                  <div className="candidate-head">
-                    <strong>{item.title}</strong>
-                    <span className="status-pill status-pill--spark">{item.kindLabel}</span>
-                  </div>
-                  <p className="soft-text">{item.detail}</p>
-                  <p className="micro-copy">{item.reason}</p>
-                  <div className="token-list">
-                    {item.tags.map((tag, index) => <span key={`${tag}-${index}`} className="token-chip">{tag}</span>)}
-                  </div>
-                  <div className="inline-actions">
-                    <LineButton variant="secondary" onClick={() => appendRecallItem(item)}>
-                      塞进想法
-                    </LineButton>
-                    <LineButton variant="ghost" onClick={() => onCopy(`${item.title}\n${item.detail}`, '关联线索已复制。')}>
-                      复制
-                    </LineButton>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="soft-text">先输入一点想法，或者带入片段和笔记，召回就会更准。</p>
-          )}
-        </ResultCard>
+        <RecallPanel
+          title="关联召回"
+          items={recallItems}
+          emptyText="先输入一点想法，或者带入片段和笔记，召回就会更准。"
+          sendLabel="塞进想法"
+          copyLabel="复制"
+          onSend={appendRecallItem}
+          onCopy={copyRecallItem}
+        />
 
         {/* action-row 包一层 relative，让 PocketBurst 在按钮位置爆发 */}
         <div className="action-row" style={{ position: 'relative' }}>

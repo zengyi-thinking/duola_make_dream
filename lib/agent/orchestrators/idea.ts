@@ -3,13 +3,16 @@ import {
   extractThemesFromIdea,
   getArchiveNotesByIds,
   getContextSnippetsByIds,
+  getActiveHarnessPatches,
   getMemorySummary,
+  markHarnessPatchesApplied,
   mergeRecentThemes,
   saveArtifact,
   saveIdea,
   saveProfile,
 } from '@/lib/memory';
 import { getLlmClient } from '@/lib/llm';
+import { buildHarnessHint } from '../harness';
 import { POCKET_AGENT_VOICE } from '../personality';
 import { routeIdeaIntent } from '../router';
 import type { IdeaSubmitResult, IdeaSource, ProductArtifact } from '../types';
@@ -55,14 +58,22 @@ export async function processIdeaSubmission(
   };
 
   const client = await getLlmClient();
+  // 自学习闭环：读取有效 harness 补丁 → 生成 hint → 注入各 gadget 的 system prompt
+  const activePatches = await getActiveHarnessPatches();
+  const hint = buildHarnessHint(activePatches);
   const concept = await runIdeaLens({
     idea: ideaText,
     intent,
     profile,
     contextLine,
-  }, client);
-  const imagePrompt = await runProductCamera(concept, client);
-  const shrinkResult = await runShrinkLight(concept, client);
+  }, client, hint);
+  const imagePrompt = await runProductCamera(concept, client, hint);
+  const shrinkResult = await runShrinkLight(concept, client, hint);
+  // 补丁已注入本轮输出，标记为已应用（status → applied）
+  if (activePatches.length > 0) {
+    await markHarnessPatchesApplied(activePatches.map((p) => p.id));
+  }
+
   const artifact: ProductArtifact = {
     id: crypto.randomUUID(),
     ideaId: idea.id,

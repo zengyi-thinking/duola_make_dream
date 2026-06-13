@@ -10,6 +10,7 @@ import {
 } from '@/lib/messaging/bus';
 import { EmptyCard } from '../components/ResultCard';
 import { ListBlock } from '../components/ListBlock';
+import { InfoBlock } from '../components/InfoBlock';
 
 type SourceTypeFilter = 'all' | 'paper' | 'article' | 'idea';
 
@@ -189,10 +190,10 @@ export default function ArchiveTab(props: ArchiveTabProps) {
                   <button type="button" className="drawer-close" onClick={() => setDrawerNoteId(null)}>✕</button>
                 </div>
                 <div className="drawer-body">
-                  <InfoRow label="来源标题" value={selectedNote.sourceTitle} />
-                  <InfoRow label="来源网址" value={selectedNote.origin} />
-                  <InfoRow label="类型" value={selectedNote.sourceType} />
-                  <InfoRow label="摘要" value={selectedNote.summary} />
+                  <InfoBlock label="来源标题" value={selectedNote.sourceTitle} />
+                  <InfoBlock label="来源网址" value={selectedNote.origin} />
+                  <InfoBlock label="类型" value={selectedNote.sourceType} />
+                  <InfoBlock label="摘要" value={selectedNote.summary} />
                   <div className="drawer-section">
                     <span className="memory-label">要点</span>
                     <ListBlock items={selectedNote.bullets} />
@@ -203,8 +204,8 @@ export default function ArchiveTab(props: ArchiveTabProps) {
                       {selectedNote.tags.map((tag) => <span key={tag} className="token-chip">{tag}</span>)}
                     </div>
                   </div>
-                  <InfoRow label="保存时间" value={new Date(selectedNote.createdAt).toLocaleString('zh-CN')} />
-                  <InfoRow label="关联上下文" value={selectedNote.relatedContextIds.length > 0 ? selectedNote.relatedContextIds.join(', ') : '无'} />
+                  <InfoBlock label="保存时间" value={new Date(selectedNote.createdAt).toLocaleString('zh-CN')} />
+                  <InfoBlock label="关联上下文" value={selectedNote.relatedContextIds.length > 0 ? selectedNote.relatedContextIds.join(', ') : '无'} />
                 </div>
                 <div className="drawer-footer">
                   <LineButton
@@ -251,14 +252,5 @@ export default function ArchiveTab(props: ArchiveTabProps) {
         <p className="soft-text">归档页只负责整理笔记与它们的上下文。长期记忆、图片记录、图谱记录和历史回放已经移到观察页。</p>
       </section>
     </StaggerStack>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="info-block">
-      <span className="memory-label">{label}</span>
-      <p>{value}</p>
-    </div>
   );
 }

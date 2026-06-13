@@ -8,6 +8,7 @@ import type {
   IdeaSubmitResult,
   ImageGenerationResult,
   MemoryCandidateMutationResult,
+  MemoryRecallResult,
   MemorySummary,
   MindmapGenerationResult,
   PageAnalyzeResponse,
@@ -43,7 +44,8 @@ export type ExtensionMessageType =
   | 'memory.candidate.approve'
   | 'memory.candidate.reject'
   | 'memory.candidate.list'
-  | 'memory.candidate.delete';
+  | 'memory.candidate.delete'
+  | 'memory.recall';
 
 export type MessageType = ExtensionMessageType;
 
@@ -208,6 +210,14 @@ export type MemoryCandidateDeleteRequest = MessageEnvelope<
   }
 >;
 
+export type MemoryRecallRequest = MessageEnvelope<
+  'memory.recall',
+  {
+    query: string;
+    limit?: number;
+  }
+>;
+
 export type AppMessage =
   | IdeaSubmitRequest
   | FeedbackRecordRequest
@@ -230,7 +240,8 @@ export type AppMessage =
   | MemoryCandidateApproveRequest
   | MemoryCandidateRejectRequest
   | MemoryCandidateListRequest
-  | MemoryCandidateDeleteRequest;
+  | MemoryCandidateDeleteRequest
+  | MemoryRecallRequest;
 
 export type InternalExtractCurrentMessage = {
   type: 'content.page.extract-current';
@@ -288,6 +299,7 @@ export type MessageResponseMap = {
   'memory.candidate.reject': ResponseEnvelope<'memory.candidate.reject', MemoryCandidateMutationResult>;
   'memory.candidate.list': ResponseEnvelope<'memory.candidate.list', { candidates: import('@/lib/agent/types').MemoryCandidate[]; memorySummary: MemorySummary }>;
   'memory.candidate.delete': ResponseEnvelope<'memory.candidate.delete', MemorySummary>;
+  'memory.recall': ResponseEnvelope<'memory.recall', MemoryRecallResult>;
 };
 
 export type AppMessageResponse = MessageResponseMap[ExtensionMessageType];
