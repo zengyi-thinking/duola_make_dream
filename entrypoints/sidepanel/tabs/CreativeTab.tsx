@@ -89,31 +89,43 @@ export default function CreativeTab(props: CreativeTabProps) {
     requestAnimationFrame(() => setBurstActive(true));
     window.setTimeout(() => setBurstActive(false), 800);
 
-    const response = await sendRuntimeMessage(
-      createIdeaSubmitMessage(ideaText, selectedContextIds, selectedArchiveNoteIds),
-    );
-    setBusyAction('');
+    try {
+      const response = await sendRuntimeMessage(
+        createIdeaSubmitMessage(ideaText, selectedContextIds, selectedArchiveNoteIds),
+      );
 
-    if (!response.success) {
-      const msg = response.error ?? '生成失败。';
-      setErrorText(msg); setStatusText(msg);
-      return;
+      if (!response.success) {
+        const msg = response.error ?? '生成失败。';
+        setErrorText(msg); setStatusText(msg);
+        return;
+      }
+
+      setArtifact(response.payload.artifact);
+      setMemory(response.payload.memorySummary);
+      setStatusText(response.payload.assistantSummary);
+      setIdeaText(''); setSelectedContextIds([]); setSelectedArchiveNoteIds([]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '生成失败。';
+      setErrorText(msg);
+      setStatusText(msg);
+    } finally {
+      setBusyAction('');
     }
-
-    setArtifact(response.payload.artifact);
-    setMemory(response.payload.memorySummary);
-    setStatusText(response.payload.assistantSummary);
-    setIdeaText(''); setSelectedContextIds([]); setSelectedArchiveNoteIds([]);
   }
 
   async function handleFeedback(action: FeedbackAction) {
     if (!artifact) return;
     setBusyAction(`feedback-${action}`);
-    const response = await sendRuntimeMessage(createFeedbackMessage(artifact.id, action));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '反馈失败。'); return; }
-    setMemory(response.payload.memorySummary);
-    setLastFeedback(`已记录：${FEEDBACK_OPTIONS.find((i) => i.action === action)?.label ?? action}`);
+    try {
+      const response = await sendRuntimeMessage(createFeedbackMessage(artifact.id, action));
+      if (!response.success) { setErrorText(response.error ?? '反馈失败。'); return; }
+      setMemory(response.payload.memorySummary);
+      setLastFeedback(`已记录：${FEEDBACK_OPTIONS.find((i) => i.action === action)?.label ?? action}`);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '反馈失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   return (

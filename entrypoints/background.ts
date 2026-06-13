@@ -48,19 +48,78 @@ import type {
   MessageSource,
 } from '@/lib/messaging/types';
 
+/**
+ * 最近活跃 tab 缓存（content script 通过长连注册自己的 tab）。
+ *
+ * 背景：sidepanel 在 MV3 里是独立窗口（windowType: 'panel'），
+ *  当 sidepanel 主动发起 page.readCurrent 时，
+ *  `chrome.tabs.query({active:true, lastFocusedWindow:true})` 可能返回 panel 窗口自己，
+ *  导致拿不到普通网页 tab。
+ *
+ * 解法：content script 注入后通过 `chrome.runtime.connect('content-tab-registry')`
+ *  上报自己的 tab id，SW 缓存起来。sidepanel 请求时优先用最近活跃的缓存 tab。
+ */
+const recentContentTabs = new Map<number, {
+  url: string;
+  pathname: string;
+  title: string;
+  href: string;
+  lastSeen: number;
+}>();
+
 export default defineBackground(() => {
   // 点击扩展图标时打开/关闭 sidepanel
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
-  browser.runtime.onMessage.addListener((message: AppMessage, _sender, sendResponse) => {
+  // 监听 content script 长连 → 缓存 tabId
+  // 通过 wxt 的 browser.runtime.onConnect 包装，与 onMessage 行为一致
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name !== 'content-tab-registry') return;
+    const tabId = port.sender?.tab?.id;
+    if (!tabId) return;
+
+    port.onMessage.addListener((msg: { type?: string; url?: string; pathname?: string; title?: string; href?: string }) => {
+      if (msg?.type === 'content.registerTab') {
+        recentContentTabs.set(tabId, {
+          url: msg.url ?? '',
+          pathname: msg.pathname ?? '',
+          title: msg.title ?? '',
+          href: msg.href ?? '',
+          lastSeen: Date.now(),
+        });
+        console.log(`[bg] content tab registered: ${tabId} ${msg.title}`);
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      // tab 关闭时清理
+      // 延迟清理，因为 SW 重启时所有 port 都会 disconnect，tab 本身还在
+      setTimeout(() => {
+        const entry = recentContentTabs.get(tabId);
+        if (entry && Date.now() - entry.lastSeen > 30_000) {
+          recentContentTabs.delete(tabId);
+        }
+      }, 1000);
+    });
+  });
+
+  browser.runtime.onMessage.addListener((
+    message: AppMessage,
+    _sender,
+    sendResponse: (response?: unknown) => void,
+  ) => {
     handleMessage(message)
-      .then((response) => sendResponse(response))
+      .then((response) => {
+        try { sendResponse(response); } catch { /* channel may be closed */ }
+      })
       .catch((error) => {
-        sendResponse(createErrorResponse(
-          message.type,
-          message.requestId,
-          error instanceof Error ? error.message : String(error),
-        ));
+        try {
+          sendResponse(createErrorResponse(
+            message.type,
+            message.requestId,
+            error instanceof Error ? error.message : String(error),
+          ));
+        } catch { /* channel may be closed */ }
       });
 
     return true;
@@ -321,7 +380,18 @@ async function handleMemoryCandidateReject(candidateId: string) {
 async function requestPageExtraction(message: InternalContentMessage) {
   const tabId = await getLastFocusedNormalTabId();
 
+  // P1：白名单过滤已知的"不能注入 content script"的 URL scheme
+  // 避免无效发消息后再报错，给用户更直接的解释
+  const tab = await browser.tabs.get(tabId);
+  if (!canInjectContentScript(tab.url)) {
+    throw new Error(
+      `当前页面（${describeUnsupportedUrl(tab.url)}）不允许 PocketBuddy 注入读取脚本。请打开普通网页后再试，或直接划词放入口袋。`,
+    );
+  }
+
   try {
+    // P0：先 ping 一下 content script 是否在线；若不在则动态注入
+    await ensureContentScriptInjected(tabId);
     const page = await sendTabInternalMessage(tabId, message) as PageReadResult & { __error?: string };
     if (page?.__error) {
       throw new Error(page.__error);
@@ -338,6 +408,99 @@ async function requestPageExtraction(message: InternalContentMessage) {
 }
 
 /**
+ * 判断该 URL 能否注入 content script。
+ *
+ * Chrome/Firefox MV3 都不会注入到这些 scheme 上：
+ * - chrome:// / chrome-extension:// / chrome-search:// / devtools:// / about:
+ * - chromewebstore.google.com（Web Store 自身限制）
+ * - view-source:
+ * - file:（需要 explicit host permission）
+ */
+function canInjectContentScript(rawUrl: string | undefined): boolean {
+  if (!rawUrl) return false;
+  try {
+    const url = new URL(rawUrl);
+    const scheme = url.protocol.toLowerCase();
+    if (
+      scheme === 'chrome:'
+      || scheme === 'chrome-extension:'
+      || scheme === 'chrome-search:'
+      || scheme === 'chrome-untrusted:'
+      || scheme === 'devtools:'
+      || scheme === 'about:'
+      || scheme === 'view-source:'
+    ) {
+      return false;
+    }
+    if (url.hostname === 'chromewebstore.google.com') return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function describeUnsupportedUrl(rawUrl: string | undefined): string {
+  if (!rawUrl) return '未知页面';
+  try {
+    const url = new URL(rawUrl);
+    return url.hostname || url.protocol.replace(':', '');
+  } catch {
+    return '当前 URL';
+  }
+}
+
+/**
+ * 确保目标 tab 已注入 content script。
+ *
+ * 解法（来自 chrome.scripting 官方文档 + SO 高赞答案）：
+ * 1. 先尝试 ping，content script 在线就直接返回
+ * 2. 收到 "Receiving end does not exist" → 用 chrome.scripting.executeScript 动态注入
+ * 3. 注入完成后再 ping 一次确认
+ *
+ * 解决了：
+ * - 老标签页未触发静态注入（扩展安装/更新后未刷新）
+ * - SPA 路由切换导致 content script 丢失（极少见但可能）
+ */
+async function ensureContentScriptInjected(tabId: number): Promise<void> {
+  const PING = { type: 'content.ping' } as const;
+
+  // 第一次尝试
+  try {
+    await browser.tabs.sendMessage(tabId, PING);
+    return; // content script 在线
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const notConnected = msg.includes('Receiving end does not exist')
+      || msg.includes('Could not establish connection');
+    if (!notConnected) {
+      throw err; // 其它错误（敏感输入等）原样抛
+    }
+  }
+
+  // 动态注入
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId },
+      files: ['content-scripts/content.js'],
+    });
+  } catch (injectionErr) {
+    throw new Error(
+      `动态注入 content script 失败（通常是因为扩展未获得 host 权限）。请刷新当前页面后再试。原始错误: ${
+        injectionErr instanceof Error ? injectionErr.message : String(injectionErr)
+      }`,
+    );
+  }
+
+  // 第二次确认（给 content script 一点注册监听器的时间）
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  try {
+    await browser.tabs.sendMessage(tabId, PING);
+  } catch {
+    throw new Error('注入完成但 content script 仍未注册监听器，请刷新当前页面后再试。');
+  }
+}
+
+/**
  * 获取用户最近聚焦的正常窗口中的活动标签页 ID。
  *
  * popup 窗口的 currentWindow 是 popup 自身，不是用户正在浏览的网页窗口。
@@ -345,16 +508,38 @@ async function requestPageExtraction(message: InternalContentMessage) {
  * 仅使用 activeTab 权限，不读取 tab.url / tab.title 等敏感字段。
  */
 async function getLastFocusedNormalTabId(): Promise<number> {
-  // 优先尝试最后一个被聚焦的窗口
-  const [lastFocused] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-  if (lastFocused?.id) return lastFocused.id;
+  // 优先级 0：content script 长连注册过的"最近活跃网页 tab"
+  // 这是最可靠的，因为 content script 自己知道自己的 tab id
+  if (recentContentTabs.size > 0) {
+    // 按 lastSeen 排序取最新
+    const sorted = Array.from(recentContentTabs.entries())
+      .sort((a, b) => b[1].lastSeen - a[1].lastSeen);
+    const [tabId, info] = sorted[0];
+    if (canInjectContentScript(info.href)) return tabId;
+  }
 
-  // 回退：遍历所有窗口找正常窗口的活动标签页
-  const allActiveTabs = await browser.tabs.query({ active: true });
-  const normalTab = allActiveTabs.find((tab) => tab.id && !tab.url?.startsWith('chrome://'));
+  // 优先级 1：所有 normal 窗口的活动 tab 里挑一个可注入的
+  const allNormalTabs = await browser.tabs.query({
+    active: true,
+    windowType: 'normal',
+  });
+  const normalTab = allNormalTabs.find((tab) =>
+    tab.id && canInjectContentScript(tab.url),
+  );
   if (normalTab?.id) return normalTab.id;
 
-  throw new Error('没有找到可读取的网页标签页。');
+  // 优先级 2：所有 active tab 里再找一次（兜底）
+  const allActiveTabs = await browser.tabs.query({ active: true });
+  const fallback = allActiveTabs.find((tab) =>
+    tab.id && canInjectContentScript(tab.url),
+  );
+  if (fallback?.id) return fallback.id;
+
+  // 优先级 3：返回任意活动 tab id，让上游 canInjectContentScript 给友好提示
+  const anyTab = allNormalTabs[0] ?? allActiveTabs[0];
+  if (anyTab?.id) return anyTab.id;
+
+  throw new Error('没有找到可读取的网页标签页。请打开一个普通网页后重试。');
 }
 
 function successResponse(type: AppMessage['type'], requestId: string, payload: unknown) {

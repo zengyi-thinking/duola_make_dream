@@ -60,7 +60,9 @@ export default function App() {
   const [selectedArchiveNoteId, setSelectedArchiveNoteId] = useState<string>('');
 
   useEffect(() => {
-    void refreshWorkspace();
+    void refreshWorkspace().catch((err) => {
+      setErrorText(err instanceof Error ? err.message : '初始化工作区失败。');
+    });
   }, []);
 
   const mood: PocketBuddyMood = busyAction ? 'thinking' : pageAnalysis || artifact ? 'spark' : 'warm';
@@ -91,23 +93,33 @@ export default function App() {
   async function handleGenerateImage(input: Parameters<typeof createImageGenerateMessage>[0]) {
     setBusyAction(`image-${input.style}`);
     setErrorText('');
-    const response = await sendRuntimeMessage(createImageGenerateMessage(input));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '图片请求生成失败。'); return; }
-    setMemory(response.payload.memorySummary);
-    setNoticeText('图片请求已生成。');
-    setActiveTab('observation');
+    try {
+      const response = await sendRuntimeMessage(createImageGenerateMessage(input));
+      if (!response.success) { setErrorText(response.error ?? '图片请求生成失败。'); return; }
+      setMemory(response.payload.memorySummary);
+      setNoticeText('图片请求已生成。');
+      setActiveTab('observation');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '图片请求生成失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleGenerateMindmap(input: Parameters<typeof createMindmapGenerateMessage>[0]) {
     setBusyAction('mindmap-generate');
     setErrorText('');
-    const response = await sendRuntimeMessage(createMindmapGenerateMessage(input));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '图谱生成失败。'); return; }
-    setMemory(response.payload.memorySummary);
-    setNoticeText('图谱已生成。');
-    setActiveTab('observation');
+    try {
+      const response = await sendRuntimeMessage(createMindmapGenerateMessage(input));
+      if (!response.success) { setErrorText(response.error ?? '图谱生成失败。'); return; }
+      setMemory(response.payload.memorySummary);
+      setNoticeText('图谱已生成。');
+      setActiveTab('observation');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '图谱生成失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleCopy(text: string, successText: string) {
@@ -258,10 +270,12 @@ export default function App() {
             {activeTab === 'settings' && (
               <SettingsTab
                 config={runtimeConfig}
+                memory={memory}
                 setConfig={setRuntimeConfig}
                 setMemory={setMemory}
                 setErrorText={setErrorText}
                 setNoticeText={setNoticeText}
+                refreshMemory={refreshMemory}
                 refreshConfig={refreshConfig}
                 resetWorkspaceState={resetWorkspaceState}
                 busyAction={busyAction}

@@ -22,3 +22,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# other
+.wxt-cache/
+.test-profile/
+.test-profile-debug/
+.test-profile-final/

@@ -105,29 +105,44 @@ export default function ObservationTab(props: ObservationTabProps) {
 
   async function deleteApprovedMemory(memoryId: string) {
     setBusyAction(`approved-delete-${memoryId}`);
-    const response = await sendRuntimeMessage(createMemoryDeleteMessage('approvedMemories', memoryId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '删除长期记忆失败。'); return; }
-    await refreshMemory();
-    setNoticeText('长期记忆已删除。');
+    try {
+      const response = await sendRuntimeMessage(createMemoryDeleteMessage('approvedMemories', memoryId));
+      if (!response.success) { setErrorText(response.error ?? '删除长期记忆失败。'); return; }
+      await refreshMemory();
+      setNoticeText('长期记忆已删除。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '删除长期记忆失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function deleteImage(imageId: string) {
     setBusyAction(`image-delete-${imageId}`);
-    const response = await sendRuntimeMessage(createImageDeleteMessage(imageId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '删除图片记录失败。'); return; }
-    await refreshMemory();
-    setNoticeText('图片生成记录已删除。');
+    try {
+      const response = await sendRuntimeMessage(createImageDeleteMessage(imageId));
+      if (!response.success) { setErrorText(response.error ?? '删除图片记录失败。'); return; }
+      await refreshMemory();
+      setNoticeText('图片生成记录已删除。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '删除图片记录失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function deleteMindmap(mindmapId: string) {
     setBusyAction(`mindmap-delete-${mindmapId}`);
-    const response = await sendRuntimeMessage(createMindmapDeleteMessage(mindmapId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '删除图谱记录失败。'); return; }
-    await refreshMemory();
-    setNoticeText('图谱记录已删除。');
+    try {
+      const response = await sendRuntimeMessage(createMindmapDeleteMessage(mindmapId));
+      if (!response.success) { setErrorText(response.error ?? '删除图谱记录失败。'); return; }
+      await refreshMemory();
+      setNoticeText('图谱记录已删除。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '删除图谱记录失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   return (
@@ -167,6 +182,55 @@ export default function ObservationTab(props: ObservationTabProps) {
           value={memory?.pendingPatches.length ?? 0}
           hint={`历史 ${memory?.counts.feedback ?? 0}`}
         />
+      </section>
+
+      <section className="panel-card">
+        <div className="panel-head">
+          <div>
+            <p className="section-label">State</p>
+            <h2>组件状态</h2>
+          </div>
+          <span className="micro-status">设置页改动后会同步到这里</span>
+        </div>
+        <div className="detail-grid">
+          <InfoRow label="Agent / Avatar" value={`${runtimeConfig?.agentName ?? 'PocketAgent'} · ${avatarMeta.name}`} />
+          <InfoRow label="LLM" value={`${runtimeConfig?.llmProvider ?? 'mock'} / ${runtimeConfig?.llmModel ?? '未配置'}`} />
+          <InfoRow label="图片" value={`${runtimeConfig?.imageMode ?? 'mock'} / ${runtimeConfig?.imageModel ?? '未配置'}`} />
+          <InfoRow
+            label="用户画像"
+            value={`${memory?.profile.visualLikes.slice(0, 3).join(' / ') || '暂无'} · ${memory?.profile.tonePreference || '暂无'}`}
+          />
+        </div>
+      </section>
+
+      <section className="panel-card">
+        <div className="panel-head">
+          <div>
+            <p className="section-label">Causal Chain</p>
+            <h2>喂养 -&gt; 变化 -&gt; 产出</h2>
+          </div>
+          <span className="micro-status">帮我们确认这一步有没有真的改变 Agent</span>
+        </div>
+        <div className="detail-grid">
+          <InfoRow
+            label="最近喂养"
+            value={memory?.recentPageContexts[0]?.pageTitle ?? memory?.recentContextSnippets[0]?.pageTitle ?? '暂无'}
+          />
+          <InfoRow
+            label="最近变化"
+            value={memory?.profileHistory[0]
+              ? `${formatProfileSource(memory.profileHistory[0].source)} · ${formatDate(memory.profileHistory[0].createdAt)}`
+              : '暂无'}
+          />
+          <InfoRow
+            label="最近产出"
+            value={memory?.recentArtifacts[0] ? memory.recentArtifacts[0].concept.name : '暂无'}
+          />
+          <InfoRow
+            label="最近反馈"
+            value={memory?.recentFeedback[0] ? FEEDBACK_LABELS[memory.recentFeedback[0].action] : '暂无'}
+          />
+        </div>
       </section>
 
       <section className="panel-card">

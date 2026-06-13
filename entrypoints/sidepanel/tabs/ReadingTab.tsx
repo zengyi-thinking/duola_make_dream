@@ -66,17 +66,21 @@ export default function ReadingTab(props: ReadingTabProps) {
     setErrorText('');
     setNoticeText('');
 
-    const response = await sendRuntimeMessage(createPageReadMessage());
-    setBusyAction('');
+    try {
+      const response = await sendRuntimeMessage(createPageReadMessage());
+      if (!response.success) { setErrorText(response.error ?? '当前页读取失败。'); return; }
 
-    if (!response.success) { setErrorText(response.error ?? '当前页读取失败。'); return; }
-
-    setPageRead(response.payload.page);
-    setPageContext(response.payload.savedContext);
-    setPageAnalysis(null);
-    setMemory(response.payload.memorySummary);
-    setActiveTab('reading');
-    setNoticeText('这一页已经被 PocketBuddy 读进临时口袋。');
+      setPageRead(response.payload.page);
+      setPageContext(response.payload.savedContext);
+      setPageAnalysis(null);
+      setMemory(response.payload.memorySummary);
+      setActiveTab('reading');
+      setNoticeText('这一页已经被 PocketBuddy 读进临时口袋。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '当前页读取失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleAnalyzeCurrentPage() {
@@ -84,17 +88,21 @@ export default function ReadingTab(props: ReadingTabProps) {
     setErrorText('');
     setNoticeText('');
 
-    const response = await sendRuntimeMessage(createPageAnalyzeMessage());
-    setBusyAction('');
+    try {
+      const response = await sendRuntimeMessage(createPageAnalyzeMessage());
+      if (!response.success) { setErrorText(response.error ?? '页面分析失败。'); return; }
 
-    if (!response.success) { setErrorText(response.error ?? '页面分析失败。'); return; }
-
-    setPageRead(response.payload.page);
-    setPageContext(response.payload.savedContext);
-    setPageAnalysis(response.payload.analysis);
-    setMemory(response.payload.memorySummary);
-    setActiveTab('reading');
-    setNoticeText('PocketBuddy 已经完成这一页的结构化分析。');
+      setPageRead(response.payload.page);
+      setPageContext(response.payload.savedContext);
+      setPageAnalysis(response.payload.analysis);
+      setMemory(response.payload.memorySummary);
+      setActiveTab('reading');
+      setNoticeText('PocketBuddy 已经完成这一页的结构化分析。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '页面分析失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleSaveAnalysisAsNote() {
@@ -102,52 +110,74 @@ export default function ReadingTab(props: ReadingTabProps) {
 
     setBusyAction('archive-save');
     setErrorText('');
-    const response = await sendRuntimeMessage(createArchiveSaveMessage({ analysis: pageAnalysis, sourceContext: pageContext }));
-    setBusyAction('');
+    try {
+      const response = await sendRuntimeMessage(createArchiveSaveMessage({ analysis: pageAnalysis, sourceContext: pageContext }));
+      if (!response.success) { setErrorText(response.error ?? '保存笔记失败。'); return; }
 
-    if (!response.success) { setErrorText(response.error ?? '保存笔记失败。'); return; }
-
-    setMemory(response.payload.memorySummary);
-    setSelectedArchiveNoteId(response.payload.note.id);
-    setNoticeText('这次阅读结果已经保存为一条笔记。');
+      setMemory(response.payload.memorySummary);
+      setSelectedArchiveNoteId(response.payload.note.id);
+      setNoticeText('这次阅读结果已经保存为一条笔记。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '保存笔记失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleApproveCandidate(candidateId: string) {
     setBusyAction(`candidate-approve-${candidateId}`);
-    const response = await sendRuntimeMessage(createMemoryCandidateApproveMessage(candidateId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '记忆批准失败。'); return; }
-    setMemory(response.payload.memorySummary);
-    setNoticeText(`已记住：${response.payload.candidate.title}`);
+    try {
+      const response = await sendRuntimeMessage(createMemoryCandidateApproveMessage(candidateId));
+      if (!response.success) { setErrorText(response.error ?? '记忆批准失败。'); return; }
+      setMemory(response.payload.memorySummary);
+      setNoticeText(`已记住：${response.payload.candidate.title}`);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '记忆批准失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleRejectCandidate(candidateId: string) {
     setBusyAction(`candidate-reject-${candidateId}`);
-    const response = await sendRuntimeMessage(createMemoryCandidateRejectMessage(candidateId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '记忆拒绝失败。'); return; }
-    setMemory(response.payload.memorySummary);
-    setNoticeText(`已忽略：${response.payload.candidate.title}`);
+    try {
+      const response = await sendRuntimeMessage(createMemoryCandidateRejectMessage(candidateId));
+      if (!response.success) { setErrorText(response.error ?? '记忆拒绝失败。'); return; }
+      setMemory(response.payload.memorySummary);
+      setNoticeText(`已忽略：${response.payload.candidate.title}`);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '记忆拒绝失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleApproveAllCandidates() {
-    const pending = currentAnalysisCandidates.filter((c) => c.status === 'pending');
-    for (const candidate of pending) {
-      const response = await sendRuntimeMessage(createMemoryCandidateApproveMessage(candidate.id));
-      if (!response.success) { setErrorText(response.error ?? '批量记忆时发生错误。'); return; }
-      setMemory(response.payload.memorySummary);
+    try {
+      const pending = currentAnalysisCandidates.filter((c) => c.status === 'pending');
+      for (const candidate of pending) {
+        const response = await sendRuntimeMessage(createMemoryCandidateApproveMessage(candidate.id));
+        if (!response.success) { setErrorText(response.error ?? '批量记忆时发生错误。'); return; }
+        setMemory(response.payload.memorySummary);
+      }
+      setNoticeText('当前这批可记住的信息都已进入长期记忆。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '批量记忆时发生错误。');
     }
-    setNoticeText('当前这批可记住的信息都已进入长期记忆。');
   }
 
   async function handleRejectAllCandidates() {
-    const pending = currentAnalysisCandidates.filter((c) => c.status === 'pending');
-    for (const candidate of pending) {
-      const response = await sendRuntimeMessage(createMemoryCandidateRejectMessage(candidate.id));
-      if (!response.success) { setErrorText(response.error ?? '批量拒绝时发生错误。'); return; }
-      setMemory(response.payload.memorySummary);
+    try {
+      const pending = currentAnalysisCandidates.filter((c) => c.status === 'pending');
+      for (const candidate of pending) {
+        const response = await sendRuntimeMessage(createMemoryCandidateRejectMessage(candidate.id));
+        if (!response.success) { setErrorText(response.error ?? '批量拒绝时发生错误。'); return; }
+        setMemory(response.payload.memorySummary);
+      }
+      setNoticeText('当前这批候选记忆都已被忽略。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '批量拒绝时发生错误。');
     }
-    setNoticeText('当前这批候选记忆都已被忽略。');
   }
 
   return (

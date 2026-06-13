@@ -81,6 +81,12 @@ export default defineContentScript({
     };
 
     browser.runtime.onMessage.addListener((message: InternalContentMessage, _sender, sendResponse) => {
+      // content.ping 是 background 用于"探测 content script 是否在线"的轻量握手
+      if ((message as { type?: string }).type === 'content.ping') {
+        sendResponse({ pong: true });
+        return false; // 同步响应，不需要异步
+      }
+
       handleInternalContentMessage(message)
         .then((response) => sendResponse(response))
         .catch((error) => {
@@ -91,6 +97,31 @@ export default defineContentScript({
 
       return true;
     });
+
+    // 长连 + tab 上报：让 background 知道"我在哪个 tab"
+    // 解决 sidepanel 主动发起消息时无法定位活动 tab 的问题
+    // （sidepanel 在独立窗口，chrome.tabs.query({active:true, lastFocusedWindow:true})
+    //   返回的可能是 sidepanel 自己所在的 panel 窗口）
+    try {
+      const port = browser.runtime.connect({ name: 'content-tab-registry' });
+      const myTabId = browser.runtime?.id ? null : null; // content script 自身没有 tab id
+      // 通过 sender 反查不靠谱（content script 不收 runtime.sendMessage 的 sender），
+      // 改用 content script 里能拿到的 location 信息
+      const portMessage = {
+        type: 'content.registerTab',
+        url: location.origin,
+        pathname: location.pathname,
+        title: document.title,
+        href: location.href, // privacy-check: allow — 仅上报 URL 给 background，用于跨窗口定位活动 tab
+        // content script 不知道自己的 tabId，但 background 收到 connect 时能从 sender.tab 拿到
+      };
+      port.postMessage(portMessage);
+      port.onDisconnect.addListener(() => {
+        // SW 重启 / 扩展更新后重连
+      });
+    } catch {
+      // connect 失败也无妨，不影响核心功能
+    }
 
     const updateSelectionButton = () => {
       if (isSensitiveSelection() || isSensitiveActiveElement()) {

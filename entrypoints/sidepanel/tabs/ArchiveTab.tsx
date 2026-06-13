@@ -81,31 +81,39 @@ export default function ArchiveTab(props: ArchiveTabProps) {
     }
 
     setBusyAction(`archive-delete-${noteId}`);
-    const response = await sendRuntimeMessage(createArchiveDeleteMessage(noteId));
-    setBusyAction('');
-    setConfirmDeleteId(null);
+    try {
+      const response = await sendRuntimeMessage(createArchiveDeleteMessage(noteId));
+      if (!response.success) { setErrorText(response.error ?? '删除笔记失败。'); return; }
 
-    if (!response.success) { setErrorText(response.error ?? '删除笔记失败。'); return; }
-
-    setMemory(response.payload);
-    if (selectedArchiveNoteId === noteId) setSelectedArchiveNoteId('');
-    setDrawerNoteId(null);
-    setNoticeText('笔记已删除。');
+      setMemory(response.payload);
+      if (selectedArchiveNoteId === noteId) setSelectedArchiveNoteId('');
+      setDrawerNoteId(null);
+      setNoticeText('笔记已删除。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '删除笔记失败。');
+    } finally {
+      setBusyAction('');
+      setConfirmDeleteId(null);
+    }
   }
 
   async function handleClearArchive() {
     if (!window.confirm('确定要清空所有归档笔记吗？')) return;
 
     setBusyAction('archive-clear');
-    const response = await sendRuntimeMessage(createArchiveClearMessage());
-    setBusyAction('');
+    try {
+      const response = await sendRuntimeMessage(createArchiveClearMessage());
+      if (!response.success) { setErrorText(response.error ?? '清空笔记失败。'); return; }
 
-    if (!response.success) { setErrorText(response.error ?? '清空笔记失败。'); return; }
-
-    setMemory(response.payload);
-    setSelectedArchiveNoteId('');
-    setDrawerNoteId(null);
-    setNoticeText('归档笔记已清空。');
+      setMemory(response.payload);
+      setSelectedArchiveNoteId('');
+      setDrawerNoteId(null);
+      setNoticeText('归档笔记已清空。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '清空笔记失败。');
+    } finally {
+      setBusyAction('');
+    }
   }
 
   return (

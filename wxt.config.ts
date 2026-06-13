@@ -6,8 +6,9 @@ export default defineConfig({
     name: 'PocketBuddy',
     short_name: 'PocketBuddy',
     description: '把一个模糊想法放进口袋，拿出产品概念、视觉方向和 MVP 草图',
-    permissions: ['storage', 'activeTab', 'sidePanel'],
+    permissions: ['storage', 'activeTab', 'sidePanel', 'scripting'],
     host_permissions: [
+      '<all_urls>',
       'https://api.minimaxi.com/*',
       'https://api.apimart.ai/*',
     ],

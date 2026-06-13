@@ -47,7 +47,8 @@ export type MessageType = ExtensionMessageType;
 
 export type InternalContentMessageType =
   | 'content.page.extract-current'
-  | 'content.page.extract-selection';
+  | 'content.page.extract-selection'
+  | 'content.ping';
 
 interface MessageEnvelope<TType extends ExtensionMessageType, TPayload> {
   type: TType;
@@ -235,13 +236,19 @@ export type InternalExtractSelectionMessage = {
   type: 'content.page.extract-selection';
 };
 
+export type InternalPingMessage = {
+  type: 'content.ping';
+};
+
 export type InternalContentMessage =
   | InternalExtractCurrentMessage
-  | InternalExtractSelectionMessage;
+  | InternalExtractSelectionMessage
+  | InternalPingMessage;
 
 export type InternalContentResponseMap = {
   'content.page.extract-current': PageReadResult;
   'content.page.extract-selection': PageReadResult;
+  'content.ping': { pong: true };
 };
 
 interface ResponseEnvelope<TType extends ExtensionMessageType, TPayload> {
