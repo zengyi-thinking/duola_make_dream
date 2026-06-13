@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
@@ -8,7 +8,10 @@ import type {
   MemorySummary,
   ProfileHistoryEntry,
   RuntimeConfig,
+  ProductArtifact,
 } from '@/lib/agent/types';
+import { compareGeneratedImages, compareProductArtifacts, compareStateBackups } from '@/lib/agent/insights';
+import type { GeneratedImageRecord } from '@/lib/image/types';
 import type { StateBackup } from '@/lib/storage/schema';
 import { pocketAvatars } from '@/lib/brand/avatars';
 import {
@@ -22,12 +25,13 @@ import { flushRuntimeConfigWrites, restoreStateBackup, saveStateBackup } from '@
 interface ObservationTabProps {
   memory: MemorySummary | null;
   runtimeConfig: RuntimeConfig | null;
+  artifactHistory: ProductArtifact[];
+  imageHistory: GeneratedImageRecord[];
   busyAction: string;
   setBusyAction: Dispatch<SetStateAction<string>>;
   setErrorText: Dispatch<SetStateAction<string>>;
   setNoticeText: Dispatch<SetStateAction<string>>;
-  refreshMemory: () => Promise<void>;
-  refreshConfig: () => Promise<void>;
+  refreshWorkspace: () => Promise<void>;
   resetWorkspaceState: () => void;
   onCopy: (text: string, successText: string) => void;
 }
@@ -53,17 +57,73 @@ const FEEDBACK_LABELS: Record<string, string> = {
 
 export default function ObservationTab(props: ObservationTabProps) {
   const {
-    memory, runtimeConfig, busyAction, setBusyAction,
-    setErrorText, setNoticeText, refreshMemory, refreshConfig, resetWorkspaceState, onCopy,
+    memory, runtimeConfig, artifactHistory, imageHistory, busyAction, setBusyAction,
+    setErrorText, setNoticeText, refreshWorkspace, resetWorkspaceState, onCopy,
   } = props;
 
   const [backupLabel, setBackupLabel] = useState('手动快照');
   const [confirmRestoreId, setConfirmRestoreId] = useState<string | null>(null);
+  const [artifactCompareLeftId, setArtifactCompareLeftId] = useState('');
+  const [artifactCompareRightId, setArtifactCompareRightId] = useState('');
+  const [imageCompareLeftId, setImageCompareLeftId] = useState('');
+  const [imageCompareRightId, setImageCompareRightId] = useState('');
 
   const avatarId = runtimeConfig?.avatarId ?? 'yunyu-main';
   const avatarMeta = pocketAvatars[avatarId];
 
   const timelineEntries = useMemo(() => buildTimeline(memory), [memory]);
+  const effectiveArtifactHistory = artifactHistory.length > 0
+    ? artifactHistory
+    : (memory?.recentArtifacts ?? []);
+  const effectiveImageHistory = imageHistory.length > 0
+    ? imageHistory
+    : (memory?.generatedImages ?? []);
+  const latestBackups = memory?.stateBackups ?? [];
+
+  const artifactComparison = useMemo(() => {
+    const left = effectiveArtifactHistory.find((item) => item.id === artifactCompareLeftId) ?? effectiveArtifactHistory[0];
+    const right = effectiveArtifactHistory.find((item) => item.id === artifactCompareRightId)
+      ?? effectiveArtifactHistory[1]
+      ?? effectiveArtifactHistory[0];
+    if (!left || !right || left.id === right.id) return null;
+    return compareProductArtifacts(left, right);
+  }, [artifactCompareLeftId, artifactCompareRightId, effectiveArtifactHistory]);
+
+  const imageComparison = useMemo(() => {
+    const left = effectiveImageHistory.find((item) => item.id === imageCompareLeftId) ?? effectiveImageHistory[0];
+    const right = effectiveImageHistory.find((item) => item.id === imageCompareRightId)
+      ?? effectiveImageHistory[1]
+      ?? effectiveImageHistory[0];
+    if (!left || !right || left.id === right.id) return null;
+    return compareGeneratedImages(left, right);
+  }, [effectiveImageHistory, imageCompareLeftId, imageCompareRightId]);
+
+  const backupComparison = useMemo(() => {
+    if (latestBackups.length < 2) return null;
+    return compareStateBackups(latestBackups[0], latestBackups[1]);
+  }, [latestBackups]);
+
+  useEffect(() => {
+    if (effectiveArtifactHistory.length > 1) {
+      if (!effectiveArtifactHistory.some((item) => item.id === artifactCompareLeftId)) {
+        setArtifactCompareLeftId(effectiveArtifactHistory[0].id);
+      }
+      if (!effectiveArtifactHistory.some((item) => item.id === artifactCompareRightId)) {
+        setArtifactCompareRightId(effectiveArtifactHistory[1].id);
+      }
+    }
+  }, [artifactCompareLeftId, artifactCompareRightId, effectiveArtifactHistory]);
+
+  useEffect(() => {
+    if (effectiveImageHistory.length > 1) {
+      if (!effectiveImageHistory.some((item) => item.id === imageCompareLeftId)) {
+        setImageCompareLeftId(effectiveImageHistory[0].id);
+      }
+      if (!effectiveImageHistory.some((item) => item.id === imageCompareRightId)) {
+        setImageCompareRightId(effectiveImageHistory[1].id);
+      }
+    }
+  }, [effectiveImageHistory, imageCompareLeftId, imageCompareRightId]);
 
   async function handleCreateBackup() {
     setBusyAction('backup-create');
@@ -71,7 +131,7 @@ export default function ObservationTab(props: ObservationTabProps) {
       await flushRuntimeConfigWrites();
       const backup = await saveStateBackup(backupLabel.trim() || '手动快照');
       setNoticeText(`已创建快照：${backup.label}`);
-      await Promise.all([refreshMemory(), refreshConfig()]);
+      await refreshWorkspace();
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '创建快照失败');
     } finally {
@@ -91,7 +151,7 @@ export default function ObservationTab(props: ObservationTabProps) {
       const restored = await restoreStateBackup(backupId);
       setNoticeText('已恢复快照，当前状态已回滚。');
       resetWorkspaceState();
-      await Promise.all([refreshMemory(), refreshConfig()]);
+      await refreshWorkspace();
       if (restored) {
         setConfirmRestoreId(null);
       }
@@ -108,7 +168,7 @@ export default function ObservationTab(props: ObservationTabProps) {
     try {
       const response = await sendRuntimeMessage(createMemoryDeleteMessage('approvedMemories', memoryId));
       if (!response.success) { setErrorText(response.error ?? '删除长期记忆失败。'); return; }
-      await refreshMemory();
+      await refreshWorkspace();
       setNoticeText('长期记忆已删除。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '删除长期记忆失败。');
@@ -122,7 +182,7 @@ export default function ObservationTab(props: ObservationTabProps) {
     try {
       const response = await sendRuntimeMessage(createImageDeleteMessage(imageId));
       if (!response.success) { setErrorText(response.error ?? '删除图片记录失败。'); return; }
-      await refreshMemory();
+      await refreshWorkspace();
       setNoticeText('图片生成记录已删除。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '删除图片记录失败。');
@@ -136,7 +196,7 @@ export default function ObservationTab(props: ObservationTabProps) {
     try {
       const response = await sendRuntimeMessage(createMindmapDeleteMessage(mindmapId));
       if (!response.success) { setErrorText(response.error ?? '删除图谱记录失败。'); return; }
-      await refreshMemory();
+      await refreshWorkspace();
       setNoticeText('图谱记录已删除。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '删除图谱记录失败。');
@@ -346,6 +406,153 @@ export default function ObservationTab(props: ObservationTabProps) {
           ))}
           {(memory?.stateBackups.length ?? 0) === 0 ? <p className="soft-text">还没有快照。</p> : null}
         </div>
+
+        {backupComparison ? (
+          <div className="list-card" style={{ marginTop: 10 }}>
+            <div className="candidate-head">
+              <strong>最近两份快照差异</strong>
+              <span className="status-pill status-pill--spark">compare</span>
+            </div>
+            <p className="soft-text">{backupComparison.summary}</p>
+            <div className="detail-grid">
+              <InfoRow label="较新快照" value={backupComparison.leftLabel} />
+              <InfoRow label="较旧快照" value={backupComparison.rightLabel} />
+            </div>
+            <div className="subsection">
+              <h4>差异摘要</h4>
+              <ol className="bullet-list">
+                {backupComparison.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+              </ol>
+            </div>
+          </div>
+        ) : (
+          <p className="soft-text" style={{ marginTop: 8 }}>至少保存两份快照后，这里会自动显示回滚差异。</p>
+        )}
+      </section>
+
+      <section className="panel-card">
+        <div className="panel-head">
+          <div>
+            <p className="section-label">Version Compare</p>
+            <h2>产物与图片版本对比</h2>
+          </div>
+        </div>
+
+        {effectiveArtifactHistory.length > 0 ? (
+          <div className="detail-grid">
+            <div className="settings-section">
+              <label>产物版本 A</label>
+              <select
+                className="settings-select"
+                value={artifactCompareLeftId}
+                onChange={(e) => setArtifactCompareLeftId(e.target.value)}
+              >
+                {effectiveArtifactHistory.map((item) => (
+                  <option key={item.id} value={item.id}>{describeArtifactVersion(item)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="settings-section">
+              <label>产物版本 B</label>
+              <select
+                className="settings-select"
+                value={artifactCompareRightId}
+                onChange={(e) => setArtifactCompareRightId(e.target.value)}
+              >
+                {effectiveArtifactHistory.map((item) => (
+                  <option key={item.id} value={item.id}>{describeArtifactVersion(item)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <p className="soft-text" style={{ marginTop: 8 }}>暂无产物历史，先发一个想法再来对比版本。</p>
+        )}
+
+        {artifactComparison ? (
+          <div className="list-card" style={{ marginTop: 10 }}>
+            <div className="candidate-head">
+              <strong>产物差异</strong>
+              <span className="status-pill status-pill--spark">artifact</span>
+            </div>
+            <p className="soft-text">{artifactComparison.summary}</p>
+            <div className="detail-grid">
+              <InfoRow label="版本 A" value={artifactComparison.leftLabel} />
+              <InfoRow label="版本 B" value={artifactComparison.rightLabel} />
+            </div>
+            <div className="subsection">
+              <h4>差异摘要</h4>
+              <ol className="bullet-list">
+                {artifactComparison.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+              </ol>
+            </div>
+            <div className="inline-actions">
+              <LineButton variant="ghost" onClick={() => onCopy([artifactComparison.summary, ...artifactComparison.changes].join('\n'), '产物对比摘要已复制。')}>
+                复制摘要
+              </LineButton>
+            </div>
+          </div>
+        ) : (
+          <p className="soft-text" style={{ marginTop: 8 }}>至少保留两版产物后，才能对比版本变化。</p>
+        )}
+
+        {effectiveImageHistory.length > 0 ? (
+          <div className="detail-grid" style={{ marginTop: 12 }}>
+            <div className="settings-section">
+              <label>图片版本 A</label>
+              <select
+                className="settings-select"
+                value={imageCompareLeftId}
+                onChange={(e) => setImageCompareLeftId(e.target.value)}
+              >
+                {effectiveImageHistory.map((item) => (
+                  <option key={item.id} value={item.id}>{describeImageVersion(item)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="settings-section">
+              <label>图片版本 B</label>
+              <select
+                className="settings-select"
+                value={imageCompareRightId}
+                onChange={(e) => setImageCompareRightId(e.target.value)}
+              >
+                {effectiveImageHistory.map((item) => (
+                  <option key={item.id} value={item.id}>{describeImageVersion(item)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <p className="soft-text" style={{ marginTop: 8 }}>暂无图片历史，先生成一张图片再来对比版本。</p>
+        )}
+
+        {imageComparison ? (
+          <div className="list-card" style={{ marginTop: 10 }}>
+            <div className="candidate-head">
+              <strong>图片差异</strong>
+              <span className="status-pill status-pill--spark">image</span>
+            </div>
+            <p className="soft-text">{imageComparison.summary}</p>
+            <div className="detail-grid">
+              <InfoRow label="版本 A" value={imageComparison.leftLabel} />
+              <InfoRow label="版本 B" value={imageComparison.rightLabel} />
+            </div>
+            <div className="subsection">
+              <h4>差异摘要</h4>
+              <ol className="bullet-list">
+                {imageComparison.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+              </ol>
+            </div>
+            <div className="inline-actions">
+              <LineButton variant="ghost" onClick={() => onCopy([imageComparison.summary, ...imageComparison.changes].join('\n'), '图片对比摘要已复制。')}>
+                复制摘要
+              </LineButton>
+            </div>
+          </div>
+        ) : (
+          <p className="soft-text" style={{ marginTop: 8 }}>至少保留两条图片请求后，才能对比版本变化。</p>
+        )}
       </section>
 
       <section className="panel-card">
@@ -423,12 +630,15 @@ export default function ObservationTab(props: ObservationTabProps) {
           </div>
         </div>
         <div className="stack">
-          {(memory?.generatedImages ?? []).map((item) => (
+          {effectiveImageHistory.map((item) => (
             <div key={item.id} className="list-card">
               <div className="candidate-head">
-                <strong>{item.model ?? 'gpt-image-2'}</strong>
+                <strong>{item.request.title || item.model || 'gpt-image-2'}</strong>
                 <span className={`status-pill status-pill--${item.status}`}>{item.status}</span>
               </div>
+              <p className="micro-copy">
+                {item.request.sourceType} · {item.request.style} · {formatDate(item.createdAt)}
+              </p>
               {item.imageUrl ? (
                 <img src={item.imageUrl} alt={item.prompt.slice(0, 40)} className="generated-image" />
               ) : null}
@@ -440,7 +650,7 @@ export default function ObservationTab(props: ObservationTabProps) {
               </div>
             </div>
           ))}
-          {(memory?.generatedImages.length ?? 0) === 0 ? <p className="soft-text">还没有图片生成记录。</p> : null}
+          {effectiveImageHistory.length === 0 ? <p className="soft-text">还没有图片生成记录。</p> : null}
         </div>
       </section>
 
@@ -559,6 +769,14 @@ function buildTimeline(memory: MemorySummary | null): TimelineEntry[] {
   });
 
   return entries.sort((a, b) => b.createdAt - a.createdAt).slice(0, 18);
+}
+
+function describeArtifactVersion(item: ProductArtifact) {
+  return `${shorten(item.concept.name || '未命名产物', 16)} · ${item.intent} · ${formatDate(item.createdAt)}`;
+}
+
+function describeImageVersion(item: GeneratedImageRecord) {
+  return `${shorten(item.request.title || item.request.sourceType || '未命名图片', 16)} · ${item.request.style} · ${formatDate(item.createdAt)}`;
 }
 
 function shorten(text: string, max = 16) {

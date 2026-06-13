@@ -1,12 +1,14 @@
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import type {
+  ProductArtifact,
   MemoryCandidate,
   MemorySummary,
   PageAnalysisResult,
   PageContextRecord,
   PageReadResult,
 } from '@/lib/agent/types';
+import { buildKnowledgeRecall, type RecallItem } from '@/lib/agent/insights';
 import {
   createArchiveSaveMessage,
   createMemoryCandidateApproveMessage,
@@ -15,6 +17,7 @@ import {
   createPageReadMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
+import type { GeneratedImageRecord } from '@/lib/image/types';
 import { ResultCard, EmptyCard } from '../components/ResultCard';
 import { ListBlock } from '../components/ListBlock';
 import { InfoBlock } from '../components/InfoBlock';
@@ -26,11 +29,14 @@ interface ReadingTabProps {
   pageRead: PageReadResult | null;
   pageContext: PageContextRecord | null;
   pageAnalysis: PageAnalysisResult | null;
+  artifactHistory: ProductArtifact[];
+  imageHistory: GeneratedImageRecord[];
   busyAction: string;
   setBusyAction: Dispatch<SetStateAction<string>>;
   setMemory: Dispatch<SetStateAction<MemorySummary | null>>;
   setErrorText: Dispatch<SetStateAction<string>>;
   setNoticeText: Dispatch<SetStateAction<string>>;
+  setIdeaText: Dispatch<SetStateAction<string>>;
   setPageRead: Dispatch<SetStateAction<PageReadResult | null>>;
   setPageContext: Dispatch<SetStateAction<PageContextRecord | null>>;
   setPageAnalysis: Dispatch<SetStateAction<PageAnalysisResult | null>>;
@@ -50,8 +56,8 @@ interface ReadingTabProps {
 
 export default function ReadingTab(props: ReadingTabProps) {
   const {
-    memory, pageRead, pageContext, pageAnalysis, busyAction, setBusyAction,
-    setMemory, setErrorText, setNoticeText, setPageRead, setPageContext, setPageAnalysis,
+    memory, pageRead, pageContext, pageAnalysis, artifactHistory, imageHistory, busyAction, setBusyAction,
+    setMemory, setErrorText, setNoticeText, setIdeaText, setPageRead, setPageContext, setPageAnalysis,
     setSelectedArchiveNoteId, setActiveTab, onGenerateImage, onGenerateMindmap,
   } = props;
 
@@ -60,6 +66,45 @@ export default function ReadingTab(props: ReadingTabProps) {
     const candidateIds = new Set(pageAnalysis.memoryCandidates.map((c) => c.id));
     return memory.memoryCandidates.filter((c) => candidateIds.has(c.id));
   }, [memory, pageAnalysis]);
+
+  const recallItems = useMemo(() => {
+    if (!memory) return [] as RecallItem[];
+
+    const queryParts: string[] = [];
+    if (pageAnalysis) {
+      queryParts.push(
+        pageAnalysis.pageSummary,
+        pageAnalysis.noteCard.title,
+        pageAnalysis.noteCard.summary,
+        pageAnalysis.keyIdeas.join(' '),
+        pageAnalysis.keyTakeaways.join(' '),
+        pageAnalysis.productOpportunities.join(' '),
+        pageAnalysis.usefulForCurrentIdea.join(' '),
+        pageAnalysis.memoryCandidates.map((item) => `${item.title} ${item.reason}`).join(' '),
+      );
+    }
+    if (pageRead) {
+      queryParts.push(pageRead.pageTitle, pageRead.visibleTextSummary ?? '', pageRead.textExcerpt ?? '');
+    }
+    if (pageContext) {
+      queryParts.push(pageContext.pageTitle, pageContext.visibleTextSummary, pageContext.textExcerpt, pageContext.headings.join(' '));
+    }
+
+    return buildKnowledgeRecall({
+      query: queryParts.filter(Boolean).join(' '),
+      memory,
+      artifacts: artifactHistory,
+      images: imageHistory,
+      limit: 4,
+    });
+  }, [artifactHistory, imageHistory, memory, pageAnalysis, pageContext, pageRead]);
+
+  function sendRecallToCreative(item: RecallItem) {
+    const nextText = `${item.title}：${item.detail}`;
+    setIdeaText((current) => (current.trim() ? `${current}\n${nextText}` : nextText));
+    setActiveTab('creative');
+    setNoticeText('已把关联线索送到发明页。');
+  }
 
   async function handleReadCurrentPage() {
     setBusyAction('page-read');
@@ -324,6 +369,33 @@ export default function ReadingTab(props: ReadingTabProps) {
                 生成研究路线图
               </LineButton>
             </div>
+          </ResultCard>
+
+          <ResultCard title="关联召回">
+            {recallItems.length > 0 ? (
+              <div className="stack">
+                {recallItems.map((item) => (
+                  <div key={`${item.kind}-${item.id}`} className="list-card">
+                    <div className="candidate-head">
+                      <strong>{item.title}</strong>
+                      <span className="status-pill status-pill--spark">{item.kindLabel}</span>
+                    </div>
+                    <p className="soft-text">{item.detail}</p>
+                    <p className="micro-copy">{item.reason}</p>
+                    <div className="token-list">
+                      {item.tags.map((tag, index) => <span key={`${tag}-${index}`} className="token-chip">{tag}</span>)}
+                    </div>
+                    <div className="inline-actions">
+                      <LineButton variant="secondary" onClick={() => sendRecallToCreative(item)}>
+                        发到发明页
+                      </LineButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="soft-text">等页面分析完成后，这里会给你更强的关联线索。</p>
+            )}
           </ResultCard>
         </StaggerStack>
       ) : (

@@ -6,6 +6,7 @@ import type {
   ArchiveNoteListRequest,
   ArchiveNoteDeleteRequest,
   ArchiveNoteSaveRequest,
+  ArtifactListRequest,
   ContextCaptureSelectionRequest,
   FeedbackRecordRequest,
   IdeaSubmitRequest,
@@ -163,6 +164,15 @@ export function createArchiveClearMessage(source: MessageSource = 'popup'): Arch
   return {
     type: 'archive.note.clear',
     requestId: createRequestId('archive.note.clear'),
+    source,
+    payload: {},
+  };
+}
+
+export function createArtifactListMessage(source: MessageSource = 'popup'): ArtifactListRequest {
+  return {
+    type: 'artifact.list',
+    requestId: createRequestId('artifact.list'),
     source,
     payload: {},
   };

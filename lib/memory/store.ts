@@ -128,6 +128,11 @@ export async function getFeedbackLog(limit = 60): Promise<FeedbackRecord[]> {
   return log.slice(0, limit);
 }
 
+export async function getArtifactHistory(limit = 30): Promise<ProductArtifact[]> {
+  const artifacts = await readStorage('artifactHistory');
+  return artifacts.slice(0, limit);
+}
+
 export async function getHarnessPatches(limit = 20): Promise<HarnessPatch[]> {
   const patches = await readStorage('harnessPatches');
   return patches.slice(0, limit);

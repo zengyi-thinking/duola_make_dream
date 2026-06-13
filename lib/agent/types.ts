@@ -267,6 +267,11 @@ export interface ArchiveNoteListResult {
   memorySummary: MemorySummary;
 }
 
+export interface ArtifactListResult {
+  records: ProductArtifact[];
+  memorySummary: MemorySummary;
+}
+
 export interface MemoryCandidateMutationResult {
   candidate: MemoryCandidate;
   approvedMemory?: ApprovedMemory;

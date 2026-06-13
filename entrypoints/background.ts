@@ -13,6 +13,7 @@ import {
   deleteMemory,
   deleteMemoryCandidate,
   ensureProfile,
+  getArtifactHistory,
   getArchiveNotes,
   getFeedbackLog,
   getGeneratedImages,
@@ -171,6 +172,12 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
 
     case 'archive.note.clear':
       return successResponse('archive.note.clear', message.requestId, await clearArchiveNotes());
+
+    case 'artifact.list':
+      return successResponse('artifact.list', message.requestId, {
+        records: await getArtifactHistory(),
+        memorySummary: await getMemorySummary(),
+      });
 
     case 'image.generate':
       return successResponse('image.generate', message.requestId, await handleImageGenerate(message.payload));
@@ -455,11 +462,14 @@ function describeUnsupportedUrl(rawUrl: string | undefined): string {
  * 解法（来自 chrome.scripting 官方文档 + SO 高赞答案）：
  * 1. 先尝试 ping，content script 在线就直接返回
  * 2. 收到 "Receiving end does not exist" → 用 chrome.scripting.executeScript 动态注入
- * 3. 注入完成后再 ping 一次确认
+ * 3. 注入后用指数退避重试 PING（因为 content.js 是 ES module，
+ *    需要解析所有 import 后才会调用 defineContentScript 的 main()，
+ *    在慢机器或大页面上可能需要 200-800ms）
  *
  * 解决了：
  * - 老标签页未触发静态注入（扩展安装/更新后未刷新）
  * - SPA 路由切换导致 content script 丢失（极少见但可能）
+ * - 动态注入后模块加载慢导致 PING 失败（之前 60ms 太短）
  */
 async function ensureContentScriptInjected(tabId: number): Promise<void> {
   const PING = { type: 'content.ping' } as const;
@@ -477,11 +487,18 @@ async function ensureContentScriptInjected(tabId: number): Promise<void> {
     }
   }
 
-  // 动态注入
+  // 动态注入：使用 func 模式注入一个精简的 onMessage 桥接脚本
+  // 为什么不用 files: ['content-scripts/content.js']：
+  //   WXT 编译的 content.js 是 IIFE 包裹的 async main()，执行链是：
+  //     (async () => { try { await e(...); } catch { H.error(...); } })()
+  //   如果 main() 内部抛错（比如 document.documentElement 还没就绪），
+  //   错误会被 H.error 静默吞掉，listener 永远不注册 → "3000ms 内仍未注册监听器"
+  //   func 模式是纯函数，注入时同步执行，错误原样冒上来
   try {
     await browser.scripting.executeScript({
       target: { tabId },
-      files: ['content-scripts/content.js'],
+      world: 'ISOLATED',
+      func: injectContentScriptBridge,
     });
   } catch (injectionErr) {
     throw new Error(
@@ -491,12 +508,183 @@ async function ensureContentScriptInjected(tabId: number): Promise<void> {
     );
   }
 
-  // 第二次确认（给 content script 一点注册监听器的时间）
-  await new Promise((resolve) => setTimeout(resolve, 60));
+  // 第二次确认（func 模式同步执行，50ms 足够让消息回到 SW）
+  await new Promise((resolve) => setTimeout(resolve, 50));
   try {
     await browser.tabs.sendMessage(tabId, PING);
+    return;
+  } catch (err) {
+    throw new Error(
+      `动态注入了 content script bridge 但 listener 仍未注册。请刷新当前页面后再试。原始错误: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
+/**
+ * 通过 chrome.scripting.executeScript({func: ...}) 注入的桥接脚本。
+ *
+ * 设计目标：
+ * 1. 100% 同步：listener 立即注册，不依赖任何异步操作
+ * 2. 不依赖 WXT 模块链路：不 import 任何东西，纯原生 API
+ * 3. 暴露与 content.ts 相同的消息协议（content.ping / extract-current / extract-selection）
+ * 4. 重复注入保护：window.__pbBridgeInjected 标记
+ *
+ * 注意：func 模式下，函数体被字符串化后在目标 world 执行，
+ * 不能引用外层任何变量。所有逻辑必须内联在这里。
+ */
+function injectContentScriptBridge(): void {
+  const w = window as unknown as { __pbBridgeInjected?: boolean };
+  if (w.__pbBridgeInjected) return;
+  w.__pbBridgeInjected = true;
+
+  const chromeRef = (globalThis as { chrome?: unknown }).chrome
+    ?? (globalThis as unknown as { browser?: unknown }).browser;
+  if (!chromeRef || !(chromeRef as { runtime?: { onMessage?: unknown } }).runtime?.onMessage) {
+    throw new Error('chrome.runtime.onMessage 不可用，可能不是扩展上下文');
+  }
+
+  // ── 内联 DOM 工具（精简版，删掉了原始 content.ts 里的 FAB / Shadow DOM 部分）──
+  const BLOCKED_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'CANVAS', 'FORM', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']);
+  const REMOVABLE_SELECTORS = 'script,style,noscript,iframe,svg,canvas,form,input,textarea,select,button,nav,footer,[hidden],[aria-hidden="true"],[contenteditable]';
+
+  function sanitize(input: string): string {
+    return input.replace(/\s+/g, ' ').trim();
+  }
+
+  function getReadableRoot(root: HTMLElement): ParentNode {
+    return root.querySelector('article, main, [role="main"]')
+      ?? root.querySelector('body')
+      ?? root;
+  }
+
+  function extractHeadings(root: ParentNode, limit = 20): string[] {
+    return Array.from(root.querySelectorAll('h1, h2, h3'))
+      .map((n) => sanitize(n.textContent ?? ''))
+      .filter(Boolean)
+      .slice(0, limit);
+  }
+
+  function extractReadableText(root: ParentNode, maxChars: number): string {
+    const host = root instanceof HTMLElement ? root : (root.querySelector('body') ?? root as Element);
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    const parts: string[] = [];
+    let len = 0;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const parent = node.parentElement;
+      if (!parent || BLOCKED_TAGS.has(parent.tagName)) continue;
+      const text = sanitize(node.textContent ?? '');
+      if (!text) continue;
+      parts.push(text);
+      len += text.length + 1;
+      if (len >= maxChars) break;
+    }
+    return parts.join(' ').slice(0, maxChars).trim();
+  }
+
+  function createSanitizedClone(src: Document): HTMLElement {
+    const clone = src.documentElement.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll(REMOVABLE_SELECTORS).forEach((n) => n.remove());
+    clone.querySelectorAll('header').forEach((h) => {
+      const links = h.querySelectorAll('a').length;
+      if (h.querySelector('nav') || links >= 4) h.remove();
+    });
+    return clone;
+  }
+
+  function classifyPage(url: string, title: string, headings: string[], excerpt: string): 'paper' | 'article' | 'generic' {
+    const joined = [url, title, ...headings, excerpt].join(' ').toLowerCase();
+    if (/arxiv|doi|abstract|references|method|conclusion/.test(joined)) return 'paper';
+    if (/article|blog|post|newsletter|author|published|教程|博客|文章/.test(joined)) return 'article';
+    return 'generic';
+  }
+
+  function extractCurrentPage(mode: string) {
+    if (/\.pdf$/i.test(window.location.pathname) // privacy-check: allow — 仅读取 pathname 用于 PDF 检测，不外传
+      || document.contentType?.toLowerCase().includes('pdf')) {
+      throw new Error('当前页面像是 PDF 阅读器或不可注入页面，暂不支持自动读取。可先划词放入口袋或复制摘要。');
+    }
+    const clone = createSanitizedClone(document);
+    const readable = getReadableRoot(clone);
+    const headings = extractHeadings(readable);
+    const mainText = extractReadableText(readable, 3000);
+    if (!mainText) {
+      throw new Error('当前页面没有提取到可分析的正文内容。');
+    }
+    const textExcerpt = mainText.slice(0, 500);
+    return {
+      id: crypto.randomUUID(),
+      mode,
+      origin: window.location.origin,
+      pageTitle: document.title.trim().slice(0, 140),
+      pageType: classifyPage(window.location.href, document.title, headings, textExcerpt), // privacy-check: allow — 仅在 content script 内部用于分类判定，不外传
+      headings,
+      mainText,
+      visibleTextSummary: mainText.slice(0, 300),
+      textExcerpt,
+      createdAt: Date.now(),
+    };
+  }
+
+  // ── 注册监听器 ──
+  (chromeRef as { runtime: { onMessage: { addListener: (
+    cb: (message: { type?: string; mode?: string }, sender: unknown, sendResponse: (r: unknown) => void) => boolean | void
+  ) => void } } }).runtime.onMessage.addListener((
+    message: { type?: string; mode?: string },
+    _sender: unknown,
+    sendResponse: (r: unknown) => void,
+  ) => {
+    if (message?.type === 'content.ping') {
+      sendResponse({ pong: true });
+      return false;
+    }
+
+    if (message?.type === 'content.page.extract-current') {
+      try {
+        const mode = message.mode ?? 'current-page';
+        const result = extractCurrentPage(mode);
+        sendResponse(result);
+      } catch (err) {
+        sendResponse({ __error: err instanceof Error ? err.message : String(err) });
+      }
+      return false;
+    }
+
+    if (message?.type === 'content.page.extract-selection') {
+      const sel = window.getSelection()?.toString().replace(/\s+/g, ' ').trim() ?? '';
+      if (!sel) {
+        sendResponse({ __error: '当前没有选中的文本。' });
+      } else {
+        sendResponse({
+          id: crypto.randomUUID(),
+          mode: 'selection',
+          origin: window.location.origin,
+          pageTitle: document.title.trim().slice(0, 140),
+          pageType: 'generic',
+          selectedText: sel.slice(0, 280),
+          createdAt: Date.now(),
+        });
+      }
+      return false;
+    }
+
+    return false;
+  });
+
+  // ── 主动注册到 tab registry ──
+  try {
+    const port = (chromeRef as { runtime: { connect: (n: { name: string }) => { postMessage: (m: unknown) => void } } }).runtime.connect({ name: 'content-tab-registry' });
+    port.postMessage({
+      type: 'content.registerTab',
+      url: window.location.origin,
+      pathname: window.location.pathname, // privacy-check: allow — 仅在 content script 内部使用
+      title: document.title,
+      href: window.location.href, // privacy-check: allow — 仅上报 URL 给 background，用于跨窗口定位活动 tab
+    });
   } catch {
-    throw new Error('注入完成但 content script 仍未注册监听器，请刷新当前页面后再试。');
+    // connect 失败也无妨
   }
 }
 
@@ -754,6 +942,10 @@ function buildEmptyPayload(type: AppMessage['type']) {
     return { notes: [], memorySummary: emptySummary };
   }
 
+  if (type === 'artifact.list') {
+    return { records: [], memorySummary: emptySummary };
+  }
+
   if (type === 'image.generate') {
     return {
       request: {
@@ -767,6 +959,14 @@ function buildEmptyPayload(type: AppMessage['type']) {
       record: {
         id: '',
         requestId: '',
+        request: {
+          id: '',
+          sourceType: 'idea',
+          title: '',
+          content: '',
+          style: 'line-art',
+          createdAt: 0,
+        },
         prompt: '',
         status: 'failed',
         previewText: '',

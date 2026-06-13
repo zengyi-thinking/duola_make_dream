@@ -14,6 +14,7 @@ export {
   deleteMemoryCandidate,
   ensureProfile,
   getApprovedMemories,
+  getArtifactHistory,
   getArchiveNotes,
   getArchiveNotesByIds,
   getContextSnippetsByIds,

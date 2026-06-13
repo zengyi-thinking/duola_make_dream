@@ -1,11 +1,133 @@
 import { browser } from 'wxt/browser';
 import type { StateBackup, StorageSchema, StorageSnapshot } from './schema';
 import { DEFAULT_RUNTIME_CONFIG, STORAGE_KEYS, createDefaultStorageState } from './schema';
+import type {
+  GeneratedImageRecord,
+  ImageGenerationRequest,
+  ImageGenerationSourceType,
+  ImageGenerationStyle,
+} from '@/lib/image/types';
 
 type StorageKey = keyof StorageSchema;
 
 const DEFAULT_STATE = createDefaultStorageState();
 let runtimeConfigWriteQueue: Promise<void> = Promise.resolve();
+
+function normalizeStorageSnapshot(
+  snapshot: StorageSnapshot & Partial<Pick<StorageSchema, 'stateBackups'>>,
+): StorageSchema {
+  return {
+    ...snapshot,
+    generatedImages: normalizeGeneratedImages(snapshot.generatedImages),
+    stateBackups: snapshot.stateBackups ?? [],
+  };
+}
+
+function normalizeGeneratedImages(
+  records: StorageSchema['generatedImages'] | undefined,
+): StorageSchema['generatedImages'] {
+  return (records ?? []).map((record) => normalizeGeneratedImageRecord(record as GeneratedImageRecord));
+}
+
+function normalizeGeneratedImageRecord(record: GeneratedImageRecord): GeneratedImageRecord {
+  const parsedRequest = normalizeImageRequest(record);
+
+  return {
+    ...record,
+    requestId: record.requestId || parsedRequest.id,
+    request: parsedRequest,
+    prompt: record.prompt || buildImagePromptFromRequest(parsedRequest),
+    status: record.status ?? 'mocked',
+    createdAt: record.createdAt || parsedRequest.createdAt,
+  };
+}
+
+function normalizeImageRequest(record: Partial<GeneratedImageRecord>): ImageGenerationRequest {
+  const fallback = inferImageRequestFromPrompt(
+    record.prompt ?? '',
+    record.requestId ?? record.id ?? crypto.randomUUID(),
+    record.createdAt ?? Date.now(),
+  );
+
+  const request = record.request ?? ({} as Partial<ImageGenerationRequest>);
+  return {
+    id: request.id ?? fallback.id,
+    createdAt: request.createdAt ?? fallback.createdAt,
+    sourceType: request.sourceType ?? fallback.sourceType,
+    title: request.title ?? fallback.title,
+    content: request.content ?? fallback.content,
+    style: request.style ?? fallback.style,
+    relatedNoteId: request.relatedNoteId ?? fallback.relatedNoteId,
+  };
+}
+
+function inferImageRequestFromPrompt(
+  prompt: string,
+  fallbackId: string,
+  fallbackCreatedAt: number,
+): ImageGenerationRequest {
+  const sourceText = extractPromptSection(prompt, 'Source', 'Title:');
+  const title = extractPromptSection(prompt, 'Title', 'Style:') || '旧图片记录';
+  const styleText = extractPromptSection(prompt, 'Style', 'Content:');
+  const content = extractPromptSection(prompt, 'Content', 'Do not use copyrighted cartoon characters') || prompt;
+
+  return {
+    id: fallbackId,
+    createdAt: fallbackCreatedAt,
+    sourceType: inferSourceTypeFromPrompt(sourceText),
+    title,
+    content,
+    style: inferImageStyleFromPrompt(styleText || prompt),
+  };
+}
+
+function inferSourceTypeFromPrompt(sourceText: string): ImageGenerationSourceType {
+  if (sourceText === 'page-summary' || sourceText === 'paper-note' || sourceText === 'article-note' || sourceText === 'mindmap') {
+    return sourceText;
+  }
+  return 'idea';
+}
+
+function inferImageStyleFromPrompt(styleText: string): ImageGenerationStyle {
+  const lowered = styleText.toLowerCase();
+
+  if (lowered.includes('mindmap')) return 'mindmap';
+  if (lowered.includes('knowledge card')) return 'knowledge-card';
+  if (lowered.includes('browser extension popup') || lowered.includes('product ui concept') || lowered.includes('product design framing')) {
+    return 'product-ui';
+  }
+  if (lowered.includes('clean poster layout') || lowered.includes('concept poster design')) return 'poster';
+  return 'line-art';
+}
+
+function extractPromptSection(prompt: string, label: string, endMarker: string): string {
+  const startMarker = `${label}:`;
+  const startIndex = prompt.indexOf(startMarker);
+  if (startIndex < 0) return '';
+
+  const contentStart = startIndex + startMarker.length;
+  const endIndex = prompt.indexOf(endMarker, contentStart);
+  const raw = prompt.slice(contentStart, endIndex >= 0 ? endIndex : prompt.length);
+  return raw.trim().replace(/\.$/, '').trim();
+}
+
+function buildImagePromptFromRequest(request: ImageGenerationRequest): string {
+  const styleMap = {
+    'line-art': 'minimalist line-art illustration, blue and white palette, pocket assistant aesthetic',
+    'product-ui': 'clean product UI concept, browser extension popup, product design framing',
+    'knowledge-card': 'knowledge card poster, structured typography, educational card composition',
+    poster: 'clean poster layout, visual hierarchy, concept poster design',
+    mindmap: 'structured mindmap poster, concept graph, blue-white knowledge map',
+  } satisfies Record<ImageGenerationRequest['style'], string>;
+
+  return [
+    `Source: ${request.sourceType}.`,
+    `Title: ${request.title}.`,
+    `Style: ${styleMap[request.style]}.`,
+    `Content: ${request.content}.`,
+    'Do not use copyrighted cartoon characters. Keep the visual language original, soft, pocket-like, and product-ready.',
+  ].join(' ');
+}
 
 function normalizeRuntimeConfig(
   runtimeConfig: Partial<StorageSchema['runtimeConfig']> | undefined,
@@ -20,7 +142,11 @@ function normalizeRuntimeConfig(
 export async function readStorage<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {
   try {
     const result = await browser.storage.local.get(key);
-    return (result[key] as StorageSchema[K] | undefined) ?? DEFAULT_STATE[key];
+    const rawValue = result[key] as StorageSchema[K] | undefined;
+    if (key === 'generatedImages') {
+      return normalizeGeneratedImages(rawValue as StorageSchema['generatedImages'] | undefined) as StorageSchema[K];
+    }
+    return rawValue ?? DEFAULT_STATE[key];
   } catch (error) {
     throw new Error(`读取 storage(${String(key)}) 失败: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -45,7 +171,7 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
     throw new Error(`读取 storage 快照失败: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  return {
+  return normalizeStorageSnapshot({
     profile: (result.profile as StorageSchema['profile'] | undefined) ?? DEFAULT_STATE.profile,
     profileHistory: (result.profileHistory as StorageSchema['profileHistory'] | undefined) ?? [],
     ideaHistory: (result.ideaHistory as StorageSchema['ideaHistory'] | undefined) ?? [],
@@ -63,7 +189,7 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
     runtimeConfig: normalizeRuntimeConfig(
       result.runtimeConfig as Partial<StorageSchema['runtimeConfig']> | undefined,
     ),
-  };
+  });
 }
 
 export async function resetStorageScope(scope: keyof StorageSchema | 'all'): Promise<StorageSchema> {
@@ -211,8 +337,9 @@ export async function restoreStateBackup(backupId: string): Promise<StorageSchem
     throw new Error(`找不到备份 ${backupId}`);
   }
 
+  const restoredSnapshot = normalizeStorageSnapshot(target.snapshot);
   const next: StorageSchema = {
-    ...target.snapshot,
+    ...restoredSnapshot,
     stateBackups: snapshot.stateBackups,
   };
 

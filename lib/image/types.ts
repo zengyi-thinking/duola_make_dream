@@ -25,6 +25,7 @@ export type ImageGenerationRequest = {
 export type GeneratedImageRecord = {
   id: string;
   requestId: string;
+  request: ImageGenerationRequest;
   prompt: string;
   status: 'mocked' | 'queued' | 'done' | 'failed';
   previewText?: string;

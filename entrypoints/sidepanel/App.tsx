@@ -14,11 +14,14 @@ import type {
   RuntimeConfig,
 } from '@/lib/agent/types';
 import {
+  createArtifactListMessage,
   createImageGenerateMessage,
+  createImageListMessage,
   createMemoryGetMessage,
   createMindmapGenerateMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
+import type { GeneratedImageRecord } from '@/lib/image/types';
 import { getRuntimeConfig } from '@/lib/storage/local';
 import { usePocketReducedMotion } from '@/lib/ui/reduced-motion';
 import { PB_EASE } from '@/lib/ui/motion-presets';
@@ -43,6 +46,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('creative');
   const [memory, setMemory] = useState<MemorySummary | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
+  const [artifactHistory, setArtifactHistory] = useState<ProductArtifact[]>([]);
+  const [imageHistory, setImageHistory] = useState<GeneratedImageRecord[]>([]);
   const [statusText, setStatusText] = useState<string>(POCKET_AGENT_VOICE.intro);
   const [errorText, setErrorText] = useState<string>('');
   const [noticeText, setNoticeText] = useState<string>('');
@@ -70,7 +75,12 @@ export default function App() {
   const agentName = runtimeConfig?.agentName ?? 'PocketBuddy';
 
   async function refreshWorkspace() {
-    await Promise.all([refreshMemory(), refreshConfig()]);
+    await Promise.all([
+      refreshMemory(),
+      refreshConfig(),
+      refreshArtifactHistory(),
+      refreshImageHistory(),
+    ]);
   }
 
   async function refreshMemory() {
@@ -80,6 +90,24 @@ export default function App() {
       return;
     }
     setMemory(response.payload);
+  }
+
+  async function refreshArtifactHistory() {
+    const response = await sendRuntimeMessage(createArtifactListMessage());
+    if (!response.success) {
+      setErrorText(response.error ?? '读取产物历史失败。');
+      return;
+    }
+    setArtifactHistory(response.payload.records);
+  }
+
+  async function refreshImageHistory() {
+    const response = await sendRuntimeMessage(createImageListMessage());
+    if (!response.success) {
+      setErrorText(response.error ?? '读取图片历史失败。');
+      return;
+    }
+    setImageHistory(response.payload.records);
   }
 
   async function refreshConfig() {
@@ -97,6 +125,10 @@ export default function App() {
       const response = await sendRuntimeMessage(createImageGenerateMessage(input));
       if (!response.success) { setErrorText(response.error ?? '图片请求生成失败。'); return; }
       setMemory(response.payload.memorySummary);
+      setImageHistory((current) => [
+        response.payload.record,
+        ...current.filter((record) => record.id !== response.payload.record.id),
+      ]);
       setNoticeText('图片请求已生成。');
       setActiveTab('observation');
     } catch (err) {
@@ -138,6 +170,8 @@ export default function App() {
     setSelectedContextIds([]);
     setSelectedArchiveNoteIds([]);
     setLastFeedback('');
+    setArtifactHistory([]);
+    setImageHistory([]);
     setPageRead(null);
     setPageContext(null);
     setPageAnalysis(null);
@@ -194,6 +228,8 @@ export default function App() {
               <CreativeTab
                 memory={memory}
                 artifact={artifact}
+                artifactHistory={artifactHistory}
+                imageHistory={imageHistory}
                 ideaText={ideaText}
                 setIdeaText={setIdeaText}
                 selectedContextIds={selectedContextIds}
@@ -206,13 +242,14 @@ export default function App() {
                 setBusyAction={setBusyAction}
                 setMemory={setMemory}
                 setStatusText={setStatusText}
-                setErrorText={setErrorText}
-                setNoticeText={setNoticeText}
-                setArtifact={setArtifact}
-                onGenerateImage={handleGenerateImage}
-                onGenerateMindmap={handleGenerateMindmap}
-                onCopy={handleCopy}
-              />
+              setErrorText={setErrorText}
+              setNoticeText={setNoticeText}
+              setArtifact={setArtifact}
+              setArtifactHistory={setArtifactHistory}
+              onGenerateImage={handleGenerateImage}
+              onGenerateMindmap={handleGenerateMindmap}
+              onCopy={handleCopy}
+            />
             )}
 
             {activeTab === 'reading' && (
@@ -221,6 +258,9 @@ export default function App() {
                 pageRead={pageRead}
                 pageContext={pageContext}
                 pageAnalysis={pageAnalysis}
+                artifactHistory={artifactHistory}
+                imageHistory={imageHistory}
+                setIdeaText={setIdeaText}
                 busyAction={busyAction}
                 setBusyAction={setBusyAction}
                 setMemory={setMemory}
@@ -256,12 +296,13 @@ export default function App() {
               <ObservationTab
                 memory={memory}
                 runtimeConfig={runtimeConfig}
+                artifactHistory={artifactHistory}
+                imageHistory={imageHistory}
                 busyAction={busyAction}
                 setBusyAction={setBusyAction}
                 setErrorText={setErrorText}
                 setNoticeText={setNoticeText}
-                refreshMemory={refreshMemory}
-                refreshConfig={refreshConfig}
+                refreshWorkspace={refreshWorkspace}
                 resetWorkspaceState={resetWorkspaceState}
                 onCopy={handleCopy}
               />

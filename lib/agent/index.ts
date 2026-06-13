@@ -4,6 +4,7 @@ export type {
   ArchiveNote,
   ContextCaptureResult,
   ContextSnippet,
+  ArtifactListResult,
   FeedbackAction,
   FeedbackRecord,
   FeedbackRecordResult,

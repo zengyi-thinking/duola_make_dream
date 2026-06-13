@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import StaggerStack from '@/components/StaggerStack/StaggerStack';
@@ -6,6 +6,8 @@ import PocketBurst from '@/components/PocketBurst/PocketBurst';
 import InkRipple, { type InkRippleHandle } from '@/components/InkRipple/InkRipple';
 import type { FeedbackAction, MemorySummary, ProductArtifact } from '@/lib/agent/types';
 import { createFeedbackMessage, createIdeaSubmitMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
+import { buildKnowledgeRecall, type RecallItem } from '@/lib/agent/insights';
+import type { GeneratedImageRecord } from '@/lib/image/types';
 import { ResultCard, EmptyCard } from '../components/ResultCard';
 import { ListBlock } from '../components/ListBlock';
 import { SelectionGroup, toggleSelection } from '../components/ContextSelector';
@@ -21,6 +23,8 @@ const FEEDBACK_OPTIONS: Array<{ label: string; action: FeedbackAction }> = [
 interface CreativeTabProps {
   memory: MemorySummary | null;
   artifact: ProductArtifact | null;
+  artifactHistory: ProductArtifact[];
+  imageHistory: GeneratedImageRecord[];
   ideaText: string;
   setIdeaText: Dispatch<SetStateAction<string>>;
   selectedContextIds: string[];
@@ -36,6 +40,7 @@ interface CreativeTabProps {
   setErrorText: Dispatch<SetStateAction<string>>;
   setNoticeText: Dispatch<SetStateAction<string>>;
   setArtifact: Dispatch<SetStateAction<ProductArtifact | null>>;
+  setArtifactHistory: Dispatch<SetStateAction<ProductArtifact[]>>;
   onGenerateImage: (input: {
     sourceType: 'idea' | 'page-summary' | 'paper-note' | 'article-note' | 'mindmap';
     title: string; content: string;
@@ -56,6 +61,7 @@ export default function CreativeTab(props: CreativeTabProps) {
     selectedArchiveNoteIds, setSelectedArchiveNoteIds,
     lastFeedback, setLastFeedback, busyAction, setBusyAction,
     setMemory, setStatusText, setErrorText, setNoticeText, setArtifact,
+    artifactHistory, imageHistory, setArtifactHistory,
     onGenerateImage, onGenerateMindmap, onCopy,
   } = props;
 
@@ -102,6 +108,10 @@ export default function CreativeTab(props: CreativeTabProps) {
 
       setArtifact(response.payload.artifact);
       setMemory(response.payload.memorySummary);
+      setArtifactHistory((current) => [
+        response.payload.artifact,
+        ...current.filter((item) => item.id !== response.payload.artifact.id),
+      ]);
       setStatusText(response.payload.assistantSummary);
       setIdeaText(''); setSelectedContextIds([]); setSelectedArchiveNoteIds([]);
     } catch (err) {
@@ -126,6 +136,35 @@ export default function CreativeTab(props: CreativeTabProps) {
     } finally {
       setBusyAction('');
     }
+  }
+
+  const recallItems = useMemo(() => {
+    const selectedContexts = (memory?.recentContextSnippets ?? []).filter((snippet) => selectedContextIds.includes(snippet.id));
+    const selectedNotes = (memory?.archiveNotes ?? []).filter((note) => selectedArchiveNoteIds.includes(note.id));
+    const queryParts: string[] = [ideaText];
+
+    selectedContexts.forEach((item) => {
+      queryParts.push(item.pageTitle, item.selectedText);
+    });
+    selectedNotes.forEach((item) => {
+      queryParts.push(item.title, item.summary, item.tags.join(' '));
+    });
+    if (memory?.profile.recentThemes.length) queryParts.push(memory.profile.recentThemes.join(' '));
+    if (memory?.profile.productPreferences.length) queryParts.push(memory.profile.productPreferences.join(' '));
+
+    return buildKnowledgeRecall({
+      query: queryParts.filter(Boolean).join(' '),
+      memory,
+      artifacts: artifactHistory,
+      images: imageHistory,
+      limit: 4,
+    });
+  }, [artifactHistory, imageHistory, ideaText, memory, selectedArchiveNoteIds, selectedContextIds]);
+
+  function appendRecallItem(item: RecallItem) {
+    const nextLine = `${item.title}：${item.detail}`;
+    setIdeaText((current) => (current.trim() ? `${current}\n${nextLine}` : nextLine));
+    setNoticeText('已把关联线索放进想法输入框。');
   }
 
   return (
@@ -169,6 +208,36 @@ export default function CreativeTab(props: CreativeTabProps) {
             id: n.id, title: n.title, description: n.summary,
           }))}
         />
+
+        <ResultCard title="关联召回">
+          {recallItems.length > 0 ? (
+            <div className="stack">
+              {recallItems.map((item) => (
+                <div key={`${item.kind}-${item.id}`} className="list-card">
+                  <div className="candidate-head">
+                    <strong>{item.title}</strong>
+                    <span className="status-pill status-pill--spark">{item.kindLabel}</span>
+                  </div>
+                  <p className="soft-text">{item.detail}</p>
+                  <p className="micro-copy">{item.reason}</p>
+                  <div className="token-list">
+                    {item.tags.map((tag, index) => <span key={`${tag}-${index}`} className="token-chip">{tag}</span>)}
+                  </div>
+                  <div className="inline-actions">
+                    <LineButton variant="secondary" onClick={() => appendRecallItem(item)}>
+                      塞进想法
+                    </LineButton>
+                    <LineButton variant="ghost" onClick={() => onCopy(`${item.title}\n${item.detail}`, '关联线索已复制。')}>
+                      复制
+                    </LineButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="soft-text">先输入一点想法，或者带入片段和笔记，召回就会更准。</p>
+          )}
+        </ResultCard>
 
         {/* action-row 包一层 relative，让 PocketBurst 在按钮位置爆发 */}
         <div className="action-row" style={{ position: 'relative' }}>

@@ -25,6 +25,4 @@ Thumbs.db
 
 # other
 .wxt-cache/
-.test-profile/
-.test-profile-debug/
-.test-profile-final/
+.test-*/

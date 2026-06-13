@@ -34,6 +34,7 @@ export async function generateImageWithAdapter(
   const baseRecord = {
     id: crypto.randomUUID(),
     requestId: request.id,
+    request,
     prompt,
     model: runtimeConfig.imageModel,
     createdAt: Date.now(),

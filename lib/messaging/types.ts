@@ -1,6 +1,7 @@
 import type {
   ArchiveNoteListResult,
   ArchiveNoteSaveResult,
+  ArtifactListResult,
   ContextCaptureResult,
   FeedbackAction,
   FeedbackRecordResult,
@@ -32,6 +33,7 @@ export type ExtensionMessageType =
   | 'archive.note.list'
   | 'archive.note.delete'
   | 'archive.note.clear'
+  | 'artifact.list'
   | 'image.generate'
   | 'image.list'
   | 'image.delete'
@@ -141,6 +143,8 @@ export type ArchiveNoteDeleteRequest = MessageEnvelope<
 
 export type ArchiveNoteClearRequest = MessageEnvelope<'archive.note.clear', Record<string, never>>;
 
+export type ArtifactListRequest = MessageEnvelope<'artifact.list', Record<string, never>>;
+
 export type ImageGenerateRequest = MessageEnvelope<
   'image.generate',
   {
@@ -216,6 +220,7 @@ export type AppMessage =
   | ArchiveNoteListRequest
   | ArchiveNoteDeleteRequest
   | ArchiveNoteClearRequest
+  | ArtifactListRequest
   | ImageGenerateRequest
   | ImageListRequest
   | ImageDeleteRequest
@@ -272,6 +277,7 @@ export type MessageResponseMap = {
   'archive.note.list': ResponseEnvelope<'archive.note.list', ArchiveNoteListResult>;
   'archive.note.delete': ResponseEnvelope<'archive.note.delete', MemorySummary>;
   'archive.note.clear': ResponseEnvelope<'archive.note.clear', MemorySummary>;
+  'artifact.list': ResponseEnvelope<'artifact.list', ArtifactListResult>;
   'image.generate': ResponseEnvelope<'image.generate', ImageGenerationResult>;
   'image.list': ResponseEnvelope<'image.list', { records: import('@/lib/image/types').GeneratedImageRecord[]; memorySummary: MemorySummary }>;
   'image.delete': ResponseEnvelope<'image.delete', MemorySummary>;
