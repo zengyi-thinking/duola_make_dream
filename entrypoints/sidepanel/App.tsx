@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
+import Aurora from '@/components/Aurora/Aurora';
+import TabIndicator from '@/components/TabIndicator/TabIndicator';
 import { POCKET_AGENT_VOICE } from '@/lib/agent/personality';
 import type {
   MemorySummary,
@@ -17,6 +20,8 @@ import {
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
 import { getRuntimeConfig } from '@/lib/storage/local';
+import { usePocketReducedMotion } from '@/lib/ui/reduced-motion';
+import { PB_EASE } from '@/lib/ui/motion-presets';
 import CreativeTab from './tabs/CreativeTab';
 import ReadingTab from './tabs/ReadingTab';
 import ArchiveTab from './tabs/ArchiveTab';
@@ -25,7 +30,16 @@ import SettingsTab from './tabs/SettingsTab';
 
 type AppTab = 'creative' | 'reading' | 'archive' | 'observation' | 'settings';
 
+const TAB_DEFS: Array<{ key: AppTab; label: string }> = [
+  { key: 'creative', label: '发明' },
+  { key: 'reading', label: '喂养' },
+  { key: 'archive', label: '归档' },
+  { key: 'observation', label: '观察' },
+  { key: 'settings', label: '设置' },
+];
+
 export default function App() {
+  const reduced = usePocketReducedMotion();
   const [activeTab, setActiveTab] = useState<AppTab>('creative');
   const [memory, setMemory] = useState<MemorySummary | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
@@ -120,6 +134,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {/* 特效1：跟随 mood 的光晕呼吸背景 */}
+      <Aurora mood={mood} />
+
       <header className="hero-card">
         <PocketBuddyAvatar avatar={avatarId} mood={mood} size={52} useChibiWhenThinking />
         <div className="hero-copy">
@@ -130,117 +147,130 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="tab-nav">
-        {[
-          { key: 'creative' as const, label: '发明' },
-          { key: 'reading' as const, label: '喂养' },
-          { key: 'archive' as const, label: '归档' },
-          { key: 'observation' as const, label: '观察' },
-          { key: 'settings' as const, label: '设置' },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            className={`tab-nav__item ${activeTab === key ? 'tab-nav__item--active' : ''}`}
-            onClick={() => setActiveTab(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      {/* 特效5：LayoutGroup 让 TabIndicator 通过 layoutId 自动迁移 */}
+      <LayoutGroup>
+        <nav className="tab-nav">
+          {TAB_DEFS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              className={`tab-nav__item ${activeTab === key ? 'tab-nav__item--active' : ''}`}
+              onClick={() => setActiveTab(key)}
+            >
+              {label}
+              <TabIndicator active={activeTab === key} />
+            </button>
+          ))}
+        </nav>
+      </LayoutGroup>
 
       {errorText ? <div className="banner banner--error">{errorText}</div> : null}
       {noticeText ? <div className="banner banner--info">{noticeText}</div> : null}
 
-      {activeTab === 'creative' && (
-        <CreativeTab
-          memory={memory}
-          artifact={artifact}
-          ideaText={ideaText}
-          setIdeaText={setIdeaText}
-          selectedContextIds={selectedContextIds}
-          setSelectedContextIds={setSelectedContextIds}
-          selectedArchiveNoteIds={selectedArchiveNoteIds}
-          setSelectedArchiveNoteIds={setSelectedArchiveNoteIds}
-          lastFeedback={lastFeedback}
-          setLastFeedback={setLastFeedback}
-          busyAction={busyAction}
-          setBusyAction={setBusyAction}
-          setMemory={setMemory}
-          setStatusText={setStatusText}
-          setErrorText={setErrorText}
-          setNoticeText={setNoticeText}
-          setArtifact={setArtifact}
-          onGenerateImage={handleGenerateImage}
-          onGenerateMindmap={handleGenerateMindmap}
-          onCopy={handleCopy}
-        />
-      )}
+      {/* Tab 切换 fade 过渡 */}
+      <div className="tab-panel-wrap">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeTab}
+            className="tab-panel-anim"
+            initial={reduced ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: PB_EASE }}
+          >
+            {activeTab === 'creative' && (
+              <CreativeTab
+                memory={memory}
+                artifact={artifact}
+                ideaText={ideaText}
+                setIdeaText={setIdeaText}
+                selectedContextIds={selectedContextIds}
+                setSelectedContextIds={setSelectedContextIds}
+                selectedArchiveNoteIds={selectedArchiveNoteIds}
+                setSelectedArchiveNoteIds={setSelectedArchiveNoteIds}
+                lastFeedback={lastFeedback}
+                setLastFeedback={setLastFeedback}
+                busyAction={busyAction}
+                setBusyAction={setBusyAction}
+                setMemory={setMemory}
+                setStatusText={setStatusText}
+                setErrorText={setErrorText}
+                setNoticeText={setNoticeText}
+                setArtifact={setArtifact}
+                onGenerateImage={handleGenerateImage}
+                onGenerateMindmap={handleGenerateMindmap}
+                onCopy={handleCopy}
+              />
+            )}
 
-      {activeTab === 'reading' && (
-        <ReadingTab
-          memory={memory}
-          pageRead={pageRead}
-          pageContext={pageContext}
-          pageAnalysis={pageAnalysis}
-          busyAction={busyAction}
-          setBusyAction={setBusyAction}
-          setMemory={setMemory}
-          setErrorText={setErrorText}
-          setNoticeText={setNoticeText}
-          setPageRead={setPageRead}
-          setPageContext={setPageContext}
-          setPageAnalysis={setPageAnalysis}
-          setSelectedArchiveNoteId={setSelectedArchiveNoteId}
-          setActiveTab={(t) => setActiveTab(t as AppTab)}
-          onGenerateImage={handleGenerateImage}
-          onGenerateMindmap={handleGenerateMindmap}
-        />
-      )}
+            {activeTab === 'reading' && (
+              <ReadingTab
+                memory={memory}
+                pageRead={pageRead}
+                pageContext={pageContext}
+                pageAnalysis={pageAnalysis}
+                busyAction={busyAction}
+                setBusyAction={setBusyAction}
+                setMemory={setMemory}
+                setErrorText={setErrorText}
+                setNoticeText={setNoticeText}
+                setPageRead={setPageRead}
+                setPageContext={setPageContext}
+                setPageAnalysis={setPageAnalysis}
+                setSelectedArchiveNoteId={setSelectedArchiveNoteId}
+                setActiveTab={(t) => setActiveTab(t as AppTab)}
+                onGenerateImage={handleGenerateImage}
+                onGenerateMindmap={handleGenerateMindmap}
+              />
+            )}
 
-      {activeTab === 'archive' && (
-        <ArchiveTab
-          memory={memory}
-          selectedArchiveNoteId={selectedArchiveNoteId}
-          setSelectedArchiveNoteId={setSelectedArchiveNoteId}
-          busyAction={busyAction}
-          setBusyAction={setBusyAction}
-          setMemory={setMemory}
-          setErrorText={setErrorText}
-          setNoticeText={setNoticeText}
-          onGenerateImage={handleGenerateImage}
-          onGenerateMindmap={handleGenerateMindmap}
-          onCopy={handleCopy}
-        />
-      )}
+            {activeTab === 'archive' && (
+              <ArchiveTab
+                memory={memory}
+                selectedArchiveNoteId={selectedArchiveNoteId}
+                setSelectedArchiveNoteId={setSelectedArchiveNoteId}
+                busyAction={busyAction}
+                setBusyAction={setBusyAction}
+                setMemory={setMemory}
+                setErrorText={setErrorText}
+                setNoticeText={setNoticeText}
+                onGenerateImage={handleGenerateImage}
+                onGenerateMindmap={handleGenerateMindmap}
+                onCopy={handleCopy}
+              />
+            )}
 
-      {activeTab === 'observation' && (
-        <ObservationTab
-          memory={memory}
-          runtimeConfig={runtimeConfig}
-          busyAction={busyAction}
-          setBusyAction={setBusyAction}
-          setErrorText={setErrorText}
-          setNoticeText={setNoticeText}
-          refreshMemory={refreshMemory}
-          refreshConfig={refreshConfig}
-          onCopy={handleCopy}
-        />
-      )}
+            {activeTab === 'observation' && (
+              <ObservationTab
+                memory={memory}
+                runtimeConfig={runtimeConfig}
+                busyAction={busyAction}
+                setBusyAction={setBusyAction}
+                setErrorText={setErrorText}
+                setNoticeText={setNoticeText}
+                refreshMemory={refreshMemory}
+                refreshConfig={refreshConfig}
+                resetWorkspaceState={resetWorkspaceState}
+                onCopy={handleCopy}
+              />
+            )}
 
-      {activeTab === 'settings' && (
-        <SettingsTab
-          config={runtimeConfig}
-          setConfig={setRuntimeConfig}
-          setMemory={setMemory}
-          setErrorText={setErrorText}
-          setNoticeText={setNoticeText}
-          refreshConfig={refreshConfig}
-          resetWorkspaceState={resetWorkspaceState}
-          busyAction={busyAction}
-          setBusyAction={setBusyAction}
-        />
-      )}
+            {activeTab === 'settings' && (
+              <SettingsTab
+                config={runtimeConfig}
+                setConfig={setRuntimeConfig}
+                setMemory={setMemory}
+                setErrorText={setErrorText}
+                setNoticeText={setNoticeText}
+                refreshConfig={refreshConfig}
+                resetWorkspaceState={resetWorkspaceState}
+                busyAction={busyAction}
+                setBusyAction={setBusyAction}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,72 @@
+/* AnimatedTree —— 思维导图树形结构 */
+
+.pb-animated-tree {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.pb-tree-node {
+  position: relative;
+}
+
+.pb-tree-node[data-depth]:not([data-depth='0']) {
+  border-left: 2px solid var(--pb-line);
+  padding-left: 10px;
+  margin-left: 4px;
+}
+
+.pb-tree-node__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--pb-ink);
+  text-align: left;
+  font-size: inherit;
+  border-radius: 6px;
+  width: 100%;
+  transition: background 120ms ease;
+}
+
+.pb-tree-node__label:hover:not(:disabled) {
+  background: var(--pb-primary-soft);
+}
+
+.pb-tree-node__label:disabled {
+  cursor: default;
+}
+
+.pb-tree-node__label--root {
+  font-weight: 700;
+  color: var(--pb-primary);
+  font-size: 13px;
+}
+
+.pb-tree-node__arrow {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--pb-primary);
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.pb-tree-node__text {
+  flex: 1;
+  word-break: break-word;
+}
+
+.pb-tree-node__children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-tree-node__label {
+    transition: none;
+  }
+}

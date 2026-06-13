@@ -5,6 +5,7 @@ import { DEFAULT_RUNTIME_CONFIG, STORAGE_KEYS, createDefaultStorageState } from 
 type StorageKey = keyof StorageSchema;
 
 const DEFAULT_STATE = createDefaultStorageState();
+let runtimeConfigWriteQueue: Promise<void> = Promise.resolve();
 
 function normalizeRuntimeConfig(
   runtimeConfig: Partial<StorageSchema['runtimeConfig']> | undefined,
@@ -169,10 +170,21 @@ export async function getRuntimeConfig(): Promise<StorageSchema['runtimeConfig']
 export async function updateRuntimeConfig(
   patch: Partial<StorageSchema['runtimeConfig']>,
 ): Promise<StorageSchema['runtimeConfig']> {
-  const current = await getRuntimeConfig();
-  const next = { ...current, ...patch };
-  await writeStorage('runtimeConfig', next);
-  return next;
+  const nextWrite = runtimeConfigWriteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const current = await getRuntimeConfig();
+      const next = { ...current, ...patch };
+      await writeStorage('runtimeConfig', next);
+      return next;
+    });
+
+  runtimeConfigWriteQueue = nextWrite.then(() => undefined, () => undefined);
+  return nextWrite;
+}
+
+export async function flushRuntimeConfigWrites(): Promise<void> {
+  await runtimeConfigWriteQueue.catch(() => undefined);
 }
 
 export async function saveStateBackup(

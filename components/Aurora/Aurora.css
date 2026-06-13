@@ -1,0 +1,37 @@
+/* Aurora 光晕背景：固定在 sidepanel 容器最底层 */
+
+.pb-aurora {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, filter, opacity;
+}
+
+/* 呼吸层：缩放起伏，叠加在主光晕上形成"会呼吸"的视觉 */
+.pb-aurora--breathe {
+  background: transparent;
+  inset: 0;
+}
+
+/* spark 脉冲环：从中心扩散后消散 */
+.pb-aurora--spark {
+  inset: 50% 50%;
+  width: 280px;
+  height: 280px;
+  margin-left: -140px;
+  margin-top: -140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 230, 120, 0.5) 0%, transparent 60%);
+  filter: blur(20px);
+  z-index: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-aurora,
+  .pb-aurora--breathe,
+  .pb-aurora--spark {
+    animation: none !important;
+    transition: none !important;
+  }
+}

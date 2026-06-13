@@ -1,11 +1,11 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import type { MemorySummary, RuntimeConfig } from '@/lib/agent/types';
 import { pocketAvatarIds, pocketAvatars } from '@/lib/brand/avatars';
 import { createMemoryDeleteMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
-import { updateRuntimeConfig } from '@/lib/storage/local';
+import { flushRuntimeConfigWrites, updateRuntimeConfig } from '@/lib/storage/local';
 
 interface SettingsTabProps {
   config: RuntimeConfig | null;
@@ -33,16 +33,15 @@ export default function SettingsTab(props: SettingsTabProps) {
   } = props;
   const [showLlmKey, setShowLlmKey] = useState(false);
   const [showImageKey, setShowImageKey] = useState(false);
-  const configSaveQueueRef = useRef(Promise.resolve());
 
   async function updateField<K extends keyof RuntimeConfig>(key: K, value: RuntimeConfig[K]) {
-    if (!config) return;
+    if (!config || busyAction) return;
 
     const next = { ...config, [key]: value };
     setConfig(next);
 
     try {
-      await enqueueRuntimeConfigUpdate({ [key]: value } as Partial<RuntimeConfig>);
+      await updateRuntimeConfig({ [key]: value } as Partial<RuntimeConfig>);
       setNoticeText('配置已保存。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '保存配置失败');
@@ -53,31 +52,18 @@ export default function SettingsTab(props: SettingsTabProps) {
     if (!window.confirm('确定要清除所有本地数据吗？此操作不可撤销。')) return;
     setBusyAction('clear-all');
     try {
-      await configSaveQueueRef.current.catch(() => undefined);
+      await flushRuntimeConfigWrites();
       const response = await sendRuntimeMessage(createMemoryDeleteMessage('all'));
       if (!response.success) { setErrorText(response.error ?? '清除失败。'); return; }
       setMemory(response.payload);
-      await refreshConfig();
       resetWorkspaceState();
+      await refreshConfig();
       setNoticeText('所有本地数据已清除。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '清除失败。');
     } finally {
       setBusyAction('');
     }
-  }
-
-  function enqueueRuntimeConfigUpdate(patch: Partial<RuntimeConfig>) {
-    const next = configSaveQueueRef.current
-      .catch(() => undefined)
-      .then(() => updateRuntimeConfig(patch));
-
-    configSaveQueueRef.current = next.then(
-      () => undefined,
-      () => undefined,
-    );
-
-    return next;
   }
 
   if (!config) {
@@ -117,6 +103,7 @@ export default function SettingsTab(props: SettingsTabProps) {
             value={config.agentName}
             onChange={(e) => updateField('agentName', e.target.value)}
             placeholder="PocketAgent"
+            disabled={Boolean(busyAction)}
           />
         </div>
 
@@ -128,16 +115,18 @@ export default function SettingsTab(props: SettingsTabProps) {
             value={config.defaultTone}
             onChange={(e) => updateField('defaultTone', e.target.value)}
             placeholder="warm-product-designer"
+            disabled={Boolean(busyAction)}
           />
         </div>
 
         <div className="settings-section">
             <label>头像</label>
-            <select
-              className="settings-select"
-              value={avatarId}
-              onChange={(e) => updateField('avatarId', e.target.value as RuntimeConfig['avatarId'])}
-            >
+          <select
+            className="settings-select"
+            value={avatarId}
+            onChange={(e) => updateField('avatarId', e.target.value as RuntimeConfig['avatarId'])}
+            disabled={Boolean(busyAction)}
+          >
             {pocketAvatarIds.map((avatarId) => {
               const meta = pocketAvatars[avatarId];
               return (
@@ -192,6 +181,7 @@ export default function SettingsTab(props: SettingsTabProps) {
                 value={config.llmModel}
                 onChange={(e) => updateField('llmModel', e.target.value)}
                 placeholder="MiniMax-M2.7"
+                disabled={Boolean(busyAction)}
               />
             </div>
             <div className="settings-section">
@@ -204,8 +194,9 @@ export default function SettingsTab(props: SettingsTabProps) {
                   value={config.llmApiKey}
                   onChange={(e) => updateField('llmApiKey', e.target.value)}
                   placeholder="sk-..."
+                  disabled={Boolean(busyAction)}
                 />
-                <LineButton variant="ghost" onClick={() => setShowLlmKey(!showLlmKey)}>
+                <LineButton variant="ghost" onClick={() => setShowLlmKey(!showLlmKey)} disabled={Boolean(busyAction)}>
                   {showLlmKey ? '隐藏' : '显示'}
                 </LineButton>
               </div>
@@ -218,6 +209,7 @@ export default function SettingsTab(props: SettingsTabProps) {
                 value={config.llmEndpoint}
                 onChange={(e) => updateField('llmEndpoint', e.target.value)}
                 placeholder="https://api.minimaxi.com/anthropic"
+                disabled={Boolean(busyAction)}
               />
             </div>
           </>
@@ -257,6 +249,7 @@ export default function SettingsTab(props: SettingsTabProps) {
                 value={config.imageModel}
                 onChange={(e) => updateField('imageModel', e.target.value)}
                 placeholder="gpt-image-2"
+                disabled={Boolean(busyAction)}
               />
             </div>
             <div className="settings-section">
@@ -269,8 +262,9 @@ export default function SettingsTab(props: SettingsTabProps) {
                   value={config.imageApiKey}
                   onChange={(e) => updateField('imageApiKey', e.target.value)}
                   placeholder="sk-..."
+                  disabled={Boolean(busyAction)}
                 />
-                <LineButton variant="ghost" onClick={() => setShowImageKey(!showImageKey)}>
+                <LineButton variant="ghost" onClick={() => setShowImageKey(!showImageKey)} disabled={Boolean(busyAction)}>
                   {showImageKey ? '隐藏' : '显示'}
                 </LineButton>
               </div>
@@ -283,6 +277,7 @@ export default function SettingsTab(props: SettingsTabProps) {
                 value={config.imageProxyEndpoint}
                 onChange={(e) => updateField('imageProxyEndpoint', e.target.value)}
                 placeholder="https://api.apimart.ai/v1/images/generations"
+                disabled={Boolean(busyAction)}
               />
             </div>
           </>

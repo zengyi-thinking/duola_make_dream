@@ -1,0 +1,34 @@
+/* PocketBurst —— 口袋泡泡爆发容器 */
+
+.pb-pocket-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.pb-pocket-burst__particle {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, #92b4ff 0%, #2557da 60%, rgba(37, 87, 218, 0) 100%);
+  box-shadow: 0 0 10px rgba(120, 160, 255, 0.7);
+  will-change: transform, opacity;
+}
+
+.pb-pocket-burst__ring {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid rgba(120, 160, 255, 0.8);
+  box-shadow: 0 0 12px rgba(120, 160, 255, 0.5) inset;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-pocket-burst {
+    display: none;
+  }
+}

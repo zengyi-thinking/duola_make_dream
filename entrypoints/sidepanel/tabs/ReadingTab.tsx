@@ -19,6 +19,7 @@ import { ResultCard, EmptyCard } from '../components/ResultCard';
 import { ListBlock } from '../components/ListBlock';
 import { InfoBlock } from '../components/InfoBlock';
 import { useMemo } from 'react';
+import StaggerStack from '@/components/StaggerStack/StaggerStack';
 
 interface ReadingTabProps {
   memory: MemorySummary | null;
@@ -186,7 +187,7 @@ export default function ReadingTab(props: ReadingTabProps) {
       </section>
 
       {pageAnalysis ? (
-        <div className="stack">
+        <StaggerStack triggerKey={pageAnalysis.id} className="stack">
           <ResultCard title="Page Summary">
             <p className="soft-text strong">{pageAnalysis.pageSummary}</p>
           </ResultCard>
@@ -294,7 +295,7 @@ export default function ReadingTab(props: ReadingTabProps) {
               </LineButton>
             </div>
           </ResultCard>
-        </div>
+        </StaggerStack>
       ) : (
         <EmptyCard avatar title="先读取，再喂养" body="点击「读取当前页」，小口袋云云会帮你提炼摘要、关键观点、产品机会和可记住信息。" />
       )}

@@ -1,0 +1,33 @@
+/* InkRipple —— 输入框光标墨水扩散 */
+
+.pb-ink-ripple {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 2;
+}
+
+.pb-ink-ripple__drop {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(120, 160, 255, 0.55) 0%,
+    rgba(37, 87, 218, 0.25) 50%,
+    transparent 70%
+  );
+  border: 1px solid rgba(120, 160, 255, 0.5);
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-ink-ripple {
+    display: none;
+  }
+}

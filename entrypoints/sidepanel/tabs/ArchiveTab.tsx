@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
+import StaggerStack from '@/components/StaggerStack/StaggerStack';
 import type { MemorySummary } from '@/lib/agent/types';
 import {
   createArchiveClearMessage,
@@ -71,6 +72,7 @@ export default function ArchiveTab(props: ArchiveTabProps) {
   }, [allNotes, sourceTypeFilter, tagFilter, searchQuery]);
 
   const selectedNote = drawerNoteId ? allNotes.find((n) => n.id === drawerNoteId) ?? null : null;
+  const activeFilterKey = `${sourceTypeFilter}-${tagFilter}`;
 
   async function handleDeleteArchiveNote(noteId: string) {
     if (confirmDeleteId !== noteId) {
@@ -107,7 +109,7 @@ export default function ArchiveTab(props: ArchiveTabProps) {
   }
 
   return (
-    <div className="tab-panel">
+    <StaggerStack triggerKey={`${activeFilterKey}-${searchQuery}`} className="tab-panel">
       <section className="panel-card">
         <div className="panel-head">
           <div>
@@ -240,7 +242,7 @@ export default function ArchiveTab(props: ArchiveTabProps) {
         </div>
         <p className="soft-text">归档页只负责整理笔记与它们的上下文。长期记忆、图片记录、图谱记录和历史回放已经移到观察页。</p>
       </section>
-    </div>
+    </StaggerStack>
   );
 }
 

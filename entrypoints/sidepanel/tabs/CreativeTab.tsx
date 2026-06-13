@@ -1,5 +1,9 @@
+import { useRef, useState, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
+import StaggerStack from '@/components/StaggerStack/StaggerStack';
+import PocketBurst from '@/components/PocketBurst/PocketBurst';
+import InkRipple, { type InkRippleHandle } from '@/components/InkRipple/InkRipple';
 import type { FeedbackAction, MemorySummary, ProductArtifact } from '@/lib/agent/types';
 import { createFeedbackMessage, createIdeaSubmitMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
 import { ResultCard, EmptyCard } from '../components/ResultCard';
@@ -55,11 +59,35 @@ export default function CreativeTab(props: CreativeTabProps) {
     onGenerateImage, onGenerateMindmap, onCopy,
   } = props;
 
+  // 特效2：口袋泡泡
+  const [burstActive, setBurstActive] = useState(false);
+
+  // 特效6：墨水光标
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const inkRef = useRef<InkRippleHandle | null>(null);
+
+  // 文字变化时触发墨水扩散（节流到 80ms）
+  useEffect(() => {
+    if (!ideaText || !textareaRef.current) return;
+    const handle = window.setTimeout(() => {
+      inkRef.current?.rippleAtCaret(textareaRef.current!);
+    }, 80);
+    return () => window.clearTimeout(handle);
+    // 只在文字长度变化时触发（输入/粘贴/删除）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ideaText.length]);
+
   async function handleIdeaSubmit() {
     if (!ideaText.trim()) return;
     setBusyAction('creative-submit');
     setErrorText(''); setNoticeText(''); setLastFeedback('');
     setStatusText('正在生成产品雏形...');
+
+    // 特效2：触发口袋泡泡
+    setBurstActive(false);
+    // 下一帧再设为 true，强制重渲染
+    requestAnimationFrame(() => setBurstActive(true));
+    window.setTimeout(() => setBurstActive(false), 800);
 
     const response = await sendRuntimeMessage(
       createIdeaSubmitMessage(ideaText, selectedContextIds, selectedArchiveNoteIds),
@@ -97,12 +125,18 @@ export default function CreativeTab(props: CreativeTabProps) {
             <h2>把想法变成产品雏形</h2>
           </div>
         </div>
-        <textarea
-          className="idea-textarea"
-          value={ideaText}
-          onChange={(e) => setIdeaText(e.target.value)}
-          placeholder="输入一个想法，比如：做一个能自动整理阅读笔记的小工具"
-        />
+
+        {/* textarea 外层相对定位，用于承载墨水光标层 */}
+        <div style={{ position: 'relative' }}>
+          <textarea
+            ref={textareaRef}
+            className="idea-textarea"
+            value={ideaText}
+            onChange={(e) => setIdeaText(e.target.value)}
+            placeholder="输入一个想法，比如：做一个能自动整理阅读笔记的小工具"
+          />
+          <InkRipple ref={inkRef} />
+        </div>
 
         <SelectionGroup
           title="带入片段"
@@ -124,15 +158,22 @@ export default function CreativeTab(props: CreativeTabProps) {
           }))}
         />
 
-        <div className="action-row">
-          <LineButton variant="primary" onClick={handleIdeaSubmit} disabled={Boolean(busyAction) || !ideaText.trim()}>
+        {/* action-row 包一层 relative，让 PocketBurst 在按钮位置爆发 */}
+        <div className="action-row" style={{ position: 'relative' }}>
+          <LineButton
+            variant="primary"
+            onClick={handleIdeaSubmit}
+            disabled={Boolean(busyAction) || !ideaText.trim()}
+          >
             {busyAction === 'creative-submit' ? '生成中...' : '生成产品雏形'}
           </LineButton>
+          <PocketBurst active={burstActive} />
         </div>
       </section>
 
+      {/* 特效3：artifact 出现后用 StaggerStack 错落入场 */}
       {artifact ? (
-        <div className="stack">
+        <StaggerStack triggerKey={artifact.id}>
           <ResultCard title={artifact.concept.name}>
             <p className="result-tagline">{artifact.concept.tagline}</p>
             <p className="soft-text">{artifact.concept.positioning}</p>
@@ -162,7 +203,7 @@ export default function CreativeTab(props: CreativeTabProps) {
             </div>
             {lastFeedback ? <p className="soft-text" style={{ marginTop: 6 }}>{lastFeedback}</p> : null}
           </ResultCard>
-        </div>
+        </StaggerStack>
       ) : (
         <EmptyCard avatar title="输入想法开始发明" body="小口袋云云已就位，输入一句话就能生成产品概念、图片 Prompt 和 MVP 计划。" />
       )}

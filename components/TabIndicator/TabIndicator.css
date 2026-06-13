@@ -1,0 +1,13 @@
+/* Tab 滑动指示条 */
+
+.pb-tab-indicator {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2.5px;
+  background: var(--pb-primary);
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(37, 87, 218, 0.4);
+  pointer-events: none;
+}

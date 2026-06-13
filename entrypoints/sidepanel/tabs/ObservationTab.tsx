@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
+import AnimatedTree from '@/components/AnimatedTree/AnimatedTree';
 import type {
   HarnessPatch,
   MemorySummary,
@@ -16,7 +17,7 @@ import {
   createMindmapDeleteMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
-import { restoreStateBackup, saveStateBackup } from '@/lib/storage/local';
+import { flushRuntimeConfigWrites, restoreStateBackup, saveStateBackup } from '@/lib/storage/local';
 
 interface ObservationTabProps {
   memory: MemorySummary | null;
@@ -27,6 +28,7 @@ interface ObservationTabProps {
   setNoticeText: Dispatch<SetStateAction<string>>;
   refreshMemory: () => Promise<void>;
   refreshConfig: () => Promise<void>;
+  resetWorkspaceState: () => void;
   onCopy: (text: string, successText: string) => void;
 }
 
@@ -52,7 +54,7 @@ const FEEDBACK_LABELS: Record<string, string> = {
 export default function ObservationTab(props: ObservationTabProps) {
   const {
     memory, runtimeConfig, busyAction, setBusyAction,
-    setErrorText, setNoticeText, refreshMemory, refreshConfig, onCopy,
+    setErrorText, setNoticeText, refreshMemory, refreshConfig, resetWorkspaceState, onCopy,
   } = props;
 
   const [backupLabel, setBackupLabel] = useState('手动快照');
@@ -66,6 +68,7 @@ export default function ObservationTab(props: ObservationTabProps) {
   async function handleCreateBackup() {
     setBusyAction('backup-create');
     try {
+      await flushRuntimeConfigWrites();
       const backup = await saveStateBackup(backupLabel.trim() || '手动快照');
       setNoticeText(`已创建快照：${backup.label}`);
       await Promise.all([refreshMemory(), refreshConfig()]);
@@ -84,8 +87,10 @@ export default function ObservationTab(props: ObservationTabProps) {
 
     setBusyAction(`backup-restore-${backupId}`);
     try {
+      await flushRuntimeConfigWrites();
       const restored = await restoreStateBackup(backupId);
       setNoticeText('已恢复快照，当前状态已回滚。');
+      resetWorkspaceState();
       await Promise.all([refreshMemory(), refreshConfig()]);
       if (restored) {
         setConfirmRestoreId(null);
@@ -390,7 +395,7 @@ export default function ObservationTab(props: ObservationTabProps) {
                 <span className="status-pill status-pill--spark">{item.sourceType}</span>
               </div>
               <div className="tree-preview">
-                <MindmapTree node={item.result.root} />
+                <AnimatedTree root={item.result.root} />
               </div>
               {item.imagePrompt ? <pre className="prompt-block">{item.imagePrompt}</pre> : null}
               <div className="inline-actions">
@@ -414,27 +419,6 @@ function StatCard({ label, value, hint }: { label: string; value: number; hint: 
       <p className="section-label">{label}</p>
       <strong>{value}</strong>
       <span className="micro-copy">{hint}</span>
-    </div>
-  );
-}
-
-interface MindmapNodeLike {
-  id: string;
-  label: string;
-  children?: MindmapNodeLike[];
-}
-
-function MindmapTree({ node }: { node: MindmapNodeLike }) {
-  return (
-    <div className="tree-node" data-depth={0}>
-      <div className="tree-node__label">{node.label}</div>
-      {node.children?.length ? (
-        <div className="tree-node__children">
-          {node.children.map((child) => (
-            <MindmapTree key={child.id} node={child} />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
