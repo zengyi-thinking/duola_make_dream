@@ -34,7 +34,7 @@ interface ReadingTabProps {
   setPageContext: Dispatch<SetStateAction<PageContextRecord | null>>;
   setPageAnalysis: Dispatch<SetStateAction<PageAnalysisResult | null>>;
   setSelectedArchiveNoteId: Dispatch<SetStateAction<string>>;
-  setActiveTab: Dispatch<SetStateAction<'creative' | 'reading' | 'archive'>>;
+  setActiveTab: (tab: string) => void;
   onGenerateImage: (input: {
     sourceType: 'idea' | 'page-summary' | 'paper-note' | 'article-note' | 'mindmap';
     title: string; content: string;

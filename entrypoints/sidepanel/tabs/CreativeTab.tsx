@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
-import ToolGrid from '@/components/ToolGrid/ToolGrid';
 import type { FeedbackAction, MemorySummary, ProductArtifact } from '@/lib/agent/types';
 import { createFeedbackMessage, createIdeaSubmitMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
 import { ResultCard, EmptyCard } from '../components/ResultCard';
@@ -12,7 +11,7 @@ const FEEDBACK_OPTIONS: Array<{ label: string; action: FeedbackAction }> = [
   { label: '更可爱', action: 'cuter' },
   { label: '更产品化', action: 'more-productized' },
   { label: '更有科技感', action: 'more-tech' },
-  { label: '不喜欢这个方向', action: 'dislike-direction' },
+  { label: '不喜欢', action: 'dislike-direction' },
 ];
 
 interface CreativeTabProps {
@@ -58,138 +57,96 @@ export default function CreativeTab(props: CreativeTabProps) {
 
   async function handleIdeaSubmit() {
     if (!ideaText.trim()) return;
-
     setBusyAction('creative-submit');
-    setErrorText('');
-    setNoticeText('');
-    setLastFeedback('');
-    setStatusText('PocketAgent 正在把你的想法整理成一个可讨论的小产品草图。');
+    setErrorText(''); setNoticeText(''); setLastFeedback('');
+    setStatusText('正在生成产品雏形...');
 
     const response = await sendRuntimeMessage(
       createIdeaSubmitMessage(ideaText, selectedContextIds, selectedArchiveNoteIds),
     );
-
     setBusyAction('');
 
     if (!response.success) {
-      const message = response.error ?? '创意生成失败。';
-      setErrorText(message);
-      setStatusText(message);
+      const msg = response.error ?? '生成失败。';
+      setErrorText(msg); setStatusText(msg);
       return;
     }
 
     setArtifact(response.payload.artifact);
     setMemory(response.payload.memorySummary);
     setStatusText(response.payload.assistantSummary);
-    setIdeaText('');
-    setSelectedContextIds([]);
-    setSelectedArchiveNoteIds([]);
+    setIdeaText(''); setSelectedContextIds([]); setSelectedArchiveNoteIds([]);
   }
 
   async function handleFeedback(action: FeedbackAction) {
     if (!artifact) return;
-
     setBusyAction(`feedback-${action}`);
     const response = await sendRuntimeMessage(createFeedbackMessage(artifact.id, action));
     setBusyAction('');
-
-    if (!response.success) {
-      setErrorText(response.error ?? '反馈没有记录成功。');
-      return;
-    }
-
+    if (!response.success) { setErrorText(response.error ?? '反馈失败。'); return; }
     setMemory(response.payload.memorySummary);
-    setLastFeedback(`已记录：${FEEDBACK_OPTIONS.find((item) => item.action === action)?.label ?? action}`);
+    setLastFeedback(`已记录：${FEEDBACK_OPTIONS.find((i) => i.action === action)?.label ?? action}`);
   }
 
   return (
     <div className="tab-panel">
       <section className="panel-card">
-        <div className="panel-head">
-          <div>
-            <p className="section-label">Idea Pocket</p>
-            <h2>把一个想法放进口袋</h2>
-          </div>
-          <span className="micro-status">{busyAction === 'creative-submit' ? '正在生成' : '本地 mock Agent'}</span>
-        </div>
-
         <textarea
           className="idea-textarea"
           value={ideaText}
-          onChange={(event) => setIdeaText(event.target.value)}
-          placeholder="例如：做一个能把论文阅读结果自动整理成插件笔记和图谱的小工具"
+          onChange={(e) => setIdeaText(e.target.value)}
+          placeholder="输入一个想法，比如：做一个能自动整理阅读笔记的小工具"
         />
 
         <SelectionGroup
-          title="带入网页片段"
-          emptyText="还没有主动放入口袋的网页片段"
+          title="带入片段"
+          emptyText="暂无"
           selectedIds={selectedContextIds}
           onToggle={(id) => toggleSelection(id, setSelectedContextIds)}
-          items={(memory?.recentContextSnippets ?? []).map((snippet) => ({
-            id: snippet.id, title: snippet.pageTitle, description: snippet.selectedText,
+          items={(memory?.recentContextSnippets ?? []).map((s) => ({
+            id: s.id, title: s.pageTitle, description: s.selectedText,
           }))}
         />
 
         <SelectionGroup
-          title="带入归档笔记"
-          emptyText="还没有保存过的归档笔记"
+          title="带入笔记"
+          emptyText="暂无"
           selectedIds={selectedArchiveNoteIds}
           onToggle={(id) => toggleSelection(id, setSelectedArchiveNoteIds)}
-          items={(memory?.archiveNotes ?? []).slice(0, 4).map((note) => ({
-            id: note.id, title: note.title, description: note.summary,
+          items={(memory?.archiveNotes ?? []).slice(0, 4).map((n) => ({
+            id: n.id, title: n.title, description: n.summary,
           }))}
         />
 
         <div className="action-row">
-          <span className="helper-text">background 会统一做创意扩展、记忆融合与结果构建。</span>
           <LineButton variant="primary" onClick={handleIdeaSubmit} disabled={Boolean(busyAction) || !ideaText.trim()}>
-            {busyAction === 'creative-submit' ? 'PocketAgent 思考中' : '生成产品雏形'}
+            {busyAction === 'creative-submit' ? '生成中...' : '生成产品雏形'}
           </LineButton>
         </div>
       </section>
 
-      <section className="panel-card">
-        <ToolGrid />
-      </section>
-
       {artifact ? (
         <div className="stack">
-          <ResultCard title="Product Concept">
-            <h3>{artifact.concept.name}</h3>
+          <ResultCard title={artifact.concept.name}>
             <p className="result-tagline">{artifact.concept.tagline}</p>
             <p className="soft-text">{artifact.concept.positioning}</p>
             <div className="token-list">
-              {artifact.concept.features.map((feature) => (
-                <span key={feature} className="token-chip">{feature}</span>
-              ))}
+              {artifact.concept.features.map((f) => <span key={f} className="token-chip">{f}</span>)}
             </div>
-          </ResultCard>
-
-          <ResultCard title="Image Prompt">
-            <pre className="prompt-block">{artifact.imagePrompt}</pre>
             <div className="inline-actions">
-              <LineButton variant="ghost" onClick={() => onCopy(artifact.imagePrompt, '图片 Prompt 已复制。')}>复制 Prompt</LineButton>
-              <LineButton
-                variant="secondary"
-                onClick={() => onGenerateImage({
-                  sourceType: 'idea', title: artifact.concept.name,
-                  content: `${artifact.concept.positioning}\n${artifact.imagePrompt}`, style: 'product-ui',
-                })}
-              >
-                生成产品概念图请求
-              </LineButton>
+              <LineButton variant="ghost" onClick={() => onCopy(artifact.imagePrompt, 'Prompt 已复制')}>复制 Prompt</LineButton>
+              <LineButton variant="secondary" onClick={() => onGenerateImage({
+                sourceType: 'idea', title: artifact.concept.name,
+                content: `${artifact.concept.positioning}\n${artifact.imagePrompt}`, style: 'product-ui',
+              })}>生成图片</LineButton>
             </div>
           </ResultCard>
 
-          <ResultCard title="MVP Plan">
+          <ResultCard title="MVP">
             <ListBlock items={artifact.mvpPlan} ordered />
-            <div className="subsection">
-              <h4>Next Tasks</h4>
-              <ListBlock items={artifact.nextTasks} />
-            </div>
           </ResultCard>
 
-          <ResultCard title="Feedback">
+          <ResultCard title="调整方向">
             <div className="button-grid">
               {FEEDBACK_OPTIONS.map((item) => (
                 <LineButton key={item.action} variant="secondary" onClick={() => handleFeedback(item.action)} disabled={Boolean(busyAction)}>
@@ -197,23 +154,11 @@ export default function CreativeTab(props: CreativeTabProps) {
                 </LineButton>
               ))}
             </div>
-            {lastFeedback ? <p className="soft-text">{lastFeedback}</p> : null}
-            <div className="inline-actions">
-              <LineButton
-                variant="ghost"
-                onClick={() => onGenerateMindmap({
-                  sourceId: artifact.id, sourceType: 'idea',
-                  title: `${artifact.concept.name} 产品图谱`,
-                  content: [artifact.concept.tagline, ...artifact.concept.features, ...artifact.nextTasks].join('；'),
-                })}
-              >
-                生成产品图谱
-              </LineButton>
-            </div>
+            {lastFeedback ? <p className="soft-text" style={{ marginTop: 6 }}>{lastFeedback}</p> : null}
           </ResultCard>
         </div>
       ) : (
-        <EmptyCard title="先抛一句想法" body="PocketBuddy 会返回产品概念、图片 Prompt、MVP 计划，还能把网页片段和归档笔记带进创意流。" />
+        <EmptyCard title="输入想法开始" body="输入一句话，生成产品概念、图片 Prompt 和 MVP 计划。" />
       )}
     </div>
   );

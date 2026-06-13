@@ -49,6 +49,9 @@ import type {
 } from '@/lib/messaging/types';
 
 export default defineBackground(() => {
+  // 点击扩展图标时打开/关闭 sidepanel
+  browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
   browser.runtime.onMessage.addListener((message: AppMessage, _sender, sendResponse) => {
     handleMessage(message)
       .then((response) => sendResponse(response))
