@@ -154,8 +154,8 @@ export default function ReadingTab(props: ReadingTabProps) {
       <section className="panel-card">
         <div className="panel-head">
           <div>
-            <p className="section-label">Read Current Page</p>
-            <h2>让小伙伴看看这一页</h2>
+            <p className="section-label">Feeding Page</p>
+            <h2>把这一页喂给 Agent</h2>
           </div>
           <span className="micro-status">不会默认读取正文</span>
         </div>
@@ -165,7 +165,7 @@ export default function ReadingTab(props: ReadingTabProps) {
             读取当前页
           </LineButton>
           <LineButton variant="secondary" onClick={handleAnalyzeCurrentPage} disabled={Boolean(busyAction)}>
-            分析这一页
+            分析并喂养
           </LineButton>
           <LineButton variant="ghost" onClick={handleSaveAnalysisAsNote} disabled={Boolean(busyAction) || !pageAnalysis || !pageContext}>
             保存为笔记
@@ -296,7 +296,7 @@ export default function ReadingTab(props: ReadingTabProps) {
           </ResultCard>
         </div>
       ) : (
-        <EmptyCard avatar title="先读取，再分析" body="点击「读取当前页」，小口袋云云会帮你提炼摘要、关键观点、产品机会和可记住信息。" />
+        <EmptyCard avatar title="先读取，再喂养" body="点击「读取当前页」，小口袋云云会帮你提炼摘要、关键观点、产品机会和可记住信息。" />
       )}
     </div>
   );

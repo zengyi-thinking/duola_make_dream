@@ -6,6 +6,7 @@ import type {
   HarnessPatch,
   IdeaRecord,
   MemoryCandidate,
+  ProfileHistoryEntry,
   ProductArtifact,
   RuntimeConfig,
   UserProfile,
@@ -16,6 +17,7 @@ import type { PageContextRecord } from '@/lib/page/types';
 
 export const STORAGE_KEYS = {
   profile: 'profile',
+  profileHistory: 'profileHistory',
   ideaHistory: 'ideaHistory',
   artifactHistory: 'artifactHistory',
   feedbackLog: 'feedbackLog',
@@ -27,11 +29,13 @@ export const STORAGE_KEYS = {
   generatedImages: 'generatedImages',
   generatedMindmaps: 'generatedMindmaps',
   harnessPatches: 'harnessPatches',
+  stateBackups: 'stateBackups',
   runtimeConfig: 'runtimeConfig',
 } as const;
 
-export interface StorageSchema {
+export interface StorageSnapshot {
   profile: UserProfile;
+  profileHistory: ProfileHistoryEntry[];
   ideaHistory: IdeaRecord[];
   artifactHistory: ProductArtifact[];
   feedbackLog: FeedbackRecord[];
@@ -46,6 +50,17 @@ export interface StorageSchema {
   runtimeConfig: RuntimeConfig;
 }
 
+export interface StateBackup {
+  id: string;
+  label: string;
+  createdAt: number;
+  snapshot: StorageSnapshot;
+}
+
+export interface StorageSchema extends StorageSnapshot {
+  stateBackups: StateBackup[];
+}
+
 export const DEFAULT_PROFILE: UserProfile = {
   visualLikes: ['蓝白线条', '口袋感', '轻陪伴'],
   visualDislikes: [],
@@ -58,6 +73,7 @@ export const DEFAULT_PROFILE: UserProfile = {
 export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   agentName: 'PocketAgent',
   defaultTone: 'warm-product-designer',
+  avatarId: 'yunyu-main',
   maxSelectionChars: 280,
   maxMainTextChars: 3000,
   maxPageExcerptChars: 500,
@@ -77,6 +93,7 @@ export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
 export function createDefaultStorageState(): StorageSchema {
   return {
     profile: { ...DEFAULT_PROFILE, lastUpdated: Date.now() },
+    profileHistory: [],
     ideaHistory: [],
     artifactHistory: [],
     feedbackLog: [],
@@ -88,6 +105,7 @@ export function createDefaultStorageState(): StorageSchema {
     generatedImages: [],
     generatedMindmaps: [],
     harnessPatches: [],
+    stateBackups: [],
     runtimeConfig: { ...DEFAULT_RUNTIME_CONFIG },
   };
 }

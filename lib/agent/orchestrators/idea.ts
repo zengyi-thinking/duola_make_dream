@@ -80,7 +80,7 @@ export async function processIdeaSubmission(
   const themedProfile = mergeRecentThemes(profile, extractThemesFromIdea(ideaText));
   await saveIdea(idea);
   await saveArtifact(artifact);
-  await saveProfile(themedProfile);
+  await saveProfile(themedProfile, 'idea');
 
   const memoryHints = runMemoryBread(themedProfile);
   const memorySummary = await getMemorySummary();

@@ -1,10 +1,20 @@
 import { browser } from 'wxt/browser';
-import type { StorageSchema } from './schema';
-import { STORAGE_KEYS, createDefaultStorageState } from './schema';
+import type { StateBackup, StorageSchema, StorageSnapshot } from './schema';
+import { DEFAULT_RUNTIME_CONFIG, STORAGE_KEYS, createDefaultStorageState } from './schema';
 
 type StorageKey = keyof StorageSchema;
 
 const DEFAULT_STATE = createDefaultStorageState();
+
+function normalizeRuntimeConfig(
+  runtimeConfig: Partial<StorageSchema['runtimeConfig']> | undefined,
+): StorageSchema['runtimeConfig'] {
+  return {
+    ...DEFAULT_RUNTIME_CONFIG,
+    ...runtimeConfig,
+    avatarId: runtimeConfig?.avatarId ?? DEFAULT_RUNTIME_CONFIG.avatarId,
+  };
+}
 
 export async function readStorage<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {
   try {
@@ -36,6 +46,7 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
 
   return {
     profile: (result.profile as StorageSchema['profile'] | undefined) ?? DEFAULT_STATE.profile,
+    profileHistory: (result.profileHistory as StorageSchema['profileHistory'] | undefined) ?? [],
     ideaHistory: (result.ideaHistory as StorageSchema['ideaHistory'] | undefined) ?? [],
     artifactHistory: (result.artifactHistory as StorageSchema['artifactHistory'] | undefined) ?? [],
     feedbackLog: (result.feedbackLog as StorageSchema['feedbackLog'] | undefined) ?? [],
@@ -47,8 +58,10 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
     generatedImages: (result.generatedImages as StorageSchema['generatedImages'] | undefined) ?? [],
     generatedMindmaps: (result.generatedMindmaps as StorageSchema['generatedMindmaps'] | undefined) ?? [],
     harnessPatches: (result.harnessPatches as StorageSchema['harnessPatches'] | undefined) ?? [],
-    runtimeConfig: (result.runtimeConfig as StorageSchema['runtimeConfig'] | undefined)
-      ?? DEFAULT_STATE.runtimeConfig,
+    stateBackups: (result.stateBackups as StorageSchema['stateBackups'] | undefined) ?? [],
+    runtimeConfig: normalizeRuntimeConfig(
+      result.runtimeConfig as Partial<StorageSchema['runtimeConfig']> | undefined,
+    ),
   };
 }
 
@@ -146,7 +159,7 @@ export async function clearArrayStorage<K extends StorageKey>(key: K): Promise<S
  * privacy-check: allow — apiKey 存于扩展本地 storage，不上传第三方
  */
 export async function getRuntimeConfig(): Promise<StorageSchema['runtimeConfig']> {
-  return readStorage('runtimeConfig');
+  return normalizeRuntimeConfig(await readStorage('runtimeConfig'));
 }
 
 /**
@@ -156,8 +169,55 @@ export async function getRuntimeConfig(): Promise<StorageSchema['runtimeConfig']
 export async function updateRuntimeConfig(
   patch: Partial<StorageSchema['runtimeConfig']>,
 ): Promise<StorageSchema['runtimeConfig']> {
-  const current = await readStorage('runtimeConfig');
+  const current = await getRuntimeConfig();
   const next = { ...current, ...patch };
   await writeStorage('runtimeConfig', next);
   return next;
+}
+
+export async function saveStateBackup(
+  label = '手动快照',
+): Promise<StateBackup> {
+  const snapshot = await readStorageSnapshot();
+  const { stateBackups: _ignored, ...snapshotWithoutBackups } = snapshot;
+  const backup: StateBackup = {
+    id: crypto.randomUUID(),
+    label,
+    createdAt: Date.now(),
+    snapshot: snapshotWithoutBackups,
+  };
+
+  const next = [backup, ...snapshot.stateBackups].slice(0, 8);
+  await writeStorage('stateBackups', next);
+  return backup;
+}
+
+export async function restoreStateBackup(backupId: string): Promise<StorageSchema> {
+  const snapshot = await readStorageSnapshot();
+  const target = snapshot.stateBackups.find((backup) => backup.id === backupId);
+  if (!target) {
+    throw new Error(`找不到备份 ${backupId}`);
+  }
+
+  const next: StorageSchema = {
+    ...target.snapshot,
+    stateBackups: snapshot.stateBackups,
+  };
+
+  try {
+    await browser.storage.local.set(next);
+  } catch (error) {
+    throw new Error(`恢复备份失败: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return next;
+}
+
+export async function getStateBackups(): Promise<StateBackup[]> {
+  return readStorage('stateBackups');
+}
+
+export async function getStorageSnapshot(): Promise<StorageSnapshot> {
+  const { stateBackups: _ignored, ...snapshot } = await readStorageSnapshot();
+  return snapshot;
 }

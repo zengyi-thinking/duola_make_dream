@@ -26,3 +26,10 @@ export const pocketAvatars = {
     usage: '高级版形象、宣传图、封面图',
   },
 } as const
+
+export const pocketAvatarIds: PocketAvatarId[] = [
+  'yunyu-main',
+  'yunyun-chibi',
+  'lanling-icon',
+  'xingche-3d',
+]

@@ -1,18 +1,14 @@
 import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
-import type { ArchiveNote, MemorySummary } from '@/lib/agent/types';
+import type { MemorySummary } from '@/lib/agent/types';
 import {
   createArchiveClearMessage,
   createArchiveDeleteMessage,
-  createImageDeleteMessage,
-  createMemoryDeleteMessage,
-  createMindmapDeleteMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
-import { ResultCard, EmptyCard } from '../components/ResultCard';
+import { EmptyCard } from '../components/ResultCard';
 import { ListBlock } from '../components/ListBlock';
-import { TreePreview } from '../components/MindmapPreview';
 
 type SourceTypeFilter = 'all' | 'paper' | 'article' | 'idea';
 
@@ -53,14 +49,12 @@ export default function ArchiveTab(props: ArchiveTabProps) {
 
   const allNotes = memory?.archiveNotes ?? [];
 
-  // 收集所有 tag
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     allNotes.forEach((note) => note.tags.forEach((tag) => tagSet.add(tag)));
     return Array.from(tagSet).sort();
   }, [allNotes]);
 
-  // 过滤后的笔记
   const filteredNotes = useMemo(() => {
     return allNotes.filter((note) => {
       if (sourceTypeFilter !== 'all' && note.sourceType !== sourceTypeFilter) return false;
@@ -112,48 +106,19 @@ export default function ArchiveTab(props: ArchiveTabProps) {
     setNoticeText('归档笔记已清空。');
   }
 
-  async function handleDeleteApprovedMemory(memoryId: string) {
-    setBusyAction(`approved-delete-${memoryId}`);
-    const response = await sendRuntimeMessage(createMemoryDeleteMessage('approvedMemories', memoryId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '删除长期记忆失败。'); return; }
-    setMemory(response.payload);
-    setNoticeText('长期记忆已删除。');
-  }
-
-  async function handleDeleteImage(imageId: string) {
-    setBusyAction(`image-delete-${imageId}`);
-    const response = await sendRuntimeMessage(createImageDeleteMessage(imageId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '删除图片记录失败。'); return; }
-    setMemory(response.payload);
-    setNoticeText('图片生成记录已删除。');
-  }
-
-  async function handleDeleteMindmap(mindmapId: string) {
-    setBusyAction(`mindmap-delete-${mindmapId}`);
-    const response = await sendRuntimeMessage(createMindmapDeleteMessage(mindmapId));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '删除图谱记录失败。'); return; }
-    setMemory(response.payload);
-    setNoticeText('图谱记录已删除。');
-  }
-
   return (
     <div className="tab-panel">
-      {/* ===== 笔记区域 ===== */}
       <section className="panel-card">
         <div className="panel-head">
           <div>
             <p className="section-label">Archive Notes</p>
-            <h2>归档与长期记忆</h2>
+            <h2>归档与笔记</h2>
           </div>
           <LineButton variant="ghost" onClick={handleClearArchive} disabled={Boolean(busyAction) || allNotes.length === 0}>
             清空笔记
           </LineButton>
         </div>
 
-        {/* 搜索和过滤 */}
         <div className="archive-filters">
           <input
             type="text"
@@ -206,7 +171,6 @@ export default function ArchiveTab(props: ArchiveTabProps) {
             )}
           </div>
 
-          {/* 详情抽屉 */}
           <div className={`archive-detail ${drawerNoteId ? 'archive-detail--open' : ''}`}>
             {selectedNote ? (
               <div className="drawer">
@@ -267,89 +231,14 @@ export default function ArchiveTab(props: ArchiveTabProps) {
         </div>
       </section>
 
-      {/* ===== 已批准记忆 ===== */}
       <section className="panel-card">
         <div className="panel-head">
           <div>
-            <p className="section-label">Approved Memories</p>
-            <h2>已批准记忆</h2>
+            <p className="section-label">Archive Tips</p>
+            <h2>这里放什么</h2>
           </div>
         </div>
-        <div className="stack">
-          {(memory?.approvedMemories ?? []).map((item) => (
-            <div key={item.id} className="list-card">
-              <div className="candidate-head">
-                <strong>{item.title}</strong>
-                <span className="status-pill status-pill--approved">{item.category}</span>
-              </div>
-              <p className="soft-text">{item.content}</p>
-              <p className="micro-copy">{item.reason}</p>
-              <div className="inline-actions">
-                <LineButton variant="ghost" onClick={() => handleDeleteApprovedMemory(item.id)}>删除这条记忆</LineButton>
-              </div>
-            </div>
-          ))}
-          {(memory?.approvedMemories.length ?? 0) === 0 ? <p className="soft-text">还没有长期记忆。</p> : null}
-        </div>
-      </section>
-
-      {/* ===== 图片请求记录 ===== */}
-      <section className="panel-card">
-        <div className="panel-head">
-          <div>
-            <p className="section-label">Generated Images</p>
-            <h2>图片请求记录</h2>
-          </div>
-        </div>
-        <div className="stack">
-          {(memory?.generatedImages ?? []).map((item) => (
-            <div key={item.id} className="list-card">
-              <div className="candidate-head">
-                <strong>{item.model ?? 'gpt-image-2'}</strong>
-                <span className={`status-pill status-pill--${item.status}`}>{item.status}</span>
-              </div>
-              {item.imageUrl ? (
-                <img src={item.imageUrl} alt={item.prompt.slice(0, 40)} className="generated-image" />
-              ) : null}
-              <pre className="prompt-block">{item.prompt}</pre>
-              <p className="soft-text">{item.previewText}</p>
-              <div className="inline-actions">
-                <LineButton variant="ghost" onClick={() => onCopy(item.prompt, '图片 Prompt 已复制。')}>复制 Prompt</LineButton>
-                <LineButton variant="ghost" onClick={() => handleDeleteImage(item.id)}>删除记录</LineButton>
-              </div>
-            </div>
-          ))}
-          {(memory?.generatedImages.length ?? 0) === 0 ? <p className="soft-text">还没有图片生成记录。</p> : null}
-        </div>
-      </section>
-
-      {/* ===== 图谱记录 ===== */}
-      <section className="panel-card">
-        <div className="panel-head">
-          <div>
-            <p className="section-label">Generated Mindmaps</p>
-            <h2>图谱记录</h2>
-          </div>
-        </div>
-        <div className="stack">
-          {(memory?.generatedMindmaps ?? []).map((item) => (
-            <div key={item.id} className="list-card">
-              <div className="candidate-head">
-                <strong>{item.result.title}</strong>
-                <span className="status-pill status-pill--spark">{item.sourceType}</span>
-              </div>
-              <TreePreview node={item.result.root} />
-              {item.imagePrompt ? <pre className="prompt-block">{item.imagePrompt}</pre> : null}
-              <div className="inline-actions">
-                {item.imagePrompt ? (
-                  <LineButton variant="ghost" onClick={() => onCopy(item.imagePrompt!, '图谱 Prompt 已复制。')}>复制 Prompt</LineButton>
-                ) : null}
-                <LineButton variant="ghost" onClick={() => handleDeleteMindmap(item.id)}>删除记录</LineButton>
-              </div>
-            </div>
-          ))}
-          {(memory?.generatedMindmaps.length ?? 0) === 0 ? <p className="soft-text">还没有图谱生成记录。</p> : null}
-        </div>
+        <p className="soft-text">归档页只负责整理笔记与它们的上下文。长期记忆、图片记录、图谱记录和历史回放已经移到观察页。</p>
       </section>
     </div>
   );

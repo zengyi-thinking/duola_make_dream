@@ -169,7 +169,7 @@ async function handleFeedbackRecord(
 
   const currentProfile = await ensureProfile();
   const nextProfile = applyFeedbackToProfile(currentProfile, action);
-  await saveProfile(nextProfile);
+  await saveProfile(nextProfile, 'feedback');
 
   const feedbackLog = await getFeedbackLog();
   const pendingPatches = await getHarnessPatches();
@@ -301,7 +301,7 @@ async function handleMemoryCandidateApprove(candidateId: string) {
   const approvedMemory = await convertCandidateToApprovedMemory(candidateId);
   const profile = await ensureProfile();
   const nextProfile = applyApprovedMemoryToProfile(profile, candidate);
-  await saveProfile(nextProfile);
+  await saveProfile(nextProfile, 'memory-approval');
 
   return {
     candidate,
@@ -390,9 +390,15 @@ function buildEmptyPayload(type: AppMessage['type']) {
     },
     recentContextSnippets: [],
     recentPageContexts: [],
+    recentIdeas: [],
+    recentArtifacts: [],
+    recentFeedback: [],
     archiveNotes: [],
     memoryCandidates: [],
     approvedMemories: [],
+    profileHistory: [],
+    stateBackups: [],
+    harnessPatches: [],
     generatedImages: [],
     generatedMindmaps: [],
     pendingPatches: [],
@@ -404,6 +410,8 @@ function buildEmptyPayload(type: AppMessage['type']) {
       notes: 0,
       memoryCandidates: 0,
       approvedMemories: 0,
+      profileChanges: 0,
+      backups: 0,
       images: 0,
       mindmaps: 0,
     },

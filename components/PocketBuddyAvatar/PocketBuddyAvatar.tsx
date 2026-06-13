@@ -1,11 +1,12 @@
 import type { PocketBuddyMood } from '@/lib/agent/types';
+import type { PocketAvatarId } from '@/lib/brand/avatars';
 import { pocketAvatars } from '@/lib/brand/avatars';
 import './PocketBuddyAvatar.css';
 
 interface PocketBuddyAvatarProps {
   mood?: PocketBuddyMood;
   /** 使用哪个头像，默认主形象云屿 */
-  avatar?: 'yunyu-main' | 'yunyun-chibi' | 'lanling-icon' | 'xingche-3d';
+  avatar?: PocketAvatarId;
   /** 显示尺寸 px */
   size?: number;
   /** 思考时是否切到 chibi 加载动画 */
@@ -30,7 +31,7 @@ export default function PocketBuddyAvatar({
 }: PocketBuddyAvatarProps) {
   // 思考时切到 chibi 做加载动画
   const effectiveAvatar = useChibiWhenThinking && mood === 'thinking' ? 'yunyun-chibi' : avatar;
-  const meta = pocketAvatars[effectiveAvatar];
+  const meta = pocketAvatars[effectiveAvatar] ?? pocketAvatars['yunyu-main'];
 
   return (
     <div

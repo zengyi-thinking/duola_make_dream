@@ -1,48 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import type { MemorySummary, RuntimeConfig } from '@/lib/agent/types';
+import { pocketAvatarIds, pocketAvatars } from '@/lib/brand/avatars';
 import { createMemoryDeleteMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
-import { getRuntimeConfig, updateRuntimeConfig } from '@/lib/storage/local';
-import { ResultCard } from '../components/ResultCard';
-import { ListBlock } from '../components/ListBlock';
+import { updateRuntimeConfig } from '@/lib/storage/local';
 
 interface SettingsTabProps {
-  memory: MemorySummary | null;
+  config: RuntimeConfig | null;
+  setConfig: Dispatch<SetStateAction<RuntimeConfig | null>>;
   setMemory: Dispatch<SetStateAction<MemorySummary | null>>;
   setErrorText: Dispatch<SetStateAction<string>>;
   setNoticeText: Dispatch<SetStateAction<string>>;
+  refreshConfig: () => Promise<void>;
+  resetWorkspaceState: () => void;
   busyAction: string;
   setBusyAction: Dispatch<SetStateAction<string>>;
 }
 
 export default function SettingsTab(props: SettingsTabProps) {
-  const { memory, setMemory, setErrorText, setNoticeText, busyAction, setBusyAction } = props;
-
-  const [config, setConfig] = useState<RuntimeConfig | null>(null);
+  const {
+    config,
+    setConfig,
+    setMemory,
+    setErrorText,
+    setNoticeText,
+    refreshConfig,
+    resetWorkspaceState,
+    busyAction,
+    setBusyAction,
+  } = props;
   const [showLlmKey, setShowLlmKey] = useState(false);
   const [showImageKey, setShowImageKey] = useState(false);
-  const [showMemory, setShowMemory] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const configSaveQueueRef = useRef(Promise.resolve());
 
-  useEffect(() => { void loadConfig(); }, []);
-
-  async function loadConfig() {
-    try {
-      setConfig(await getRuntimeConfig());
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : '读取配置失败');
-    }
-  }
-
-  // 字段级实时持久化
   async function updateField<K extends keyof RuntimeConfig>(key: K, value: RuntimeConfig[K]) {
     if (!config) return;
+
     const next = { ...config, [key]: value };
     setConfig(next);
+
     try {
-      await updateRuntimeConfig({ [key]: value });
+      await enqueueRuntimeConfigUpdate({ [key]: value } as Partial<RuntimeConfig>);
       setNoticeText('配置已保存。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '保存配置失败');
@@ -52,37 +52,122 @@ export default function SettingsTab(props: SettingsTabProps) {
   async function handleClearAll() {
     if (!window.confirm('确定要清除所有本地数据吗？此操作不可撤销。')) return;
     setBusyAction('clear-all');
-    const response = await sendRuntimeMessage(createMemoryDeleteMessage('all'));
-    setBusyAction('');
-    if (!response.success) { setErrorText(response.error ?? '清除失败。'); return; }
-    setMemory(response.payload);
-    setNoticeText('所有本地数据已清除。');
+    try {
+      await configSaveQueueRef.current.catch(() => undefined);
+      const response = await sendRuntimeMessage(createMemoryDeleteMessage('all'));
+      if (!response.success) { setErrorText(response.error ?? '清除失败。'); return; }
+      setMemory(response.payload);
+      await refreshConfig();
+      resetWorkspaceState();
+      setNoticeText('所有本地数据已清除。');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '清除失败。');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  function enqueueRuntimeConfigUpdate(patch: Partial<RuntimeConfig>) {
+    const next = configSaveQueueRef.current
+      .catch(() => undefined)
+      .then(() => updateRuntimeConfig(patch));
+
+    configSaveQueueRef.current = next.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return next;
   }
 
   if (!config) {
-    return <div className="tab-panel"><p className="soft-text">加载配置中...</p></div>;
+    return <div className="tab-panel"><p className="soft-text">加载设置中...</p></div>;
   }
 
   const llmIsReal = config.llmProvider !== 'mock';
   const imageIsReal = config.imageMode === 'proxy';
+  const avatarId = pocketAvatars[config.avatarId] ? config.avatarId : 'yunyu-main';
+  const avatarMeta = pocketAvatars[avatarId];
 
   return (
     <div className="tab-panel">
-      {/* ===== 封面（星澈 PocketAgent）===== */}
       <section className="settings-cover">
-        <PocketBuddyAvatar avatar="xingche-3d" mood="idle" size={64} />
+        <PocketBuddyAvatar avatar={avatarId} mood="warm" size={64} />
         <div className="settings-cover__copy">
-          <p className="section-label">PocketAgent</p>
+          <p className="section-label">PocketBuddy</p>
           <h2>设置中心</h2>
-          <p className="soft-text">配置你的 AI 供应商，查看 Agent 的记忆与工作历史。</p>
+          <p className="soft-text">这里配置模型、身份和头像，其他历史状态请去观察页查看。</p>
         </div>
       </section>
 
-      {/* ===== LLM 供应商 ===== */}
       <section className="panel-card">
-        <div className="panel-head"><h2>LLM 供应商</h2>
+        <div className="panel-head">
+          <div>
+            <p className="section-label">Identity Console</p>
+            <h2>Agent 身份</h2>
+          </div>
+          <span className="micro-status">会同步到侧边栏标题和头像</span>
+        </div>
+
+        <div className="settings-section">
+          <label>Agent 名称</label>
+          <input
+            type="text"
+            className="settings-input"
+            value={config.agentName}
+            onChange={(e) => updateField('agentName', e.target.value)}
+            placeholder="PocketAgent"
+          />
+        </div>
+
+        <div className="settings-section">
+          <label>默认语气</label>
+          <input
+            type="text"
+            className="settings-input"
+            value={config.defaultTone}
+            onChange={(e) => updateField('defaultTone', e.target.value)}
+            placeholder="warm-product-designer"
+          />
+        </div>
+
+        <div className="settings-section">
+            <label>头像</label>
+            <select
+              className="settings-select"
+              value={avatarId}
+              onChange={(e) => updateField('avatarId', e.target.value as RuntimeConfig['avatarId'])}
+            >
+            {pocketAvatarIds.map((avatarId) => {
+              const meta = pocketAvatars[avatarId];
+              return (
+                <option key={avatarId} value={avatarId}>
+                  {meta.name}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div className="settings-avatar-preview">
+          <PocketBuddyAvatar avatar={config.avatarId} mood="warm" size={72} />
+          <div>
+            <strong>{config.agentName}</strong>
+            <p className="soft-text">{avatarMeta.name}</p>
+            <p className="micro-copy">{avatarMeta.usage}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel-card">
+        <div className="panel-head">
+          <div>
+            <p className="section-label">LLM Provider</p>
+            <h2>LLM 接入</h2>
+          </div>
           <span className="micro-status">{config.llmProvider === 'mock' ? '本地模拟' : '已启用'}</span>
         </div>
+
         <div className="settings-section">
           <label>选择供应商</label>
           <select
@@ -141,11 +226,15 @@ export default function SettingsTab(props: SettingsTabProps) {
         )}
       </section>
 
-      {/* ===== 图片供应商 ===== */}
       <section className="panel-card">
-        <div className="panel-head"><h2>图片生成</h2>
+        <div className="panel-head">
+          <div>
+            <p className="section-label">Image Provider</p>
+            <h2>图片生成</h2>
+          </div>
           <span className="micro-status">{config.imageMode === 'mock' ? '本地模拟' : '已启用'}</span>
         </div>
+
         <div className="settings-section">
           <label>选择供应商</label>
           <select
@@ -202,101 +291,21 @@ export default function SettingsTab(props: SettingsTabProps) {
         )}
       </section>
 
-      {/* ===== Agent 记忆 ===== */}
       <section className="panel-card">
         <div className="panel-head">
-          <h2>Agent 记忆</h2>
-          <LineButton variant="ghost" onClick={() => setShowMemory(!showMemory)}>
-            {showMemory ? '收起' : '查看'}
-          </LineButton>
-        </div>
-
-        <div className="settings-row"><span>已记住偏好</span><span className="settings-value">{memory?.profile.visualLikes.length ?? 0} 项</span></div>
-        <div className="settings-row"><span>已批准记忆</span><span className="settings-value">{memory?.counts.approvedMemories ?? 0} 条</span></div>
-        <div className="settings-row"><span>记忆候选</span><span className="settings-value">{memory?.counts.memoryCandidates ?? 0} 条</span></div>
-
-        {showMemory && memory ? (
-          <div style={{ marginTop: 8 }}>
-            {memory.profile.visualLikes.length > 0 && (
-              <div style={{ marginBottom: 6 }}>
-                <span className="memory-label">偏好</span>
-                <div className="token-list" style={{ marginTop: 2 }}>
-                  {memory.profile.visualLikes.map((v) => <span key={v} className="token-chip">{v}</span>)}
-                </div>
-              </div>
-            )}
-            {memory.profile.recentThemes.length > 0 && (
-              <div style={{ marginBottom: 6 }}>
-                <span className="memory-label">近期主题</span>
-                <div className="token-list" style={{ marginTop: 2 }}>
-                  {memory.profile.recentThemes.map((t) => <span key={t} className="token-chip">{t}</span>)}
-                </div>
-              </div>
-            )}
-            {memory.approvedMemories.length > 0 && (
-              <div>
-                <span className="memory-label">长期记忆</span>
-                <div className="stack" style={{ marginTop: 4 }}>
-                  {memory.approvedMemories.map((m) => (
-                    <div key={m.id} className="candidate-card">
-                      <div className="candidate-head">
-                        <strong>{m.title}</strong>
-                        <span className="status-pill status-pill--approved">{m.category}</span>
-                      </div>
-                      <p className="soft-text">{m.content}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {memory.approvedMemories.length === 0 && memory.profile.visualLikes.length === 0 && (
-              <p className="soft-text">还没有积累记忆。使用越多，Agent 越懂你。</p>
-            )}
+          <div>
+            <p className="section-label">Data Management</p>
+            <h2>数据管理</h2>
           </div>
-        ) : null}
-      </section>
-
-      {/* ===== 工作历史 ===== */}
-      <section className="panel-card">
-        <div className="panel-head">
-          <h2>工作历史</h2>
-          <LineButton variant="ghost" onClick={() => setShowHistory(!showHistory)}>
-            {showHistory ? '收起' : '查看'}
-          </LineButton>
         </div>
-
-        <div className="settings-row"><span>生成创意</span><span className="settings-value">{memory?.counts.ideas ?? 0} 条</span></div>
-        <div className="settings-row"><span>产品雏形</span><span className="settings-value">{memory?.counts.artifacts ?? 0} 个</span></div>
-        <div className="settings-row"><span>阅读页面</span><span className="settings-value">{memory?.counts.pageContexts ?? 0} 页</span></div>
-        <div className="settings-row"><span>归档笔记</span><span className="settings-value">{memory?.counts.notes ?? 0} 条</span></div>
-        <div className="settings-row"><span>反馈记录</span><span className="settings-value">{memory?.counts.feedback ?? 0} 条</span></div>
-        <div className="settings-row"><span>图片请求</span><span className="settings-value">{memory?.counts.images ?? 0} 个</span></div>
-        <div className="settings-row"><span>图谱</span><span className="settings-value">{memory?.counts.mindmaps ?? 0} 个</span></div>
-
-        {showHistory && memory && memory.archiveNotes.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <span className="memory-label">最近笔记</span>
-            <div className="stack" style={{ marginTop: 4 }}>
-              {memory.archiveNotes.slice(0, 5).map((note) => (
-                <div key={note.id} style={{ padding: '4px 0', borderBottom: '1px solid var(--pb-line)' }}>
-                  <strong style={{ fontSize: 12 }}>{note.title}</strong>
-                  <p className="soft-text">{note.summary}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* ===== 数据管理 ===== */}
-      <section className="panel-card">
-        <h2>数据管理</h2>
         <div className="inline-actions">
           <LineButton variant="ghost" onClick={handleClearAll} disabled={Boolean(busyAction)}>
             清除所有本地数据
           </LineButton>
         </div>
-        <p className="soft-text" style={{ marginTop: 4 }}>所有数据仅存储在本地浏览器中。API Key 仅用于本地发起请求，不会上传到任何第三方服务器。</p>
+        <p className="soft-text" style={{ marginTop: 4 }}>
+          所有数据仅存储在本地浏览器中。API Key 只保存在本地，不会上传到第三方服务器。
+        </p>
       </section>
     </div>
   );

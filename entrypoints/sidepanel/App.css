@@ -65,6 +65,12 @@ button, textarea, input, select { font: inherit; }
   text-overflow: ellipsis;
 }
 
+.hero-meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--pb-muted);
+}
+
 /* ===== Tab Nav ===== */
 .tab-nav {
   display: flex;
@@ -141,6 +147,81 @@ button, textarea, input, select { font: inherit; }
 
 .panel-head h2 { margin: 0; font-size: 15px; }
 .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--pb-primary); margin: 0; }
+
+/* ===== Observation ===== */
+.observation-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(221,236,255,0.72));
+}
+
+.observation-hero__copy {
+  min-width: 0;
+}
+
+.observation-hero__copy h2 {
+  margin: 2px 0 4px;
+  font-size: 18px;
+}
+
+.observation-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stat-card {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--pb-line);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.stat-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-item {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--pb-line);
+  background: #fff;
+}
+
+.timeline-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.timeline-badge--idea { background: #e8f3ff; color: #1a5f93; }
+.timeline-badge--artifact { background: #e6f7ee; color: #1a6b43; }
+.timeline-badge--feedback { background: #fff4db; color: #8a6400; }
+.timeline-badge--profile { background: #efe8ff; color: #6b3fa0; }
+.timeline-badge--backup { background: #eef4f8; color: #4b6477; }
+.timeline-badge--patch { background: #f8eaf1; color: #9c4576; }
 
 /* ===== Input ===== */
 .idea-textarea {
@@ -392,6 +473,17 @@ button, textarea, input, select { font: inherit; }
 
 .settings-cover__copy h2 { margin: 2px 0 4px; font-size: 17px; }
 .settings-cover__copy .section-label { margin: 0; }
+
+.settings-avatar-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px dashed var(--pb-line);
+  background: rgba(244, 248, 255, 0.65);
+}
 
 /* ===== Empty Avatar（空状态 chibi）===== */
 .panel-card--empty {

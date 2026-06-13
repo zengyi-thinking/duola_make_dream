@@ -4,6 +4,7 @@ import type {
   ImageGenerationSourceType,
   ImageGenerationStyle,
 } from '@/lib/image/types';
+import type { PocketAvatarId } from '@/lib/brand/avatars';
 import type { MindmapRecord, MindmapResult } from '@/lib/mindmap/types';
 import type {
   PageAnalysisResult,
@@ -34,6 +35,13 @@ export type FeedbackAction =
   | 'more-productized'
   | 'more-tech'
   | 'dislike-direction';
+
+export type ProfileHistorySource =
+  | 'init'
+  | 'idea'
+  | 'feedback'
+  | 'memory-approval'
+  | 'manual';
 
 export type HarnessPatchTarget =
   | 'prompt'
@@ -118,6 +126,13 @@ export interface UserProfile {
   lastUpdated: number;
 }
 
+export interface ProfileHistoryEntry {
+  id: string;
+  source: ProfileHistorySource;
+  profile: UserProfile;
+  createdAt: number;
+}
+
 export type MemoryCandidateCategory = 'interest' | 'project-link' | 'topic' | 'style' | 'knowledge';
 export type MemoryCandidateSourceType = 'paper' | 'article' | 'idea';
 
@@ -163,6 +178,7 @@ export type ArchiveNote = {
 export interface RuntimeConfig {
   agentName: string;
   defaultTone: string;
+  avatarId: PocketAvatarId;
   maxSelectionChars: number;
   maxMainTextChars: number;
   maxPageExcerptChars: number;
@@ -185,9 +201,15 @@ export interface MemorySummary {
   profile: UserProfile;
   recentContextSnippets: ContextSnippet[];
   recentPageContexts: PageContextRecord[];
+  recentIdeas: IdeaRecord[];
+  recentArtifacts: ProductArtifact[];
+  recentFeedback: FeedbackRecord[];
   archiveNotes: ArchiveNote[];
   memoryCandidates: MemoryCandidate[];
   approvedMemories: ApprovedMemory[];
+  profileHistory: ProfileHistoryEntry[];
+  stateBackups: import('@/lib/storage/schema').StateBackup[];
+  harnessPatches: HarnessPatch[];
   generatedImages: GeneratedImageRecord[];
   generatedMindmaps: MindmapRecord[];
   pendingPatches: HarnessPatch[];
@@ -199,6 +221,8 @@ export interface MemorySummary {
     notes: number;
     memoryCandidates: number;
     approvedMemories: number;
+    profileChanges: number;
+    backups: number;
     images: number;
     mindmaps: number;
   };

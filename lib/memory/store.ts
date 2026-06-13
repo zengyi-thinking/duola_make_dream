@@ -7,6 +7,8 @@ import type {
   IdeaRecord,
   MemoryCandidate,
   MemorySummary,
+  ProfileHistoryEntry,
+  ProfileHistorySource,
   ProductArtifact,
   UserProfile,
 } from '@/lib/agent/types';
@@ -31,12 +33,22 @@ export async function ensureProfile(): Promise<UserProfile> {
   if (profile) return profile;
 
   const next = createProfile();
-  await writeStorage('profile', next);
+  await saveProfile(next, 'init');
   return next;
 }
 
-export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
+export async function saveProfile(
+  profile: UserProfile,
+  source: ProfileHistorySource = 'manual',
+): Promise<UserProfile> {
   await writeStorage('profile', profile);
+  const historyEntry: ProfileHistoryEntry = {
+    id: crypto.randomUUID(),
+    source,
+    profile,
+    createdAt: Date.now(),
+  };
+  await appendLimited('profileHistory', historyEntry, 20);
   return profile;
 }
 
@@ -158,9 +170,15 @@ export async function getMemorySummary(): Promise<MemorySummary> {
     profile: snapshot.profile,
     recentContextSnippets: snapshot.contextSnippets.slice(0, 3),
     recentPageContexts: snapshot.pageContexts.slice(0, 5),
+    recentIdeas: snapshot.ideaHistory.slice(0, 5),
+    recentArtifacts: snapshot.artifactHistory.slice(0, 5),
+    recentFeedback: snapshot.feedbackLog.slice(0, 5),
     archiveNotes: snapshot.archiveNotes.slice(0, 20),
     memoryCandidates: snapshot.memoryCandidates.slice(0, 20),
     approvedMemories: snapshot.approvedMemories.slice(0, 20),
+    profileHistory: snapshot.profileHistory.slice(0, 10),
+    stateBackups: snapshot.stateBackups.slice(0, 5),
+    harnessPatches: snapshot.harnessPatches.slice(0, 20),
     generatedImages: snapshot.generatedImages.slice(0, 10),
     generatedMindmaps: snapshot.generatedMindmaps.slice(0, 10),
     pendingPatches: snapshot.harnessPatches.filter((item) => item.status === 'pending').slice(0, 3),
@@ -172,6 +190,8 @@ export async function getMemorySummary(): Promise<MemorySummary> {
       notes: snapshot.archiveNotes.length,
       memoryCandidates: snapshot.memoryCandidates.length,
       approvedMemories: snapshot.approvedMemories.length,
+      profileChanges: snapshot.profileHistory.length,
+      backups: snapshot.stateBackups.length,
       images: snapshot.generatedImages.length,
       mindmaps: snapshot.generatedMindmaps.length,
     },

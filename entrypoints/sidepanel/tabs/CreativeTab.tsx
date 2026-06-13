@@ -91,6 +91,12 @@ export default function CreativeTab(props: CreativeTabProps) {
   return (
     <div className="tab-panel">
       <section className="panel-card">
+        <div className="panel-head">
+          <div>
+            <p className="section-label">Invention</p>
+            <h2>把想法变成产品雏形</h2>
+          </div>
+        </div>
         <textarea
           className="idea-textarea"
           value={ideaText}
@@ -158,7 +164,7 @@ export default function CreativeTab(props: CreativeTabProps) {
           </ResultCard>
         </div>
       ) : (
-        <EmptyCard avatar title="输入想法开始" body="小口袋云云已就位，输入一句话就能生成产品概念、图片 Prompt 和 MVP 计划。" />
+        <EmptyCard avatar title="输入想法开始发明" body="小口袋云云已就位，输入一句话就能生成产品概念、图片 Prompt 和 MVP 计划。" />
       )}
     </div>
   );
