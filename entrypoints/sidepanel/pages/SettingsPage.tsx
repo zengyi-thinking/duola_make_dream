@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import type { MemorySummary, ModelProfile, RuntimeConfig, UserProfile } from '@/lib/agent/types';
-import type { SkillDefinition } from '@/lib/skills/types';
+import { createSkillDefinition, labelSkillCategory, type SkillDefinition } from '@/lib/skills/types';
 import { createToolDefinition, labelToolCategory, type ToolDefinition } from '@/lib/tools/types';
 import {
   describeProfileHealth,
@@ -18,7 +18,9 @@ import { saveProfile } from '@/lib/memory';
 import {
   createMemoryDeleteMessage,
   createPocketModelTestMessage,
+  createPocketSkillDeleteMessage,
   createPocketSkillListMessage,
+  createPocketSkillSaveMessage,
   createPocketToolDeleteMessage,
   createPocketToolListMessage,
   createPocketToolSaveMessage,
@@ -67,6 +69,8 @@ export default function SettingsPage() {
   const [tools, setTools] = useState<ToolDefinition[]>([]);
   const [toolDraft, setToolDraft] = useState<{ name: string; description: string; promptHint: string }>({ name: '', description: '', promptHint: '' });
   const [showToolForm, setShowToolForm] = useState(false);
+  const [skillImportText, setSkillImportText] = useState('');
+  const [showSkillImport, setShowSkillImport] = useState(false);
   const [voiceDraft, setVoiceDraft] = useState('');
   const [voiceDirty, setVoiceDirty] = useState(false);
 
@@ -150,6 +154,54 @@ export default function SettingsPage() {
       if (response.success) setTools(response.payload.tools);
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '删除工具失败');
+    }
+  }
+
+  async function handleImportSkill() {
+    const text = skillImportText.trim();
+    if (!text) { setErrorText('请粘贴 skill JSON'); return; }
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      setErrorText('JSON 解析失败，请检查格式。');
+      return;
+    }
+    const name = typeof parsed.name === 'string' ? parsed.name.trim() : '';
+    const category = typeof parsed.category === 'string' ? parsed.category : '';
+    if (!name || !category) { setErrorText('skill 至少需要 name 和 category 字段。'); return; }
+    const skill = createSkillDefinition({
+      name,
+      emoji: typeof parsed.emoji === 'string' ? parsed.emoji : '⚡',
+      description: typeof parsed.description === 'string' ? parsed.description : name,
+      category: category as SkillDefinition['category'],
+      inputs: Array.isArray(parsed.inputs) ? (parsed.inputs as SkillDefinition['inputs']) : [],
+      builtIn: false,
+      compose: Array.isArray(parsed.compose) ? (parsed.compose as string[]) : undefined,
+    });
+    try {
+      const response = await sendRuntimeMessage(createPocketSkillSaveMessage(skill));
+      if (response.success) {
+        setMemory(response.payload);
+        await loadSkills();
+        setSkillImportText('');
+        setShowSkillImport(false);
+        setNoticeText(`技能「${name}」已导入。`);
+      }
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '导入失败');
+    }
+  }
+
+  async function handleDeleteSkill(skillId: string) {
+    try {
+      const response = await sendRuntimeMessage(createPocketSkillDeleteMessage(skillId));
+      if (response.success) {
+        setMemory(response.payload);
+        await loadSkills();
+      }
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '删除技能失败');
     }
   }
 
@@ -420,7 +472,7 @@ export default function SettingsPage() {
         setNoticeText={setNoticeText}
       />
 
-      {/* 模块4：Skill 注册表 */}
+      {/* 模块4：Skill 注册表（导入 + 内置运行入口） */}
       <section className="panel-card">
         <div className="panel-head">
           <div>
@@ -429,21 +481,46 @@ export default function SettingsPage() {
           </div>
           <span className="micro-status">{skills.length} 个</span>
         </div>
-        {skills.length > 0 ? (
-          <div className="candidate-stack">
-            {skills.map((s) => (
-              <div key={s.id} className="candidate-card">
-                <div className="candidate-head">
-                  <strong>{s.emoji} {s.name}</strong>
-                  <span className="token-chip">{s.category}</span>
-                </div>
-                <p className="soft-text">{s.description}</p>
-                <p className="micro-copy">{s.inputs.length} 个参数 · {s.builtIn ? '内置' : '自定义'}</p>
+        <p className="micro-copy">内置生图/网页提取 skill 可直接用；也可导入自定义 skill（粘贴 JSON，声明式组合）。</p>
+        <div className="candidate-stack">
+          {skills.map((s) => (
+            <div key={s.id} className="candidate-card">
+              <div className="candidate-head">
+                <strong>{s.emoji} {s.name}</strong>
+                <span className="token-chip">{labelSkillCategory(s.category)}</span>
               </div>
-            ))}
+              <p className="soft-text">{s.description}</p>
+              <p className="micro-copy">{s.inputs.length} 个参数 · {s.builtIn ? '内置' : '自定义'}{s.compose ? ' · 组合型' : ''}</p>
+              <div className="inline-actions" style={{ marginTop: 6 }}>
+                {s.id === 'skill.image-generation' ? (
+                  <LineButton variant="ghost" onClick={() => setNoticeText('去发明页输入想法，确认计划图后点「生图」即可调用生图 skill。')} disabled={Boolean(busyAction)}>立即使用</LineButton>
+                ) : null}
+                {s.id === 'skill.page-extraction' ? (
+                  <LineButton variant="ghost" onClick={() => setNoticeText('在任意网页点击侧栏「喂养」按钮，agent 会读取并结构化页面（网页提取 skill）。')} disabled={Boolean(busyAction)}>立即使用</LineButton>
+                ) : null}
+                {!s.builtIn ? (
+                  <LineButton variant="ghost" onClick={() => handleDeleteSkill(s.id)} disabled={Boolean(busyAction)}>删除</LineButton>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        {showSkillImport ? (
+          <div className="settings-tool-form">
+            <div className="settings-section">
+              <label>粘贴 Skill JSON</label>
+              <textarea className="settings-input settings-textarea" value={skillImportText} onChange={(e) => setSkillImportText(e.target.value)} placeholder={'{\n  "name": "我的技能",\n  "emoji": "⚡",\n  "description": "...",\n  "category": "generate",\n  "inputs": []\n}'} rows={6} disabled={Boolean(busyAction)} />
+              <p className="micro-copy">category 可选 generate/extract/structure/export；compose 可填已注册 skill/tool id 数组（声明式组合）。</p>
+            </div>
+            <div className="inline-actions">
+              <LineButton variant="primary" onClick={handleImportSkill} disabled={Boolean(busyAction)}>导入</LineButton>
+              <LineButton variant="ghost" onClick={() => { setShowSkillImport(false); setSkillImportText(''); }} disabled={Boolean(busyAction)}>取消</LineButton>
+            </div>
           </div>
         ) : (
-          <p className="soft-text">暂无技能。阶段4 会接入内置 skill（图片生成/页面提取/图谱/归档等）。</p>
+          <div className="inline-actions" style={{ marginTop: 8 }}>
+            <LineButton variant="ghost" onClick={() => setShowSkillImport(true)} disabled={Boolean(busyAction)}>+ 导入 skill</LineButton>
+          </div>
         )}
       </section>
 
