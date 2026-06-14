@@ -732,6 +732,39 @@ button, textarea, input, select { font: inherit; }
 .archive-item--active { border-color: var(--pb-primary); background: var(--pb-primary-soft); }
 .archive-item__type { font-size: 10px; font-weight: 700; color: var(--pb-primary); text-transform: uppercase; }
 .archive-item strong { display: block; margin-top: 2px; font-size: 12px; }
+.archive-item__chips { margin-top: 4px; }
+.archive-item__meter { margin-top: 6px; }
+
+.archive-note-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--pb-line);
+  background: rgba(244, 248, 255, 0.68);
+}
+
+.archive-note-summary__top {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.archive-note-summary__meter {
+  margin: 0;
+}
+
+.archive-metrics-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-top: 8px;
+}
+
+.archive-metric-card strong {
+  word-break: break-word;
+}
 
 /* ===== List Card ===== */
 .list-card { padding: 10px; border-radius: 12px; border: 1px solid var(--pb-line); }
@@ -833,6 +866,17 @@ button, textarea, input, select { font: inherit; }
   margin-top: 8px;
 }
 
+.settings-cover__metrics {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-top: 10px;
+}
+
+.settings-cover__metrics .signal-meter {
+  margin: 6px 0 4px;
+}
+
 .settings-avatar-preview {
   display: flex;
   align-items: center;
@@ -842,6 +886,14 @@ button, textarea, input, select { font: inherit; }
   border-radius: 14px;
   border: 1px dashed var(--pb-line);
   background: rgba(244, 248, 255, 0.65);
+}
+
+.settings-avatar-preview__copy {
+  min-width: 0;
+}
+
+.settings-avatar-preview__chips {
+  margin-top: 6px;
 }
 
 /* ===== Empty Avatar（空状态 chibi）===== */
@@ -922,15 +974,27 @@ button, textarea, input, select { font: inherit; }
 
 .settings-profile-summary {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
   margin: 8px 0 10px;
 }
 
 .settings-profile-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 10px;
   border-radius: 12px;
   border: 1px dashed var(--pb-line);
   background: rgba(244, 248, 255, 0.65);
+}
+
+.settings-profile-summary__item .token-list {
+  margin-top: 0;
+}
+
+.settings-profile-summary__item .signal-meter {
+  margin: 4px 0 2px;
 }
 
 .observation-grid {
@@ -1021,6 +1085,10 @@ button, textarea, input, select { font: inherit; }
   font-size: 12px;
   line-height: 1.35;
   word-break: break-word;
+}
+
+.profile-metric .signal-meter {
+  margin: 6px 0 4px;
 }
 
 .profile-editor {

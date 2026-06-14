@@ -160,11 +160,45 @@ export default function SettingsTab(props: SettingsTabProps) {
         <div className="settings-cover__copy">
           <p className="section-label">Identity Lab</p>
           <h2>身份实验室</h2>
-          <p className="soft-text">头像、语气、画像和模型配置都在这里，默认只保留真正会影响输出的内容。</p>
+          <p className="soft-text">只保留会影响输出的配置。</p>
           <div className="settings-cover__chips">
             <span className="status-pill status-pill--mocked">{avatarMeta.name}</span>
             <span className="status-pill status-pill--approved">{llmProfiles.length} 个 LLM 档</span>
             <span className="status-pill status-pill--spark">{imageProfiles.length} 个图片档</span>
+          </div>
+          <div className="settings-cover__metrics">
+            <div className="profile-metric">
+              <span className="memory-label">头像</span>
+              <strong>{avatarMeta.name}</strong>
+              <div className="signal-meter" aria-hidden="true">
+                <span style={{ width: '100%' }} />
+              </div>
+              <span className="micro-copy">{avatarMeta.usage}</span>
+            </div>
+            <div className="profile-metric">
+              <span className="memory-label">LLM</span>
+              <strong>{llmActiveProfile ? formatModelProfileSummary(llmActiveProfile) : '未激活'}</strong>
+              <div className="signal-meter" aria-hidden="true">
+                <span style={{ width: llmActiveProfile ? '100%' : '16%' }} />
+              </div>
+              <span className="micro-copy">{llmActiveProfile ? describeProfileHealth(llmActiveProfile) : '等待激活'}</span>
+            </div>
+            <div className="profile-metric">
+              <span className="memory-label">图片</span>
+              <strong>{imageActiveProfile ? formatModelProfileSummary(imageActiveProfile) : '未激活'}</strong>
+              <div className="signal-meter" aria-hidden="true">
+                <span style={{ width: imageActiveProfile ? '100%' : '16%' }} />
+              </div>
+              <span className="micro-copy">{imageActiveProfile ? describeProfileHealth(imageActiveProfile) : '等待激活'}</span>
+            </div>
+            <div className="profile-metric">
+              <span className="memory-label">变化</span>
+              <strong>{memory ? `${memory.counts.profileChanges}` : '0'}</strong>
+              <div className="signal-meter" aria-hidden="true">
+                <span style={{ width: `${Math.max(16, Math.min(100, (memory?.counts.profileChanges ?? 0) * 10))}%` }} />
+              </div>
+              <span className="micro-copy">{memory ? '画像历史' : '等待记忆'}</span>
+            </div>
           </div>
         </div>
       </section>
@@ -228,10 +262,12 @@ export default function SettingsTab(props: SettingsTabProps) {
 
         <div className="settings-avatar-preview">
           <PocketBuddyAvatar avatar={config.avatarId} mood="warm" size={72} />
-          <div>
+          <div className="settings-avatar-preview__copy">
             <strong>{config.agentName}</strong>
-            <p className="soft-text">{avatarMeta.name}</p>
-            <p className="micro-copy">{avatarMeta.usage}</p>
+            <div className="token-list settings-avatar-preview__chips">
+              <span className="token-chip">{avatarMeta.name}</span>
+              <span className="token-chip">{avatarMeta.usage}</span>
+            </div>
           </div>
         </div>
       </section>
@@ -249,7 +285,13 @@ export default function SettingsTab(props: SettingsTabProps) {
 
         <div className="settings-profile-summary">
           <div className="settings-profile-summary__item">
-            <span className="memory-label">视觉偏好</span>
+            <div className="candidate-head">
+              <span className="memory-label">视觉偏好</span>
+              <strong>{currentProfile.visualLikes.length}</strong>
+            </div>
+            <div className="signal-meter" aria-hidden="true">
+              <span style={{ width: `${profileFill(currentProfile.visualLikes.length)}%` }} />
+            </div>
             <div className="token-list">
               {(currentProfile.visualLikes.length > 0 ? currentProfile.visualLikes : ['暂无']).map((item) => (
                 <span key={item} className="token-chip">{item}</span>
@@ -257,7 +299,41 @@ export default function SettingsTab(props: SettingsTabProps) {
             </div>
           </div>
           <div className="settings-profile-summary__item">
-            <span className="memory-label">产品偏好</span>
+            <div className="candidate-head">
+              <span className="memory-label">视觉排斥</span>
+              <strong>{currentProfile.visualDislikes.length}</strong>
+            </div>
+            <div className="signal-meter" aria-hidden="true">
+              <span style={{ width: `${profileFill(currentProfile.visualDislikes.length)}%` }} />
+            </div>
+            <div className="token-list">
+              {(currentProfile.visualDislikes.length > 0 ? currentProfile.visualDislikes : ['暂无']).map((item) => (
+                <span key={item} className="token-chip">{item}</span>
+              ))}
+            </div>
+          </div>
+          <div className="settings-profile-summary__item">
+            <div className="candidate-head">
+              <span className="memory-label">语气偏好</span>
+              <strong>{currentProfile.tonePreference.trim() ? 1 : 0}</strong>
+            </div>
+            <div className="signal-meter" aria-hidden="true">
+              <span style={{ width: `${currentProfile.tonePreference.trim() ? 100 : 16}%` }} />
+            </div>
+            <div className="token-list">
+              {(currentProfile.tonePreference.trim() ? [currentProfile.tonePreference.trim()] : ['暂无']).map((item) => (
+                <span key={item} className="token-chip">{item}</span>
+              ))}
+            </div>
+          </div>
+          <div className="settings-profile-summary__item">
+            <div className="candidate-head">
+              <span className="memory-label">产品偏好</span>
+              <strong>{currentProfile.productPreferences.length}</strong>
+            </div>
+            <div className="signal-meter" aria-hidden="true">
+              <span style={{ width: `${profileFill(currentProfile.productPreferences.length)}%` }} />
+            </div>
             <div className="token-list">
               {(currentProfile.productPreferences.length > 0 ? currentProfile.productPreferences : ['暂无']).map((item) => (
                 <span key={item} className="token-chip">{item}</span>
@@ -265,7 +341,13 @@ export default function SettingsTab(props: SettingsTabProps) {
             </div>
           </div>
           <div className="settings-profile-summary__item">
-            <span className="memory-label">近期主题</span>
+            <div className="candidate-head">
+              <span className="memory-label">近期主题</span>
+              <strong>{currentProfile.recentThemes.length}</strong>
+            </div>
+            <div className="signal-meter" aria-hidden="true">
+              <span style={{ width: `${profileFill(currentProfile.recentThemes.length)}%` }} />
+            </div>
             <div className="token-list">
               {(currentProfile.recentThemes.length > 0 ? currentProfile.recentThemes : ['暂无']).map((item) => (
                 <span key={item} className="token-chip">{item}</span>
@@ -352,7 +434,6 @@ export default function SettingsTab(props: SettingsTabProps) {
         kind="llm"
         sectionLabel="LLM Profile Deck"
         title="LLM 配置档"
-        summary="默认激活真实模型，必要时再切换到别的档。"
         profiles={llmProfiles}
         activeProfile={llmActiveProfile}
         activeProfileId={config.activeLlmProfileId}
@@ -367,7 +448,6 @@ export default function SettingsTab(props: SettingsTabProps) {
         kind="image"
         sectionLabel="Image Profile Deck"
         title="图片配置档"
-        summary="这里直接连到真实生图端点，默认只保留一个最常用档。"
         profiles={imageProfiles}
         activeProfile={imageActiveProfile}
         activeProfileId={config.activeImageProfileId}
@@ -400,7 +480,6 @@ function ModelProfileSection(props: {
   kind: 'llm' | 'image';
   sectionLabel: string;
   title: string;
-  summary: string;
   profiles: ModelProfile[];
   activeProfile: ModelProfile | null;
   activeProfileId: string | null;
@@ -414,7 +493,6 @@ function ModelProfileSection(props: {
     kind,
     sectionLabel,
     title,
-    summary,
     profiles,
     activeProfile,
     activeProfileId,
@@ -550,7 +628,6 @@ function ModelProfileSection(props: {
         <div>
           <p className="section-label">{sectionLabel}</p>
           <h2>{title}</h2>
-          <p className="soft-text">{summary}</p>
         </div>
         <span className={`status-pill status-pill--${activeProfile ? 'approved' : 'mocked'}`}>
           {describeProfileHealth(activeProfile)}
@@ -591,18 +668,30 @@ function ModelProfileSection(props: {
         <div className="profile-metric">
           <span className="memory-label">当前档</span>
           <strong>{draft.name || defaultProfileName(kind)}</strong>
+          <div className="signal-meter" aria-hidden="true">
+            <span style={{ width: `${draft.name.trim() ? 100 : 16}%` }} />
+          </div>
         </div>
         <div className="profile-metric">
           <span className="memory-label">模型</span>
           <strong>{draft.model || '未配置'}</strong>
+          <div className="signal-meter" aria-hidden="true">
+            <span style={{ width: `${draft.model.trim() ? 100 : 16}%` }} />
+          </div>
         </div>
         <div className="profile-metric">
           <span className="memory-label">端点</span>
           <strong>{formatEndpointHost(draft.endpoint)}</strong>
+          <div className="signal-meter" aria-hidden="true">
+            <span style={{ width: `${draft.endpoint.trim() ? 100 : 16}%` }} />
+          </div>
         </div>
         <div className="profile-metric">
           <span className="memory-label">密钥</span>
           <strong>{maskApiKey(draft.apiKey)}</strong>
+          <div className="signal-meter" aria-hidden="true">
+            <span style={{ width: `${draft.apiKey.trim() ? 100 : 16}%` }} />
+          </div>
         </div>
       </div>
 
@@ -750,4 +839,9 @@ function parseProfileList(value: string): string[] {
         .filter(Boolean),
     ),
   );
+}
+
+function profileFill(count: number) {
+  if (count <= 0) return 16;
+  return Math.min(100, Math.max(24, count * 24));
 }
