@@ -1,0 +1,217 @@
+/* InfographicPanel —— 16:9 海报风计划信息图。莫兰迪手绘涂鸦风，参考 images/image.png。 */
+
+.infographic {
+  width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #f8fbff 0%, #f3f0ff 100%);
+  border: 1.5px solid var(--pb-line);
+  box-shadow: 0 8px 24px -12px rgba(37, 87, 218, 0.18);
+}
+
+.infographic__frame {
+  position: relative;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---------- Hero ---------- */
+.infographic__hero {
+  position: relative;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2a5bd4 0%, #5b4bd4 100%);
+  color: #fff;
+  overflow: hidden;
+}
+.infographic__hero-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 85% 20%, rgba(255, 255, 255, 0.18), transparent 40%),
+    radial-gradient(circle at 10% 90%, rgba(255, 255, 255, 0.12), transparent 35%);
+  pointer-events: none;
+}
+.infographic__kicker {
+  position: relative;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  opacity: 0.9;
+}
+.infographic__title {
+  position: relative;
+  margin: 4px 0 2px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.infographic__tagline {
+  position: relative;
+  margin: 0;
+  font-size: 12.5px;
+  opacity: 0.92;
+  line-height: 1.5;
+}
+.infographic__hero-meta {
+  position: relative;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.infographic__hero-meta span {
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.95;
+}
+.infographic__hero-meta em {
+  font-style: normal;
+  font-weight: 700;
+  margin-right: 5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- 通用 section label ---------- */
+.infographic__section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.infographic__section-label span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pb-ink);
+}
+.infographic__section-label span:first-child {
+  font-size: 14px;
+}
+
+/* ---------- 功能流程 ---------- */
+.infographic__flow-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.infographic__flow-step {
+  flex: 1 1 45%;
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: 11px;
+  background: #fff;
+  border: 1px dashed rgba(37, 87, 218, 0.3);
+  position: relative;
+}
+.infographic__flow-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--pb-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.infographic__flow-step strong {
+  display: block;
+  font-size: 12.5px;
+  color: var(--pb-ink);
+  line-height: 1.3;
+}
+.infographic__flow-step p {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--pb-muted);
+  line-height: 1.5;
+}
+
+/* ---------- 四象限 ---------- */
+.infographic__quad {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.infographic__quad-block {
+  padding: 10px 11px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+}
+.infographic__quad-block--purple { background: #f4f1ff; border-color: rgba(123, 104, 238, 0.22); }
+.infographic__quad-block--green { background: #f0faf4; border-color: rgba(46, 139, 87, 0.22); }
+.infographic__quad-block--amber { background: #fff9ec; border-color: rgba(214, 158, 46, 0.24); }
+.infographic__quad-block--red { background: #fff0f0; border-color: rgba(192, 57, 43, 0.22); }
+
+.infographic__quad-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+.infographic__quad-head span { font-size: 13px; }
+.infographic__quad-head strong {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--pb-ink);
+}
+.infographic__quad-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.infographic__quad-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.infographic__quad-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pb-ink);
+  line-height: 1.3;
+}
+.infographic__quad-detail {
+  font-size: 10.5px;
+  color: var(--pb-muted);
+  line-height: 1.45;
+}
+.infographic__quad-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pb-muted);
+  text-align: center;
+}
+
+/* ---------- Footer ---------- */
+.infographic__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px 2px;
+  border-top: 1px dashed var(--pb-line);
+  font-size: 10.5px;
+  color: var(--pb-muted);
+  line-height: 1.4;
+}
+.infographic__footer-meta {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--pb-primary);
+}
+
+@media (max-width: 360px) {
+  .infographic__flow-step { flex: 1 1 100%; }
+  .infographic__quad { grid-template-columns: 1fr; }
+}

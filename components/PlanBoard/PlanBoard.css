@@ -1,0 +1,194 @@
+/* PlanBoard —— 精美 HTML 计划面板。莫兰迪蓝白模块化卡片，参考 images/image.png 布局。 */
+
+.plan-board {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px 8px;
+}
+
+/* ---------- 标题卡 ---------- */
+.plan-board__hero {
+  position: relative;
+  padding: 16px 18px;
+  border-radius: var(--pb-radius);
+  background: linear-gradient(135deg, var(--pb-primary-soft) 0%, #eef3ff 60%, #f6f0ff 100%);
+  border: 1px solid var(--pb-line);
+  overflow: hidden;
+}
+.plan-board__hero::after {
+  content: '';
+  position: absolute;
+  right: -20px;
+  top: -20px;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(37, 87, 218, 0.12), transparent 70%);
+  pointer-events: none;
+}
+.plan-board__hero-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.plan-board__kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pb-primary);
+}
+.plan-board__intent {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 87, 218, 0.12);
+  color: var(--pb-primary);
+  font-weight: 600;
+}
+.plan-board__name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--pb-ink);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.plan-board__tagline {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--pb-muted);
+  line-height: 1.5;
+}
+
+/* ---------- 定位四元组 ---------- */
+.plan-board__meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.plan-board__meta-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--pb-panel);
+  border: 1px solid var(--pb-line);
+}
+.plan-board__meta-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--pb-primary);
+  text-transform: uppercase;
+}
+.plan-board__meta-value {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--pb-ink);
+  line-height: 1.5;
+}
+
+/* ---------- 功能 chip 行 ---------- */
+.plan-board__features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.plan-board__feature-chip {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--pb-primary-soft);
+  color: var(--pb-primary);
+  font-weight: 600;
+  border: 1px solid rgba(37, 87, 218, 0.18);
+}
+
+/* ---------- 模块 section ---------- */
+.plan-board__section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.plan-board__section-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+.plan-board__section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pb-ink);
+  flex: 1;
+}
+.plan-board__section-count {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--pb-muted);
+  background: var(--pb-bg);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--pb-line);
+}
+
+.plan-board__module-list {
+  display: grid;
+  gap: 8px;
+}
+.plan-board__module-list--grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.plan-board__module-list--stack,
+.plan-board__module-list--timeline,
+.plan-board__module-list--compare,
+.plan-board__module-list--risk {
+  grid-template-columns: 1fr;
+}
+
+.plan-board__module {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--pb-line);
+  background: var(--pb-panel);
+}
+.plan-board__module--grid { background: #f3f7ff; border-color: rgba(37, 87, 218, 0.16); }
+.plan-board__module--stack { background: #f4f1ff; border-color: rgba(123, 104, 238, 0.18); border-left: 3px solid #7b68ee; }
+.plan-board__module--timeline { background: #f0faf4; border-color: rgba(46, 139, 87, 0.18); border-left: 3px solid #2e8b57; }
+.plan-board__module--compare { background: #fff9ec; border-color: rgba(214, 158, 46, 0.2); }
+.plan-board__module--risk { background: #fff0f0; border-color: rgba(192, 57, 43, 0.18); border-left: 3px solid #c0392b; }
+
+.plan-board__module-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.plan-board__module-index {
+  font-size: 10px;
+  font-weight: 700;
+  color: #2e8b57;
+  background: rgba(46, 139, 87, 0.14);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+.plan-board__module-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--pb-ink);
+  line-height: 1.35;
+}
+.plan-board__module-detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--pb-muted);
+  line-height: 1.55;
+}
+
+/* 窄屏：定位四元组和功能网格降为单列 */
+@media (max-width: 380px) {
+  .plan-board__meta-grid,
+  .plan-board__module-list--grid {
+    grid-template-columns: 1fr;
+  }
+}

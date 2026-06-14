@@ -1,10 +1,14 @@
 /**
- * StructureAgent —— 发明链路第 4 阶段：信息编排，生成产品概念 + 图片 prompt + MVP 计划。
+ * StructureAgent —— 发明链路第 4 阶段：信息编排，生成产品概念 + 计划面板 + 图片 prompt + MVP。
  * 平移自 processIdeaSubmission 的中段（runIdeaLens + runProductCamera + runShrinkLight）。
- * 调 LLM（三个 gadget），降级策略与原 orchestrator 一致（mock→模板/失败→模板）。
- * ctx.hint = voice + tone + harness 合并后的 system prompt 片段，注入三个 gadget。
+ *
+ * 产品重设计：runIdeaLens 现在产出信息密集型 PlanBoardData（含 5 类模块），
+ * 本 agent 把它放进 StructureOutput.planBoard，Director 再写入 artifact.planBoard，
+ * 供前端 PlanBoard 组件与 InfographicPanel 渲染。
+ *
+ * 降级策略与原 orchestrator 一致（mock→模板/失败→模板）。ctx.hint 注入三个 gadget。
  */
-import type { AgentIntent, ProductConcept, UserProfile } from '@/lib/agent/types';
+import type { AgentIntent, PlanBoardData, ProductConcept, UserProfile } from '@/lib/agent/types';
 import type { AgentRunResult, SubAgent } from '../types';
 import { runIdeaLens, runProductCamera, runShrinkLight } from '@/lib/agent/gadgets';
 import { createGraphNode } from '@/lib/graph/types';
@@ -16,7 +20,10 @@ export interface StructureInput {
   contextLine: string;
 }
 export interface StructureOutput {
+  /** 兼容字段（ProductConcept 子集），旧消费方仍可用 */
   concept: ProductConcept;
+  /** 信息密集型计划面板数据（PlanBoard/InfographicPanel 渲染源） */
+  planBoard: PlanBoardData;
   imagePrompt: string;
   mvpPlan: string[];
   nextTasks: string[];
@@ -27,30 +34,36 @@ export const structureAgent: SubAgent<StructureInput, StructureOutput> = {
   stage: 'outline',
   needsLlm: true,
   async run(input, ctx): Promise<AgentRunResult<StructureOutput>> {
-    ctx.emit({ agentId: 'structure', status: 'running', stage: 'outline', message: 'Structuring…生成产品概念与 MVP' });
-    const concept = await runIdeaLens(
+    ctx.emit({ agentId: 'structure', status: 'running', stage: 'outline', message: 'Structuring…生成计划面板与 MVP' });
+    const planBoard = await runIdeaLens(
       { idea: input.idea, intent: input.intent, profile: input.profile, contextLine: input.contextLine },
       ctx.client,
       ctx.hint,
     );
-    const imagePrompt = await runProductCamera(concept, ctx.client, ctx.hint);
-    const shrink = await runShrinkLight(concept, ctx.client, ctx.hint);
-    const output: StructureOutput = { concept, imagePrompt, mvpPlan: shrink.mvpPlan, nextTasks: shrink.nextTasks };
+    const imagePrompt = await runProductCamera(planBoard, ctx.client, ctx.hint);
+    const shrink = await runShrinkLight(planBoard, ctx.client, ctx.hint);
+    const output: StructureOutput = {
+      concept: planBoard,
+      planBoard,
+      imagePrompt,
+      mvpPlan: shrink.mvpPlan,
+      nextTasks: shrink.nextTasks,
+    };
     const stageNode = createGraphNode({
       type: 'structure',
-      title: concept.name,
-      summary: concept.tagline,
+      title: planBoard.name,
+      summary: planBoard.tagline,
       payload: output,
     });
-    ctx.emit({ agentId: 'structure', status: 'done', stage: 'outline', message: `计划图就绪：${concept.name}`, partial: stageNode });
+    ctx.emit({ agentId: 'structure', status: 'done', stage: 'outline', message: `计划面板就绪：${planBoard.name}`, partial: stageNode });
     return {
       output,
       stageNode,
       experience: {
         outcome: 'success',
         agentId: 'structure',
-        summary: `生成概念 ${concept.name}`,
-        lesson: ctx.client.kind === 'mock' ? 'mock 模板产出（行为等价基线）' : '真实 LLM 产出',
+        summary: `生成计划 ${planBoard.name}（${planBoard.modules.length} 模块）`,
+        lesson: ctx.client.kind === 'mock' ? 'mock 模板产出（含 5 类模块）' : '真实 LLM 产出信息密集计划',
       },
     };
   },

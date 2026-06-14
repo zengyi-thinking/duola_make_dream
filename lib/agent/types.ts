@@ -145,11 +145,40 @@ export interface ProductConcept {
   visualDirection: string[];
 }
 
+/**
+ * 计划面板模块 —— 一个有标题+详述的结构化单元。
+ * 用于把单薄的 ProductConcept 扩展为信息密集型的「精美 HTML 计划面板」与「16:9 信息图」。
+ */
+export interface PlanBoardModule {
+  title: string;
+  detail: string;
+}
+
+/**
+ * 计划面板数据 —— IdeaLens 产出的信息密集型计划，是 PlanBoard/InfographicPanel 的渲染源。
+ * 在 ProductConcept 基础上扩展五类模块（功能/技术路线/里程碑/竞品/风险），
+ * 让"开一家拉面店"也能输出选址/菜单/供应链/营销/财务等丰富内容，而非单薄的 8 字段。
+ */
+export interface PlanBoardData extends ProductConcept {
+  /** 功能模块（4-6 个，每个含标题+详述） */
+  modules: PlanBoardModule[];
+  /** 技术路线分层（如 前端 / Agent / 记忆层，或 选址 / 运营 / 供应链） */
+  techStack: PlanBoardModule[];
+  /** 实施里程碑（M1/M2/M3 或阶段目标） */
+  milestones: PlanBoardModule[];
+  /** 竞品对比（vs 现状 / vs 同类） */
+  competitors: PlanBoardModule[];
+  /** 风险与对策 */
+  risks: PlanBoardModule[];
+}
+
 export interface ProductArtifact {
   id: string;
   ideaId: string;
   intent: AgentIntent;
   concept: ProductConcept;
+  /** 信息密集型计划面板数据（IdeaLens 扩展产出）；旧数据可能缺失，渲染时降级到 concept */
+  planBoard?: PlanBoardData;
   imagePrompt: string;
   mvpPlan: string[];
   nextTasks: string[];
@@ -435,6 +464,8 @@ export interface ExperienceSeed {
 export interface AgentRunResult<O> {
   output: O;
   stageNode?: import('@/lib/graph/types').GraphNode;
+  /** 该阶段产出的多个节点（如 researchAgent 把每条召回/调研各建一个 research 节点），Director 合并回主图 */
+  stageNodes?: import('@/lib/graph/types').GraphNode[];
   /** 该阶段产出的关系边（连到已有节点或本阶段 stageNode），Director 合并回主图 */
   stageEdges?: import('@/lib/graph/types').GraphEdge[];
   experience?: ExperienceSeed;

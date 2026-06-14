@@ -30,6 +30,53 @@ const NODE_COLORS: Record<GraphNodeType, number> = {
   feedback: 0xe74c3c,
 };
 
+/** 节点类型 → emoji 图标（节点 sprite 上显示） */
+const NODE_EMOJI: Partial<Record<GraphNodeType, string>> = {
+  idea: '💡', plan: '🧭', research: '🔍', reflect: '🪞', structure: '🧩',
+  note: '📝', image: '🖼️', mindmap: '🗂️', memory: '🧠', success: '✅',
+  failure: '⚠️', tool: '🔧', skill: '⚡', profile: '👤', feedback: '💬',
+};
+
+/**
+ * 节点 sprite 贴图：圆角矩形（类型色）+ emoji + 标题前 6 字。
+ * 替代旧的无标签小圆点，让图谱节点可读（产品重设计要求"以图展示，节点带内容"）。
+ */
+function makeNodeTexture(node: GraphNode): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 88;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const colorHex = '#' + (NODE_COLORS[node.type] ?? 0x2557da).toString(16).padStart(6, '0');
+    const r = 22;
+    ctx.beginPath();
+    ctx.moveTo(r, 6);
+    ctx.arcTo(250, 6, 250, 82, r);
+    ctx.arcTo(250, 82, 6, 82, r);
+    ctx.arcTo(6, 82, 6, 6, r);
+    ctx.arcTo(6, 6, 250, 6, r);
+    ctx.closePath();
+    ctx.fillStyle = colorHex;
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'middle';
+    ctx.font = '30px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(NODE_EMOJI[node.type] ?? '●', 16, 46);
+    ctx.font = 'bold 28px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(truncateLabel(node.title), 58, 46);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+
+function truncateLabel(title: string, max = 6): string {
+  const t = (title ?? '').trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
 interface SimNode extends GraphNode {
   x: number;
   y: number;
@@ -89,8 +136,8 @@ export default function GraphCanvas({ graph, reducedMotion, onDeleteNode, emptyH
       const angle = (i / Math.max(1, graph.nodes.length)) * Math.PI * 2;
       return {
         ...n,
-        x: width / 2 + Math.cos(angle) * 80,
-        y: height / 2 + Math.sin(angle) * 80,
+        x: width / 2 + Math.cos(angle) * 110,
+        y: height / 2 + Math.sin(angle) * 110,
         vx: 0,
         vy: 0,
       };
@@ -101,21 +148,25 @@ export default function GraphCanvas({ graph, reducedMotion, onDeleteNode, emptyH
       .map((e) => ({ source: e.source, target: e.target, id: e.id }));
 
     const simulation = forceSimulation<SimNode>(nodes)
-      .force('charge', forceManyBody().strength(reducedMotion ? -120 : -220))
-      .force('link', forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(80).strength(0.5))
+      .force('charge', forceManyBody().strength(reducedMotion ? -160 : -300))
+      .force('link', forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(95).strength(0.5))
       .force('center', forceCenter(width / 2, height / 2))
-      .force('collide', forceCollide(26))
+      .force('collide', forceCollide(44))
       .alphaDecay(0.04);
     if (reducedMotion) simulation.alpha(0.3);
 
-    // ---- node meshes ----
-    const nodeGeometry = new THREE.CircleGeometry(11, 28);
-    const meshes = new Map<string, THREE.Mesh>();
+    // ---- node sprites（带标签 + 类型色 emoji）----
+    const sprites = new Map<string, THREE.Sprite>();
+    const nodeTextures: THREE.Texture[] = [];
     nodes.forEach((n) => {
-      const material = new THREE.MeshBasicMaterial({ color: NODE_COLORS[n.type] ?? 0x2557da });
-      const mesh = new THREE.Mesh(nodeGeometry, material);
-      scene.add(mesh);
-      meshes.set(n.id, mesh);
+      const texture = makeNodeTexture(n);
+      nodeTextures.push(texture);
+      const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(72, 25, 1);
+      sprite.renderOrder = 2;
+      scene.add(sprite);
+      sprites.set(n.id, sprite);
     });
 
     // ---- edges ----
@@ -128,8 +179,8 @@ export default function GraphCanvas({ graph, reducedMotion, onDeleteNode, emptyH
 
     const syncPositions = () => {
       nodes.forEach((n) => {
-        const mesh = meshes.get(n.id);
-        if (mesh) mesh.position.set(n.x, n.y, 0);
+        const sprite = sprites.get(n.id);
+        if (sprite) sprite.position.set(n.x, n.y, 0);
       });
       links.forEach((link, i) => {
         const s = typeof link.source === 'string' ? nodeMap.get(link.source) : (link.source as SimNode);
@@ -171,12 +222,17 @@ export default function GraphCanvas({ graph, reducedMotion, onDeleteNode, emptyH
     const pickNode = (clientX: number, clientY: number): SimNode | null => {
       const { x, y } = toWorld(clientX, clientY);
       let closest: SimNode | null = null;
-      let minDist = 16;
+      let minDist = Infinity;
       nodes.forEach((n) => {
-        const d = Math.hypot(n.x - x, n.y - y);
-        if (d < minDist) {
-          minDist = d;
-          closest = n;
+        // AABB 拾取：节点 sprite 宽 72 高 25，半宽 36 半高 12.5，加容差
+        const dx = Math.abs(n.x - x);
+        const dy = Math.abs(n.y - y);
+        if (dx <= 40 && dy <= 16) {
+          const d = Math.hypot(dx, dy);
+          if (d < minDist) {
+            minDist = d;
+            closest = n;
+          }
         }
       });
       return closest;
@@ -254,8 +310,8 @@ export default function GraphCanvas({ graph, reducedMotion, onDeleteNode, emptyH
       renderer.domElement.removeEventListener('click', onPointerClick);
       renderer.domElement.removeEventListener('wheel', onWheel);
       resizeObserver.disconnect();
-      meshes.forEach((m) => (m.material as THREE.Material).dispose());
-      nodeGeometry.dispose();
+      sprites.forEach((s) => (s.material as THREE.SpriteMaterial).dispose());
+      nodeTextures.forEach((t) => t.dispose());
       edgeGeometry.dispose();
       edgeMaterial.dispose();
       renderer.dispose();

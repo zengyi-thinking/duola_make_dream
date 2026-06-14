@@ -277,10 +277,13 @@ const invent = await swEval(`
               payload: { text: '一个能自动整理浏览器标签页的小工具', source: 'popup' },
             });
             const r = resp?.payload?.result;
+            const researchNodes = r?.planGraph?.nodes?.filter((n) => n.type === 'research')?.length ?? 0;
             return {
               ok: resp?.success ?? false,
               conceptName: r?.artifact?.concept?.name,
               planNodes: r?.planGraph?.nodes?.length ?? 0,
+              planBoardModules: r?.artifact?.planBoard?.modules?.length ?? 0,
+              researchNodes,
               error: resp?.error,
             };
           } catch (e) { return { ok: false, error: String(e) }; }
@@ -291,10 +294,10 @@ const invent = await swEval(`
   })()
 `, 90000);
 console.log(`   发明结果: ${JSON.stringify(invent)}`);
-record('pocket.agent.invent 真实 LLM 加工',
-  invent.ok && invent.planNodes > 0 && !!invent.conceptName,
+record('pocket.agent.invent 真实 LLM 加工 + planBoard + 调研节点',
+  invent.ok && invent.planNodes > 0 && !!invent.conceptName && invent.planBoardModules > 0,
   invent.conceptName
-    ? `concept="${invent.conceptName}" (${invent.planNodes} 节点)`
+    ? `concept="${invent.conceptName}" | ${invent.planNodes} 节点(${invent.researchNodes} 调研) | planBoard ${invent.planBoardModules} 模块`
     : (invent.error ?? '失败'));
 
 // ── Test 3: page.extract-current 全链路 ───────────────────

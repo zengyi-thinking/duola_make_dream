@@ -2,6 +2,7 @@ import type { GadgetMeta } from './types';
 
 export { runAnywhereDoor } from './anywhere-door';
 export { runIdeaLens } from './idea-lens';
+export { runResearchLens } from './research-lens';
 export { runMemoryBread } from './memory-bread';
 export { runProductCamera } from './product-camera';
 export { runShrinkLight } from './shrink-light';
@@ -19,6 +20,7 @@ export const gadgetRegistry: GadgetMeta[] = [
   { id: 'memory-bread', name: '记忆面包', describe: '从用户画像提炼记忆与偏好提示', needsLlm: false },
   { id: 'anywhere-door', name: '任意门', describe: '拼接选中的网页片段作为上下文', needsLlm: false },
   { id: 'time-notebook', name: '时光笔记本', describe: '把页面分析转成归档笔记草稿', needsLlm: false },
+  { id: 'research-lens', name: '调研放大镜', describe: '基于内置知识做调研发现（不联网，兜底关联图）', needsLlm: true },
 ];
 
 export function listGadgets(): GadgetMeta[] {

@@ -6,11 +6,12 @@ import PocketBurst from '@/components/PocketBurst/PocketBurst';
 import InkRipple, { type InkRippleHandle } from '@/components/InkRipple/InkRipple';
 import GraphCanvas from '@/components/GraphCanvas/GraphCanvas';
 import ProcessingStage from '@/components/ProcessingStage/ProcessingStage';
+import PlanBoard from '@/components/PlanBoard/PlanBoard';
+import InfographicPanel from '@/components/InfographicPanel/InfographicPanel';
 import type { FeedbackAction, ProductArtifact } from '@/lib/agent/types';
 import type { GraphView } from '@/lib/graph/types';
 import {
   createFeedbackMessage,
-  createPocketAgentImageMessage,
   createPocketAgentInventMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
@@ -18,12 +19,8 @@ import { useToast } from '../context/ToastContext';
 import { useBusy } from '../context/BusyContext';
 import { useMemory } from '../context/MemoryContext';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { useNavigation } from '../context/NavigationContext';
 import { useRuntimeConfig } from '../context/RuntimeConfigContext';
-import { ResultCard, EmptyCard } from '../components/ResultCard';
-import { InfoBlock } from '../components/InfoBlock';
-import { ListBlock } from '../components/ListBlock';
-import PipelineFlow from '../components/PipelineFlow';
+import { EmptyCard } from '../components/ResultCard';
 import { SelectionGroup, toggleSelection } from '../components/ContextSelector';
 
 const FEEDBACK_OPTIONS: Array<{ label: string; action: FeedbackAction }> = [
@@ -35,20 +32,18 @@ const FEEDBACK_OPTIONS: Array<{ label: string; action: FeedbackAction }> = [
 ];
 
 /**
- * 发明页（推倒重建自 CreativeTab）。
+ * 发明页（产品重设计全链路版）。
  *
- * 核心变化（对照计划第三节）：
- * - 调度改走 PocketAgentDirector：idea → pocket.agent.invent（plan→research→reflect→structure）→ 计划图 GraphCanvas
- * - 召回延迟到计划图后：调研召回由 Director 的 ResearchAgent 内部完成，结果并入计划图节点，前端不再立即召回
- * - 计划图确认后 → pocket.agent.image 生图 → 图片节点并入全局记忆图
- * - 状态全部走 Context，无 props drilling
+ * 三大功能：
+ * 1. 输入想法 → 加工动画（规划/调研/反思/编排/审查 阶段状态机）→ 精美 HTML 计划面板（PlanBoard）
+ * 2. 计划后面以图展示关联笔记 + LLM 调研（GraphCanvas，节点带标签，地位相同）
+ * 3. 确认后点"生成计划图"→ HTML 信息图（InfographicPanel）原地展示（不跳走，不调文生图）
  */
 export default function InventPage() {
   const { setStatusText, setErrorText, setNoticeText } = useToast();
   const { busyAction, setBusyAction } = useBusy();
   const { memory, setMemory } = useMemory();
-  const { setArtifactHistory, setImageHistory } = useWorkspace();
-  const { setPage } = useNavigation();
+  const { setArtifactHistory } = useWorkspace();
   const { config } = useRuntimeConfig();
 
   const [ideaText, setIdeaText] = useState('');
@@ -56,6 +51,7 @@ export default function InventPage() {
   const [selectedArchiveNoteIds, setSelectedArchiveNoteIds] = useState<string[]>([]);
   const [artifact, setArtifact] = useState<ProductArtifact | null>(null);
   const [planGraph, setPlanGraph] = useState<GraphView | null>(null);
+  const [showInfographic, setShowInfographic] = useState(false);
   const [lastFeedback, setLastFeedback] = useState('');
 
   const [burstActive, setBurstActive] = useState(false);
@@ -75,7 +71,8 @@ export default function InventPage() {
     if (!ideaText.trim()) return;
     setBusyAction('invent');
     setErrorText(''); setNoticeText(''); setLastFeedback('');
-    setStatusText('正在生成计划图…');
+    setShowInfographic(false);
+    setStatusText('正在生成计划…');
     setBurstActive(false);
     requestAnimationFrame(() => setBurstActive(true));
     window.setTimeout(() => setBurstActive(false), 800);
@@ -108,27 +105,20 @@ export default function InventPage() {
     }
   }
 
+  /**
+   * 生成计划图：不再调文生图（中文渲染会乱码），改为前端用 planBoard 渲染 HTML 信息图原地展示。
+   * 短暂播放 image 模式动画后展示 InfographicPanel。
+   */
   async function handleImage() {
-    if (!planGraph) return;
+    if (!artifact?.planBoard) return;
     setBusyAction('image');
     setErrorText('');
-    setStatusText('正在生成图片…');
-    try {
-      const response = await sendRuntimeMessage(createPocketAgentImageMessage(planGraph));
-      if (!response.success || !response.payload.result) {
-        setErrorText(response.error ?? '图片生成失败。');
-        return;
-      }
-      const { imageRecord } = response.payload.result;
-      setMemory(response.payload.memorySummary);
-      setImageHistory((cur) => [imageRecord, ...cur.filter((i) => i.id !== imageRecord.id)]);
-      setNoticeText('图片已生成，已并入记忆图。');
-      setPage('memory');
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : '图片生成失败。');
-    } finally {
-      setBusyAction('');
-    }
+    setStatusText('正在生成计划图…');
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 1100));
+    setShowInfographic(true);
+    setNoticeText('计划信息图已生成。');
+    setStatusText('计划信息图已生成，可继续调整或开始下一个想法。');
+    setBusyAction('');
   }
 
   async function handleFeedback(action: FeedbackAction) {
@@ -156,6 +146,7 @@ export default function InventPage() {
   }
 
   const inventing = busyAction === 'invent';
+  const planBoard = artifact?.planBoard;
 
   return (
     <div className="tab-panel">
@@ -173,7 +164,7 @@ export default function InventPage() {
             className="idea-textarea"
             value={ideaText}
             onChange={(e) => setIdeaText(e.target.value)}
-            placeholder="输入一个想法，比如：做一个能自动整理阅读笔记的小工具"
+            placeholder="输入一个想法，比如：我想要开一家拉面店"
           />
           <InkRipple ref={inkRef} />
         </div>
@@ -204,61 +195,35 @@ export default function InventPage() {
             onClick={handleInvent}
             disabled={Boolean(busyAction) || !ideaText.trim()}
           >
-            {inventing ? '生成中…' : '生成计划图'}
+            {inventing ? '生成中…' : '生成计划'}
           </LineButton>
           <PocketBurst active={burstActive} />
         </div>
       </section>
 
-      <ProcessingStage active={inventing} avatar={config?.avatarId} hint="正在加工：规划 → 调研 → 反思 → 编排" />
+      <ProcessingStage
+        active={inventing}
+        avatar={config?.avatarId}
+        mode="invent"
+        hint="正在加工：规划 → 调研 → 反思 → 编排 → 审查"
+      />
 
-      {planGraph ? (
-        <motion.section
-          className="panel-card"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div className="panel-head">
-            <div>
-              <p className="section-label">Plan Graph</p>
-              <h2>计划图</h2>
-            </div>
-            <span className="timeline-badge timeline-badge--pipeline">{planGraph.nodes.length} 节点</span>
-          </div>
-          <GraphCanvas graph={planGraph} emptyHint="计划图还没长出节点。" />
-        </motion.section>
-      ) : null}
-
-      {artifact ? (
+      {planBoard && artifact ? (
         <StaggerStack triggerKey={artifact.id}>
-          <ResultCard title="结果板">
-            <p className="result-tagline">{artifact.concept.name}</p>
-            <p className="soft-text">{artifact.concept.tagline}</p>
-            <p className="soft-text">{artifact.concept.positioning}</p>
+          <PlanBoard board={planBoard} intentLabel={labelIntent(artifact.intent)} />
 
-            <PipelineFlow trace={artifact.pipelineTrace} />
-
-            <div className="token-list">
-              {artifact.concept.features.map((f) => <span key={f} className="token-chip">{f}</span>)}
-            </div>
-
-            <div className="detail-grid concept-board">
-              <InfoBlock label="方向" value={artifact.intent} />
-              <InfoBlock label="工具" value={artifact.appliedGadgets.length > 0 ? artifact.appliedGadgets.join(' / ') : '无'} />
-              <InfoBlock label="下一步" value={artifact.nextTasks.slice(0, 2).join(' / ') || '暂无'} />
-              <div className="concept-board__list">
-                <span className="memory-label">MVP 路径</span>
-                <ListBlock items={artifact.mvpPlan} ordered />
-              </div>
-            </div>
-
+          <section className="panel-card plan-actions">
             <div className="inline-actions">
-              <LineButton variant="ghost" onClick={() => handleCopy(artifact.imagePrompt, 'Prompt 已复制')}>复制 Prompt</LineButton>
-              <LineButton variant="secondary" onClick={handleImage} disabled={Boolean(busyAction)}>
-                确认并生图
+              <LineButton variant="primary" onClick={handleImage} disabled={Boolean(busyAction)}>
+                {busyAction === 'image' ? '生成中…' : '生成计划图'}
+              </LineButton>
+              <LineButton
+                variant="ghost"
+                onClick={() => handleCopy(artifact.imagePrompt, 'Prompt 已复制')}
+              >
+                复制 Prompt
               </LineButton>
             </div>
-
             <div className="button-grid">
               {FEEDBACK_OPTIONS.map((item) => (
                 <LineButton
@@ -271,13 +236,60 @@ export default function InventPage() {
                 </LineButton>
               ))}
             </div>
-
             {lastFeedback ? <p className="soft-text">{lastFeedback}</p> : null}
-          </ResultCard>
+          </section>
         </StaggerStack>
       ) : (
-        !inventing ? <EmptyCard avatar title="输入想法开始发明" body="输入一句话，PocketBuddy 会经规划→调研→反思→编排，给你一张计划图。" /> : null
+        !inventing ? <EmptyCard avatar title="输入想法开始发明" body="输入一句话，PocketBuddy 会经规划→调研→反思→编排，给你一份信息密集的计划面板。" /> : null
       )}
+
+      {planGraph ? (
+        <motion.section
+          className="panel-card"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="panel-head">
+            <div>
+              <p className="section-label">Related Graph</p>
+              <h2>关联图（笔记 + 调研）</h2>
+            </div>
+            <span className="timeline-badge timeline-badge--pipeline">{planGraph.nodes.length} 节点</span>
+          </div>
+          <GraphCanvas graph={planGraph} emptyHint="关联图还没长出节点。" />
+          <p className="soft-text" style={{ marginTop: 8 }}>
+            节点含你的笔记（召回）与 Agent 内置调研，地位相同。点开节点查看内容。
+          </p>
+        </motion.section>
+      ) : null}
+
+      <ProcessingStage active={busyAction === 'image'} avatar={config?.avatarId} mode="image" />
+
+      {showInfographic && planBoard ? (
+        <motion.section
+          className="panel-card"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="panel-head">
+            <div>
+              <p className="section-label">Plan Infographic</p>
+              <h2>计划信息图（16:9）</h2>
+            </div>
+          </div>
+          <InfographicPanel board={planBoard} createdAt={artifact?.createdAt} />
+        </motion.section>
+      ) : null}
     </div>
   );
+}
+
+function labelIntent(intent: ProductArtifact['intent']): string {
+  switch (intent) {
+    case 'browser-extension': return '浏览器插件';
+    case 'creator-tool': return '创作工具';
+    case 'learning-tool': return '学习工具';
+    case 'playful-tool': return '陪伴型小工具';
+    default: return '效率工具';
+  }
 }

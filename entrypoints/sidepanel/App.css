@@ -384,6 +384,7 @@ button, textarea, input, select { font: inherit; }
 /* ===== Buttons ===== */
 .button-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.plan-actions { display: flex; flex-direction: column; gap: 10px; }
 
 /* ===== Selection ===== */
 .selection-panel { margin-top: 8px; }

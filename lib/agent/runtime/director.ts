@@ -128,6 +128,7 @@ function collectResult<O>(
   experiences: ExperienceSeed[],
 ): void {
   if (result.stageNode) nodes.push(result.stageNode);
+  if (result.stageNodes) nodes.push(...result.stageNodes);
   if (result.stageEdges) edges.push(...result.stageEdges);
   if (result.experience) experiences.push(result.experience);
 }
@@ -164,6 +165,7 @@ export class PocketAgentDirector {
     const researchResult = await researchAgent.run(
       {
         query: input.text,
+        intent: planResult.output.intent,
         memory: await getMemorySummary(),
         artifacts: await getArtifactHistory(),
         images: await getGeneratedImages(),
@@ -181,19 +183,20 @@ export class PocketAgentDirector {
     );
     collectResult(structureResult, stageNodes, stageEdges, experiences);
 
-    // 连边：structure 派生自 plan，关联 research / reflect
+    // 连边：structure 派生自 plan，关联 research（多节点）/ reflect
     const planId = planResult.stageNode?.id;
     const structureId = structureResult.stageNode?.id;
     if (planId && structureId) stageEdges.push(createGraphEdge(structureId, planId, 'derives'));
-    if (researchResult.stageNode?.id && structureId) {
-      stageEdges.push(createGraphEdge(structureId, researchResult.stageNode.id, 'relates'));
+    const researchNodeIds = researchResult.stageNodes?.map((n) => n.id) ?? [];
+    for (const rid of researchNodeIds) {
+      if (structureId) stageEdges.push(createGraphEdge(structureId, rid, 'relates'));
     }
     if (reflectResult.stageNode?.id && structureId) {
       stageEdges.push(createGraphEdge(structureId, reflectResult.stageNode.id, 'relates'));
     }
 
     // 持久化（对应 processIdeaSubmission 的 save 段）
-    const { concept, imagePrompt, mvpPlan, nextTasks } = structureResult.output;
+    const { concept, planBoard, imagePrompt, mvpPlan, nextTasks } = structureResult.output;
     const idea: IdeaRecord = {
       id: crypto.randomUUID(),
       rawInput: input.text,
@@ -210,7 +213,7 @@ export class PocketAgentDirector {
       sourceId: idea.id,
       stages: [
         createPipelineStage('plan', '规划', '锁定输入与目标', `${selectedContexts.length} 个片段 · ${selectedNotes.length} 条笔记`),
-        createPipelineStage('research', '调研', '召回关联记忆', `${researchResult.output.recallItems.length} 条`),
+        createPipelineStage('research', '调研', '召回 + 内置调研', `${researchResult.output.recallItems.length} 召回 · ${researchResult.output.findings.length} 调研`),
         createPipelineStage('reflect', '反思', '结合自学习', reflectResult.output.activePatchCount > 0 ? `${reflectResult.output.activePatchCount} 条补丁` : '无补丁'),
         createPipelineStage('outline', '信息编排', '生成概念与 MVP', concept.features.slice(0, 2).join(' / ') || concept.name),
         createPipelineStage('generate', '生成', '待用户确认后生图', concept.name),
@@ -221,6 +224,7 @@ export class PocketAgentDirector {
       ideaId: idea.id,
       intent: planResult.output.intent,
       concept,
+      planBoard,
       imagePrompt,
       mvpPlan,
       nextTasks,
