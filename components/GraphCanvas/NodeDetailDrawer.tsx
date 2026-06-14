@@ -93,16 +93,35 @@ function ImageNodeContent({ url, prompt }: { url: string; prompt: string }) {
 
 function NoteNodeContent({ payload }: { payload: Record<string, unknown> }) {
   // 笔记卡片（从 ArchiveNote 或 PageAnalysisResult.noteCard 提取）
-  const summary = (typeof payload.noteCard === 'object' && payload.noteCard && typeof (payload.noteCard as Record<string, unknown>).summary === 'string')
-    ? ((payload.noteCard as Record<string, unknown>).summary as string)
+  const noteCard = (typeof payload.noteCard === 'object' && payload.noteCard) ? (payload.noteCard as Record<string, unknown>) : null;
+  const summary = typeof noteCard?.summary === 'string'
+    ? noteCard.summary
     : (typeof payload.summary === 'string' ? payload.summary : '');
-  const bullets = (typeof payload.noteCard === 'object' && payload.noteCard && Array.isArray((payload.noteCard as Record<string, unknown>).bullets))
-    ? ((payload.noteCard as Record<string, unknown>).bullets as unknown[]).map(String)
+  const bullets = Array.isArray(noteCard?.bullets)
+    ? (noteCard!.bullets as unknown[]).map(String)
     : (Array.isArray(payload.bullets) ? (payload.bullets as unknown[]).map(String) : []);
   const tags = Array.isArray(payload.tags) ? (payload.tags as unknown[]).map(String) : [];
+  const origin = typeof payload.origin === 'string' ? payload.origin : '';
+  const sourceTitle = typeof payload.sourceTitle === 'string' ? payload.sourceTitle : '';
+  const sourceType = typeof payload.sourceType === 'string' ? payload.sourceType : '';
+  const createdAt = typeof payload.createdAt === 'number' ? payload.createdAt : 0;
+  const sourceTypeLabel = sourceType === 'paper' ? '论文' : sourceType === 'article' ? '文章' : sourceType === 'idea' ? '想法' : sourceType;
 
+  const hasSourceRow = Boolean(sourceType || sourceTitle || createdAt);
   return (
     <div className="node-drawer__note">
+      {hasSourceRow ? (
+        <div className="node-drawer__note-source">
+          {sourceType ? <span className="node-drawer__note-type">{sourceTypeLabel}</span> : null}
+          {sourceTitle ? <span className="node-drawer__note-origin">{sourceTitle}</span> : null}
+          {createdAt ? <span className="node-drawer__note-time">{describeNoteAge(createdAt)}</span> : null}
+        </div>
+      ) : null}
+      {origin ? (
+        <a className="node-drawer__note-link" href={origin} target="_blank" rel="noreferrer" title={origin}>
+          🔗 {shortenNoteUrl(origin)}
+        </a>
+      ) : null}
       {summary ? <p className="node-drawer__note-summary">{summary}</p> : null}
       {bullets.length > 0 ? (
         <ul className="node-drawer__note-list">
@@ -111,11 +130,32 @@ function NoteNodeContent({ payload }: { payload: Record<string, unknown> }) {
       ) : null}
       {tags.length > 0 ? (
         <div className="node-drawer__note-tags">
-          {tags.map((t) => <span key={t} className="node-drawer__tag">#{t}</span>)}
+          {tags.map((t) => <span key={t} className="node-drawer__note-tag">#{t}</span>)}
         </div>
       ) : null}
     </div>
   );
+}
+
+function shortenNoteUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.length > 1 ? u.pathname.slice(0, 20) : '';
+    return (u.hostname + path) || url.slice(0, 32);
+  } catch {
+    return url.slice(0, 32);
+  }
+}
+
+function describeNoteAge(ts: number): string {
+  const min = Math.floor(Math.max(0, Date.now() - ts) / 60000);
+  if (min < 1) return '刚刚';
+  if (min < 60) return `${min} 分钟前`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} 小时前`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} 天前`;
+  return `${Math.floor(d / 30)} 个月前`;
 }
 
 function ResearchNodeContent({ items, payload }: { items: string[]; payload: Record<string, unknown> }) {

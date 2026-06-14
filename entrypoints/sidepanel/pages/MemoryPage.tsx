@@ -214,7 +214,7 @@ function buildIdeaGraph(artifacts: ProductArtifact[], images: GeneratedImageReco
   return createGraphView({ scope: 'memory', title: 'idea 成果', nodes, edges });
 }
 
-/** 笔记子图：archiveNotes → note 节点。 */
+/** 笔记子图：archiveNotes → note 节点。同 sourceType 相邻连 relates 边（聚簇约束）。 */
 function buildNotesGraph(notes: ArchiveNote[], _artifacts: ProductArtifact[]): GraphView {
   const nodes = notes.map((n) =>
     createGraphNode({
@@ -225,5 +225,21 @@ function buildNotesGraph(notes: ArchiveNote[], _artifacts: ProductArtifact[]): G
       sourceId: n.id,
     }),
   );
-  return createGraphView({ scope: 'memory', title: '网页笔记', nodes, edges: [] });
+  // 补 relates 边：同 sourceType 相邻连边（同类聚簇），让力导向有聚拢约束，避免无边失衡抖动
+  const edges = [];
+  const byType = new Map<string, ArchiveNote[]>();
+  for (const n of notes) {
+    const arr = byType.get(n.sourceType) ?? [];
+    arr.push(n);
+    byType.set(n.sourceType, arr);
+  }
+  const nodeByNoteId = new Map(notes.map((n, i) => [n.id, nodes[i]]));
+  for (const arr of byType.values()) {
+    for (let k = 0; k < arr.length - 1; k++) {
+      const a = nodeByNoteId.get(arr[k].id);
+      const b = nodeByNoteId.get(arr[k + 1].id);
+      if (a && b) edges.push(createGraphEdge(a.id, b.id, 'relates'));
+    }
+  }
+  return createGraphView({ scope: 'memory', title: '网页笔记', nodes, edges });
 }

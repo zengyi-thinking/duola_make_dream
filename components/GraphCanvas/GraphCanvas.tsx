@@ -87,26 +87,47 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
   const [enteringIds, setEnteringIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [dims, setDims] = useState({ width: 360, height: 300 });
+  // dims 同步到 ref：simulation 生命周期与 dims 解耦，防 ResizeObserver 抖动反复重建 simulation
+  const dimsRef = useRef(dims);
+  dimsRef.current = dims;
 
-  // 测量容器尺寸（SVG viewBox 用）
+  // 测量容器尺寸（SVG viewBox 用）。rAF 节流 + 变化阈值过滤，消除 sidepanel 布局微抖的反复回调。
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const measure = () => setDims({ width: container.clientWidth || 360, height: 300 });
+    let raf = 0;
+    let lastW = 0;
+    let lastH = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const w = container.clientWidth || 360;
+        const h = 300;
+        if (Math.abs(w - lastW) < 2 && Math.abs(h - lastH) < 2) return;
+        lastW = w;
+        lastH = h;
+        setDims({ width: w, height: h });
+      });
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(container);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   const { nodes, links } = useMemo(() => {
-    const { width, height } = dims;
+    // 初值用固定中心布局（不依赖 dims），避免 dims 抖动重置节点位置
+    const cx = 180;
+    const cy = 150;
     const ns: SimNode[] = graph.nodes.map((n, i) => {
       const angle = (i / Math.max(1, graph.nodes.length)) * Math.PI * 2;
       return {
         ...n,
-        x: width / 2 + Math.cos(angle) * 110,
-        y: height / 2 + Math.sin(angle) * 110,
+        x: cx + Math.cos(angle) * 110,
+        y: cy + Math.sin(angle) * 110,
         vx: 0,
         vy: 0,
       };
@@ -116,7 +137,7 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
       .filter((e) => nodeMap.has(e.source) && nodeMap.has(e.target))
       .map((e) => ({ source: e.source, target: e.target, id: e.id }));
     return { nodes: ns, links: ls };
-  }, [graph, dims]);
+  }, [graph]);
 
   /**
    * 入场动画状态：每次 graph.nodes 变化时,把"首次出现"的 id 加入 enteringIds。
@@ -152,14 +173,17 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
 
   useEffect(() => {
     if (nodes.length === 0) return;
-    const { width, height } = dims;
+    const { width, height } = dimsRef.current;
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
     const simulation = forceSimulation<SimNode>(nodes)
-      .force('charge', forceManyBody().strength(-300))
+      // 少节点时降低排斥强度，避免无边失衡拉锯
+      .force('charge', forceManyBody().strength(nodes.length <= 3 ? -140 : -300))
       .force('link', forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(95).strength(0.5))
       .force('center', forceCenter(width / 2, height / 2))
-      .force('collide', forceCollide(48))
+      .force('collide', forceCollide(42))
+      .velocityDecay(0.7)
+      .alphaMin(0.05)
       .alphaDecay(0.04);
     simRef.current = simulation;
 
@@ -187,7 +211,7 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
       simulation.stop();
       simRef.current = null;
     };
-  }, [nodes, links, dims]);
+  }, [nodes, links]);
 
   // pointer 坐标 → SVG 坐标
   const toSvgPoint = (clientX: number, clientY: number): { x: number; y: number } | null => {

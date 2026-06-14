@@ -687,6 +687,60 @@ button, textarea, input, select { font: inherit; }
   gap: 10px;
   margin-top: 6px;
 }
+/* 笔记卡片：绿色调精美容器 */
+.node-drawer__note {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--pb-tone-green-soft);
+  border: 1px solid var(--pb-tone-green-border);
+}
+.node-drawer__note-source {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+}
+.node-drawer__note-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pb-tone-green);
+  color: #fff;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+.node-drawer__note-origin {
+  color: var(--pb-ink);
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-drawer__note-time {
+  color: var(--pb-muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.node-drawer__note-link {
+  font-size: 11px;
+  color: var(--pb-primary);
+  text-decoration: none;
+  padding: 4px 8px;
+  background: var(--pb-bg);
+  border-radius: 6px;
+  border: 1px solid var(--pb-line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-drawer__note-link:hover {
+  background: var(--pb-primary-soft);
+}
 .node-drawer__note-title {
   margin: 0;
   font-size: 15px;
@@ -695,9 +749,12 @@ button, textarea, input, select { font: inherit; }
 }
 .node-drawer__note-summary {
   margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--pb-tone-green);
   font-size: 13px;
   color: var(--pb-ink);
   line-height: 1.6;
+  font-weight: 500;
 }
 .node-drawer__note-list {
   list-style: none;
@@ -709,35 +766,34 @@ button, textarea, input, select { font: inherit; }
 }
 .node-drawer__note-list li {
   position: relative;
-  padding-left: 14px;
+  padding-left: 16px;
   font-size: 12.5px;
   color: var(--pb-ink);
   line-height: 1.55;
 }
 .node-drawer__note-list li::before {
-  content: '';
+  content: '✓';
   position: absolute;
   left: 0;
-  top: 8px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--pb-primary);
-  opacity: 0.65;
+  top: 0;
+  font-size: 11px;
+  color: var(--pb-tone-green);
+  font-weight: 700;
 }
 .node-drawer__note-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
 }
+.node-drawer__note-tag,
 .node-drawer__tag {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--pb-primary-soft);
-  color: var(--pb-primary);
+  background: rgba(46, 139, 87, 0.12);
+  color: var(--pb-tone-green);
   font-weight: 600;
-  border: 1px solid rgba(37, 87, 218, 0.18);
+  border: 1px solid var(--pb-tone-green-border);
 }
 .node-drawer__image-img {
   display: block;
