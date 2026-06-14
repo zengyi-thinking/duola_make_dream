@@ -87,7 +87,9 @@ export function createGraphEdge(
   id?: string,
 ): GraphEdge {
   return {
-    id: id ?? crypto.randomUUID(),
+    // 默认稳定 id：同 source/target/relation 的边 id 相同，mergeIntoGlobalGraph 可据此去重，
+    // 避免重复迁移或多次 merge 累积重复边。显式传 id 时仍用传入值。
+    id: id ?? `edge:${source}:${target}:${relation}`,
     source,
     target,
     relation,

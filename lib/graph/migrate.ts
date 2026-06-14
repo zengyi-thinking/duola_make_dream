@@ -88,7 +88,7 @@ export async function migrateLegacyToGraph(): Promise<MigrationResult> {
         sourceId: artifact.id,
       }),
     );
-    edges.push(createGraphEdge(ideaNodeId, planNodeId, 'derives'));
+    edges.push(createGraphEdge(planNodeId, ideaNodeId, 'derives'));
     for (const noteId of artifact.selectedArchiveNoteIds) {
       edges.push(createGraphEdge(planNodeId, migratedId('note', noteId), 'cites'));
     }

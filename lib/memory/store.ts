@@ -470,6 +470,12 @@ export async function getGlobalGraph(): Promise<GraphView> {
 }
 
 /**
+ * graphViews 写队列：阶段1 子 Agent 会并发 mergeIntoGlobalGraph（加工中途追加 partial 节点），
+ * 用串行队列保证"读-合并-写"原子性，避免后写覆盖先写。仿 runtimeConfigWriteQueue。
+ */
+let graphViewWriteQueue: Promise<void> = Promise.resolve();
+
+/**
  * 把新节点/边幂等合并进全局图（按 id 去重）。
  * 迁移链路和子 Agent 产出都走这里，让全局图持续生长。
  */
@@ -478,34 +484,40 @@ export async function mergeIntoGlobalGraph(
   edges: GraphEdge[],
 ): Promise<void> {
   if (nodes.length === 0 && edges.length === 0) return;
-  const views = await readStorage('graphViews');
-  const idx = views.findIndex((view) => view.scope === 'global');
-  const now = Date.now();
+  const run = graphViewWriteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const views = await readStorage('graphViews');
+      const idx = views.findIndex((view) => view.scope === 'global');
+      const now = Date.now();
 
-  if (idx < 0) {
-    const globalView: GraphView = {
-      id: crypto.randomUUID(),
-      scope: 'global',
-      title: '全局记忆图',
-      nodes,
-      edges,
-      createdAt: now,
-    };
-    await appendLimited('graphViews', globalView, 30);
-    return;
-  }
+      if (idx < 0) {
+        const globalView: GraphView = {
+          id: crypto.randomUUID(),
+          scope: 'global',
+          title: '全局记忆图',
+          nodes,
+          edges,
+          createdAt: now,
+        };
+        await appendLimited('graphViews', globalView, 30);
+        return;
+      }
 
-  const existing = views[idx];
-  const nodeIds = new Set(existing.nodes.map((node) => node.id));
-  const edgeIds = new Set(existing.edges.map((edge) => edge.id));
-  const merged: GraphView = {
-    ...existing,
-    nodes: [...existing.nodes, ...nodes.filter((node) => !nodeIds.has(node.id))],
-    edges: [...existing.edges, ...edges.filter((edge) => !edgeIds.has(edge.id))],
-  };
-  const next = [...views];
-  next[idx] = merged;
-  await writeStorage('graphViews', next);
+      const existing = views[idx];
+      const nodeIds = new Set(existing.nodes.map((node) => node.id));
+      const edgeIds = new Set(existing.edges.map((edge) => edge.id));
+      const merged: GraphView = {
+        ...existing,
+        nodes: [...existing.nodes, ...nodes.filter((node) => !nodeIds.has(node.id))],
+        edges: [...existing.edges, ...edges.filter((edge) => !edgeIds.has(edge.id))],
+      };
+      const next = [...views];
+      next[idx] = merged;
+      await writeStorage('graphViews', next);
+    });
+  graphViewWriteQueue = run.then(() => undefined, () => undefined);
+  await run;
 }
 
 // ---------- Skill 注册表 ----------

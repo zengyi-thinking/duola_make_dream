@@ -428,9 +428,11 @@ export interface ExperienceSeed {
   relatedNodeIds?: string[];
 }
 
-/** 子 Agent 单次运行的产物：领域输出 + 可选的阶段图节点 + 可选的经验种子 */
+/** 子 Agent 单次运行的产物：领域输出 + 可选的阶段图节点/边 + 可选的经验种子 */
 export interface AgentRunResult<O> {
   output: O;
   stageNode?: import('@/lib/graph/types').GraphNode;
+  /** 该阶段产出的关系边（连到已有节点或本阶段 stageNode），Director 合并回主图 */
+  stageEdges?: import('@/lib/graph/types').GraphEdge[];
   experience?: ExperienceSeed;
 }
