@@ -78,6 +78,7 @@ export function compareStateBackups(left: StateBackup, right: StateBackup): Vers
   pushCountChange(changes, '归档', leftSnapshot.archiveNotes.length, rightSnapshot.archiveNotes.length);
   pushCountChange(changes, '图片', leftSnapshot.generatedImages.length, rightSnapshot.generatedImages.length);
   pushCountChange(changes, '图谱', leftSnapshot.generatedMindmaps.length, rightSnapshot.generatedMindmaps.length);
+  pushCountChange(changes, '流水线', leftSnapshot.pipelineRuns?.length ?? 0, rightSnapshot.pipelineRuns?.length ?? 0);
   pushCountChange(changes, '候选记忆', leftSnapshot.memoryCandidates.length, rightSnapshot.memoryCandidates.length);
   pushCountChange(changes, '长期记忆', leftSnapshot.approvedMemories.length, rightSnapshot.approvedMemories.length);
   pushCountChange(changes, '补丁', leftSnapshot.harnessPatches.length, rightSnapshot.harnessPatches.length);

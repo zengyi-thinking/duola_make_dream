@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { MemorySummary } from '@/lib/agent/types';
 import { buildObservationTimeline, formatObservationDate } from './observation-utils';
+import PipelineFlow from '../../components/PipelineFlow';
 
 interface ObservationTimelineSectionProps {
   memory: MemorySummary | null;
@@ -25,6 +26,7 @@ export default function ObservationTimelineSection({ memory }: ObservationTimeli
               <span className={`timeline-badge timeline-badge--${entry.kind}`}>{entry.badgeLabel}</span>
             </div>
             <p className="micro-copy">{entry.detail}</p>
+            {entry.pipelineTrace ? <PipelineFlow trace={entry.pipelineTrace} compact /> : null}
             <p className="micro-copy">{formatObservationDate(entry.createdAt)}</p>
           </article>
         )) : (

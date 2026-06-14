@@ -1,12 +1,14 @@
 import type {
+  ContentPipelineTrace,
   HarnessPatch,
   MemorySummary,
   ProfileHistoryEntry,
   ProfileHistorySource,
 } from '@/lib/agent/types';
 import type { StateBackup } from '@/lib/storage/schema';
+import { formatPipelineKindLabel } from '@/lib/agent/pipeline';
 
-export type TimelineKind = 'idea' | 'artifact' | 'feedback' | 'profile' | 'backup' | 'patch';
+export type TimelineKind = 'idea' | 'artifact' | 'feedback' | 'profile' | 'backup' | 'patch' | 'pipeline';
 
 export interface TimelineEntry {
   id: string;
@@ -15,6 +17,7 @@ export interface TimelineEntry {
   detail: string;
   createdAt: number;
   badgeLabel: string;
+  pipelineTrace?: ContentPipelineTrace;
 }
 
 const FEEDBACK_LABELS: Record<string, string> = {
@@ -71,6 +74,18 @@ export function buildObservationTimeline(memory: MemorySummary | null): Timeline
       detail: `喜欢 ${entry.profile.visualLikes.slice(0, 3).join(' / ') || '暂无'} · 语气 ${entry.profile.tonePreference || '暂无'}`,
       createdAt: entry.createdAt,
       badgeLabel: 'Profile',
+    });
+  });
+
+  memory.pipelineRuns.forEach((trace) => {
+    entries.push({
+      id: `pipeline-${trace.id}`,
+      kind: 'pipeline',
+      title: `${formatPipelineKindLabel(trace.kind)} · ${trace.title}`,
+      detail: trace.summary,
+      createdAt: trace.createdAt,
+      badgeLabel: `${trace.stages.length} 步`,
+      pipelineTrace: trace,
     });
   });
 

@@ -68,9 +68,26 @@ const browser = await puppeteer.launch({
 });
 
 let sw = null;
-for (let i = 0; i < 40; i++) {
-  sw = browser.targets().find((t) => { try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; } });
-  if (sw) break; await wait(500);
+for (let i = 0; i < 120 && !sw; i++) {
+  sw = browser.targets().find((t) => {
+    try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; }
+  });
+  if (!sw) await wait(500);
+}
+if (!sw && typeof browser.waitForTarget === 'function') {
+  try {
+    sw = await browser.waitForTarget((t) => {
+      try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; }
+    }, { timeout: 60000 });
+  } catch {
+    sw = null;
+  }
+}
+if (!sw) {
+  console.error('❌ 没找到扩展 service worker');
+  console.error(browser.targets().map((t) => `[${t.type()}] ${t.url()}`).join('\n'));
+  await browser.close();
+  process.exit(1);
 }
 const extId = new URL(sw.url()).host;
 const swClient = await sw.createCDPSession();
@@ -107,6 +124,7 @@ const res = await sidePanel.evaluate(() => new Promise((resolve) => {
       pageSummary: resp.payload?.analysis?.pageSummary,
       keyIdeas: resp.payload?.analysis?.keyIdeas,
       noteTitle: resp.payload?.analysis?.noteCard?.title,
+      pipelineRunsCount: resp.payload?.memorySummary?.counts?.pipelineRuns,
     } : { success: false, error: chrome.runtime.lastError?.message }),
   );
 }));
@@ -126,13 +144,15 @@ const TEMPLATE_MARKS = ['更像一篇论文或研究摘要', '更像一篇结构
 const A = res.success;
 const B = !TEMPLATE_MARKS.some((m) => String(res.pageSummary ?? '').includes(m));
 const C = /多模态|跨模态|CMAN/.test(String(`${res.pageSummary ?? ''} ${(res.keyIdeas ?? []).join(' ')}`));
+const D = (res.pipelineRunsCount ?? 0) > 0;
 
 console.log('\n=== 断言 ===');
 console.log(`A analyzeCurrent 成功: ${A ? '✅' : '❌'}`);
 console.log(`B pageSummary 非模板: ${B ? '✅' : '❌'}`);
 console.log(`C 真读正文(含"多模态"): ${C ? '✅' : '❌'}`);
+console.log(`D 流水线已落盘: ${D ? '✅' : '❌'}`);
 
-const pass = A && B && C;
+const pass = A && B && C && D;
 console.log(pass ? '\n🎉 页面分析 LLM 链路通过：喂养链路已具备真智能（与 idea 链路对称）。' : '\n⚠️ 未完全通过。');
 process.exit(pass ? 0 : 1);
 

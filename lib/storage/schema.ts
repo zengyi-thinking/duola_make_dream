@@ -2,6 +2,7 @@ import type {
   ApprovedMemory,
   ArchiveNote,
   ContextSnippet,
+  ContentPipelineTrace,
   FeedbackRecord,
   HarnessPatch,
   IdeaRecord,
@@ -31,6 +32,7 @@ export const STORAGE_KEYS = {
   generatedImages: 'generatedImages',
   generatedMindmaps: 'generatedMindmaps',
   harnessPatches: 'harnessPatches',
+  pipelineRuns: 'pipelineRuns',
   stateBackups: 'stateBackups',
   runtimeConfig: 'runtimeConfig',
 } as const;
@@ -49,6 +51,7 @@ export interface StorageSnapshot {
   generatedImages: GeneratedImageRecord[];
   generatedMindmaps: MindmapRecord[];
   harnessPatches: HarnessPatch[];
+  pipelineRuns: ContentPipelineTrace[];
   runtimeConfig: RuntimeConfig;
 }
 
@@ -98,6 +101,7 @@ export function createDefaultStorageState(): StorageSchema {
     generatedImages: [],
     generatedMindmaps: [],
     harnessPatches: [],
+    pipelineRuns: [],
     stateBackups: [],
     runtimeConfig: createBundledRuntimeConfig(),
   };

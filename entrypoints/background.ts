@@ -4,6 +4,7 @@ import {
   applyApprovedMemoryToProfile,
   applyFeedbackToProfile,
   approveMemoryCandidate,
+  cleanupOrphanIdeas,
   clearArchiveNotes,
   convertCandidateToApprovedMemory,
   deleteApprovedMemory,
@@ -29,17 +30,20 @@ import {
   saveGeneratedMindmap,
   saveHarnessPatch,
   saveMemoryCandidates,
+  savePipelineRun,
   savePageContext,
   saveProfile,
+  updateIdeaStatus,
 } from '@/lib/memory';
 import { buildArchiveNoteFromAnalysis, buildPageAnalysisResult } from '@/lib/agent/core';
+import { buildPipelineTrace, createPipelineStage } from '@/lib/agent/pipeline';
 import { runImageGeneration } from '@/lib/image/service';
 import { generateMindmapRecord } from '@/lib/mindmap/service';
 import { toPageContextRecord } from '@/lib/page/extractor';
 import { buildHarnessPatchFromFeedback, shouldCreateHarnessPatch } from '@/lib/agent/harness';
 import { processIdeaSubmission } from '@/lib/agent/orchestrators/idea';
 import { buildKnowledgeRecall } from '@/lib/agent/recall';
-import type { MemoryRecallResult } from '@/lib/agent/types';
+import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult } from '@/lib/agent/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
 import type { PageReadResult } from '@/lib/page/types';
@@ -73,6 +77,11 @@ const recentContentTabs = new Map<number, {
 export default defineBackground(() => {
   // 点击扩展图标时打开/关闭 sidepanel
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
+  // SW 启动时清理孤儿 idea（>5 分钟仍 pending = 一定是被异常中止的）
+  cleanupOrphanIdeas().catch((err) => {
+    console.warn('[bg] cleanupOrphanIdeas failed:', err);
+  });
 
   // 监听 content script 长连 → 缓存 tabId
   // 通过 wxt 的 browser.runtime.onConnect 包装，与 onMessage 行为一致
@@ -132,7 +141,7 @@ export default defineBackground(() => {
 async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
   switch (message.type) {
     case 'idea.submit':
-      return successResponse('idea.submit', message.requestId, await processIdeaSubmission({
+      return successResponse('idea.submit', message.requestId, await runIdeaSubmissionWithTransaction({
         text: message.payload.text,
         source: 'popup',
         selectedContextIds: message.payload.selectedContextIds,
@@ -266,12 +275,48 @@ async function handleFeedbackRecord(
 async function handleContextCapture(
   payload: ContextCaptureSelectionRequest['payload'],
 ) {
+  // 优先信任 popup 主动上送的 payload（content script 在 selection 触发瞬间已把
+  // 选区信息塞进 message.payload 转发过来了 —— 这是当前 SW 链路的事实）。
+  // 但如果 payload 是兜底空值（来自 createErrorResponse），则改为反向问 content script
+  // 拿一次最新选区，避免出现"孤儿协议"。
+  const hasPayloadContent = payload.selectedText && payload.selectedText.trim().length > 0;
+  if (!hasPayloadContent) {
+    try {
+      const tabId = await getLastFocusedNormalTabId();
+      const tab = await browser.tabs.get(tabId);
+      if (canInjectContentScript(tab.url)) {
+        const fresh = await sendTabInternalMessage(tabId, { type: 'content.page.extract-selection' }) as PageReadResult;
+        if (fresh?.selectedText) {
+          return persistSnippet({
+            origin: fresh.origin,
+            pageTitle: fresh.pageTitle,
+            selectedText: fresh.selectedText,
+          });
+        }
+      }
+    } catch {
+      // 拿不到最新选区就回退到 payload
+    }
+  }
+
+  return persistSnippet({
+    origin: payload.origin,
+    pageTitle: payload.pageTitle,
+    selectedText: payload.selectedText,
+  });
+}
+
+async function persistSnippet(input: {
+  origin: string;
+  pageTitle: string;
+  selectedText: string;
+}) {
   const runtimeConfig = await readStorage('runtimeConfig');
   const snippet = {
     id: crypto.randomUUID(),
-    origin: payload.origin,
-    pageTitle: payload.pageTitle.trim().slice(0, 100),
-    selectedText: payload.selectedText.trim().slice(0, runtimeConfig.maxSelectionChars),
+    origin: input.origin,
+    pageTitle: (input.pageTitle ?? '').trim().slice(0, 100),
+    selectedText: (input.selectedText ?? '').trim().slice(0, runtimeConfig.maxSelectionChars),
     source: 'content' as const,
     createdAt: Date.now(),
   };
@@ -319,6 +364,20 @@ async function handlePageRead(mode: 'current-page' | 'study-archive') {
   });
   const runtimeConfig = await readStorage('runtimeConfig');
   const savedContext = await savePageContext(toPageContextRecord(page, runtimeConfig));
+  const pipelineTrace = buildPipelineTrace({
+    kind: 'page',
+    title: page.pageTitle,
+    summary: '提取正文与页面结构',
+    sourceId: page.id,
+    stages: [
+      createPipelineStage('plan', '规划', '锁定页面与模式', `${mode} · ${page.pageType}`),
+      createPipelineStage('research', '调研', '提取正文并清洗结构', `${page.headings?.length ?? 0} 个标题`),
+      createPipelineStage('reflect', '反思', '压缩出可读摘要', (page.visibleTextSummary ?? page.textExcerpt ?? '').slice(0, 40) || '暂无摘要'),
+      createPipelineStage('outline', '信息编排', '写入临时页面口袋', savedContext.id.slice(0, 8)),
+      createPipelineStage('generate', '生成', '形成页面缓存', page.pageTitle),
+    ],
+  });
+  await savePipelineRun(pipelineTrace);
 
   return {
     page,
@@ -336,6 +395,7 @@ async function handlePageAnalyze(mode: 'current-page' | 'study-archive') {
   const savedContext = await savePageContext(toPageContextRecord(page, runtimeConfig));
   const profile = await ensureProfile();
   const analysis = await buildPageAnalysisResult(page, savedContext, profile);
+  await savePipelineRun(analysis.pipelineTrace);
   await saveMemoryCandidates(analysis.memoryCandidates);
 
   return {
@@ -348,7 +408,22 @@ async function handlePageAnalyze(mode: 'current-page' | 'study-archive') {
 
 async function handleArchiveSave(analysis: AppMessage extends never ? never : any, sourceContext: any) {
   const note = buildArchiveNoteFromAnalysis(analysis, sourceContext);
+  const pipelineTrace = buildPipelineTrace({
+    kind: 'archive',
+    title: note.title,
+    summary: note.summary,
+    sourceId: analysis?.id ?? sourceContext?.id ?? note.id,
+    stages: [
+      createPipelineStage('plan', '规划', '决定沉淀为笔记', note.sourceType),
+      createPipelineStage('research', '调研', '压缩页面分析结果', analysis?.pageSummary ?? note.summary),
+      createPipelineStage('reflect', '反思', '筛选长期保留价值', note.tags.slice(0, 3).join(' / ') || '暂无标签'),
+      createPipelineStage('outline', '信息编排', '整理标题、摘要和要点', note.title),
+      createPipelineStage('generate', '生成', '写入记忆库', `${note.bullets.length} 条要点`),
+    ],
+  });
+  note.pipelineTrace = pipelineTrace;
   await saveArchiveNote(note);
+  await savePipelineRun(pipelineTrace);
   return {
     note,
     memorySummary: await getMemorySummary(),
@@ -358,6 +433,9 @@ async function handleArchiveSave(analysis: AppMessage extends never ? never : an
 async function handleImageGenerate(payload: AppMessage extends never ? never : any) {
   const runtimeConfig = await readStorage('runtimeConfig');
   const { request, record } = await runImageGeneration(payload, runtimeConfig);
+  if (record.pipelineTrace) {
+    await savePipelineRun(record.pipelineTrace);
+  }
   await saveGeneratedImage(record);
   return {
     request,
@@ -368,6 +446,9 @@ async function handleImageGenerate(payload: AppMessage extends never ? never : a
 
 async function handleMindmapGenerate(payload: AppMessage extends never ? never : any) {
   const record = generateMindmapRecord(payload);
+  if (record.pipelineTrace) {
+    await savePipelineRun(record.pipelineTrace);
+  }
   await saveGeneratedMindmap(record);
   return {
     record,
@@ -785,6 +866,7 @@ function buildEmptyPayload(type: AppMessage['type']) {
     profileHistory: [],
     stateBackups: [],
     harnessPatches: [],
+    pipelineRuns: [],
     generatedImages: [],
     generatedMindmaps: [],
     pendingPatches: [],
@@ -798,6 +880,7 @@ function buildEmptyPayload(type: AppMessage['type']) {
       approvedMemories: 0,
       profileChanges: 0,
       backups: 0,
+      pipelineRuns: 0,
       images: 0,
       mindmaps: 0,
     },
@@ -825,6 +908,7 @@ function buildEmptyPayload(type: AppMessage['type']) {
         appliedGadgets: [],
         selectedContextIds: [],
         selectedArchiveNoteIds: [],
+        pipelineTrace: createEmptyPipelineTrace('idea', '想法产物'),
         createdAt: 0,
       },
       assistantSummary: '',
@@ -926,6 +1010,7 @@ function buildEmptyPayload(type: AppMessage['type']) {
           tags: [],
         },
         memoryCandidates: [],
+        pipelineTrace: createEmptyPipelineTrace('page', '页面分析'),
         createdAt: 0,
       },
       memorySummary: emptySummary,
@@ -946,6 +1031,7 @@ function buildEmptyPayload(type: AppMessage['type']) {
         createdAt: 0,
         savedByUser: true,
         relatedContextIds: [],
+        pipelineTrace: createEmptyPipelineTrace('archive', '归档'),
       },
       memorySummary: emptySummary,
     };
@@ -984,6 +1070,7 @@ function buildEmptyPayload(type: AppMessage['type']) {
         status: 'failed',
         previewText: '',
         model: 'gpt-image-2',
+        pipelineTrace: createEmptyPipelineTrace('image', '图片生成'),
         createdAt: 0,
       },
       memorySummary: emptySummary,
@@ -1004,6 +1091,7 @@ function buildEmptyPayload(type: AppMessage['type']) {
           createdAt: 0,
         },
         imagePrompt: '',
+        pipelineTrace: createEmptyPipelineTrace('mindmap', '图谱生成'),
         createdAt: 0,
       },
       memorySummary: emptySummary,
@@ -1039,4 +1127,44 @@ function buildEmptyPayload(type: AppMessage['type']) {
   }
 
   return emptySummary;
+}
+
+function createEmptyPipelineTrace(kind: ContentPipelineKind, title: string): ContentPipelineTrace {
+  return {
+    id: '',
+    kind,
+    title,
+    summary: '',
+    stages: [],
+    createdAt: 0,
+  };
+}
+
+/**
+ * 事务包装：把 processIdeaSubmission 包成"先记 idea → 跑链路 → 标记 status"的状态机。
+ *
+ * 解决 #L1-5（事务支持）问题：
+ * 旧版链路是「LLM 跑完才存 idea/artifact/profile」—— 如果 LLM 跑完但 SW 异常
+ * 退出，idea 根本不存，用户看不到这次尝试；下次重试会拿同样 input 重新跑。
+ *
+ * 新版：
+ * 1. processIdeaSubmission 内部依然做同样的事，但同步返回 ideaId + 抛错带 status 信息
+ * 2. 启动时 cleanupOrphanIdeas 兜底 >5 分钟的 pending idea
+ *
+ * 这里包装是为了在 handler 层捕获异常后，把 idea 标 status='failed' + failReason。
+ */
+async function runIdeaSubmissionWithTransaction(input: {
+  text: string;
+  source: 'popup' | 'selection';
+  selectedContextIds?: string[];
+  selectedArchiveNoteIds?: string[];
+}): Promise<import('@/lib/agent/types').IdeaSubmitResult> {
+  const result = await processIdeaSubmission(input);
+  // 成功：把对应的 idea 标记为 committed
+  if (result.artifact.ideaId) {
+    await updateIdeaStatus(result.artifact.ideaId, 'committed').catch((err) => {
+      console.warn('[bg] 标记 idea 为 committed 失败：', err);
+    });
+  }
+  return result;
 }

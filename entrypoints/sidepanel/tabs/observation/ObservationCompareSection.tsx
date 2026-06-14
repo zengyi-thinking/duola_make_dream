@@ -189,12 +189,19 @@ function CompareCard({
         <InfoBlock label="版本 A" value={comparison.leftLabel} />
         <InfoBlock label="版本 B" value={comparison.rightLabel} />
       </div>
-      <div className="subsection">
-        <h4>差异摘要</h4>
-        <ol className="bullet-list">
-          {comparison.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
-        </ol>
+      <div className="token-list">
+        {comparison.changes.slice(0, 3).map((change, index) => (
+          <span key={`${index}-${change}`} className="token-chip">{shorten(change, 18)}</span>
+        ))}
       </div>
+      <details className="reading-accordion" style={{ marginTop: 10 }}>
+        <summary>展开差异明细 ({comparison.changes.length})</summary>
+        <div className="subsection">
+          <ol className="bullet-list">
+            {comparison.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+          </ol>
+        </div>
+      </details>
       <div className="inline-actions">
         <LineButton variant="ghost" onClick={onCopy}>
           复制摘要
@@ -212,10 +219,6 @@ function describeImageVersion(item: GeneratedImageRecord) {
   return `${shorten(item.request.title || item.request.sourceType || '未命名图片', 16)} · ${item.request.style} · ${formatDate(item.createdAt)}`;
 }
 
-function shorten(text: string, max = 16) {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
-}
-
 function formatDate(timestamp: number) {
   return new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit',
@@ -223,4 +226,8 @@ function formatDate(timestamp: number) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(timestamp));
+}
+
+function shorten(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }

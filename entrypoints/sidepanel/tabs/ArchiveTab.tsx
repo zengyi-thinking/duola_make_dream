@@ -11,6 +11,7 @@ import {
 import { EmptyCard } from '../components/ResultCard';
 import { ListBlock } from '../components/ListBlock';
 import { InfoBlock } from '../components/InfoBlock';
+import PipelineFlow from '../components/PipelineFlow';
 
 type SourceTypeFilter = 'all' | 'paper' | 'article' | 'idea';
 
@@ -194,6 +195,7 @@ export default function ArchiveTab(props: ArchiveTabProps) {
                   <InfoBlock label="来源网址" value={selectedNote.origin} />
                   <InfoBlock label="类型" value={selectedNote.sourceType} />
                   <InfoBlock label="摘要" value={selectedNote.summary} />
+                  {selectedNote.pipelineTrace ? <PipelineFlow trace={selectedNote.pipelineTrace} /> : null}
                   <div className="drawer-section">
                     <span className="memory-label">要点</span>
                     <ListBlock items={selectedNote.bullets} />

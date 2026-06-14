@@ -1,5 +1,6 @@
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import type { MemorySummary, RuntimeConfig } from '@/lib/agent/types';
+import { formatPipelineKindLabel } from '@/lib/agent/pipeline';
 import { pocketAvatars } from '@/lib/brand/avatars';
 import { ObservationSignalBoard } from '../../components/ObservationSignalBoard';
 
@@ -15,14 +16,14 @@ export default function ObservationOverview({ memory, runtimeConfig }: Observati
     ? {
         ideas: memory.counts.ideas,
         feed: memory.counts.pageContexts,
+        pipeline: memory.counts.pipelineRuns,
         profile: memory.counts.profileChanges,
-        patch: memory.pendingPatches.length,
       }
     : {
         ideas: 0,
         feed: 0,
+        pipeline: 0,
         profile: 0,
-        patch: 0,
       };
 
   return (
@@ -44,8 +45,14 @@ export default function ObservationOverview({ memory, runtimeConfig }: Observati
       <section className="status-grid">
         <StatCard label="创意" value={counts.ideas} hint={`产物 ${memory?.counts.artifacts ?? 0}`} />
         <StatCard label="喂养" value={counts.feed} hint={`候选记忆 ${memory?.counts.memoryCandidates ?? 0}`} />
+        <StatCard
+          label="流水线"
+          value={counts.pipeline}
+          hint={memory?.pipelineRuns[0]
+            ? `${formatPipelineKindLabel(memory.pipelineRuns[0].kind)} · ${memory.pipelineRuns[0].stages.length} 步`
+            : '等待第一条流程'}
+        />
         <StatCard label="画像" value={counts.profile} hint={`快照 ${memory?.counts.backups ?? 0}`} />
-        <StatCard label="补丁" value={counts.patch} hint={`反馈 ${memory?.counts.feedback ?? 0}`} />
       </section>
 
       <ObservationSignalBoard memory={memory} runtimeConfig={runtimeConfig} />

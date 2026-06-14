@@ -1,5 +1,4 @@
 import type { MemorySummary } from '@/lib/agent/types';
-import { InfoBlock } from '../../components/InfoBlock';
 import { formatObservationDate, formatProfileSource } from './observation-utils';
 
 interface ObservationProfileSectionProps {
@@ -19,11 +18,11 @@ export default function ObservationProfileSection({ memory }: ObservationProfile
         </div>
       </div>
 
-      <div className="detail-grid">
-        <InfoBlock label="视觉偏好" value={profile?.visualLikes.join(' / ') || '暂无'} />
-        <InfoBlock label="视觉排斥" value={profile?.visualDislikes.join(' / ') || '暂无'} />
-        <InfoBlock label="语气偏好" value={profile?.tonePreference || '暂无'} />
-        <InfoBlock label="产品偏好" value={profile?.productPreferences.join(' / ') || '暂无'} />
+      <div className="profile-strip">
+        <ProfileChipPanel title="视觉偏好" items={profile?.visualLikes ?? []} emptyText="暂无" />
+        <ProfileChipPanel title="视觉排斥" items={profile?.visualDislikes ?? []} emptyText="暂无" />
+        <ProfileChipPanel title="语气偏好" items={profile?.tonePreference ? [profile.tonePreference] : []} emptyText="暂无" />
+        <ProfileChipPanel title="产品偏好" items={profile?.productPreferences ?? []} emptyText="暂无" />
       </div>
 
       <div className="profile-strip">
@@ -57,5 +56,24 @@ export default function ObservationProfileSection({ memory }: ObservationProfile
         {(memory?.profileHistory.length ?? 0) === 0 ? <p className="soft-text">还没有画像历史。</p> : null}
       </div>
     </section>
+  );
+}
+
+function ProfileChipPanel({
+  title,
+  items,
+  emptyText,
+}: {
+  title: string;
+  items: string[];
+  emptyText: string;
+}) {
+  return (
+    <div className="profile-strip__item">
+      <span className="memory-label">{title}</span>
+      <div className="token-list">
+        {items.length > 0 ? items.slice(0, 4).map((item) => <span key={item} className="token-chip">{item}</span>) : <span className="soft-text">{emptyText}</span>}
+      </div>
+    </div>
   );
 }

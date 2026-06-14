@@ -1,6 +1,7 @@
 import type {
   ApprovedMemory,
   ArchiveNote,
+  ContentPipelineTrace,
   ContextSnippet,
   FeedbackRecord,
   HarnessPatch,
@@ -57,6 +58,54 @@ export async function saveIdea(idea: IdeaRecord): Promise<IdeaRecord> {
   return idea;
 }
 
+/** 更新指定 idea 的提交状态（pending → committed/failed）。事务收尾用。 */
+export async function updateIdeaStatus(
+  ideaId: string,
+  status: 'committed' | 'failed',
+  failReason?: string,
+): Promise<IdeaRecord | null> {
+  const ideas = await readStorage('ideaHistory');
+  const idx = ideas.findIndex((i) => i.id === ideaId);
+  if (idx < 0) return null;
+  const updated: IdeaRecord = {
+    ...ideas[idx],
+    status,
+    failReason,
+    completedAt: Date.now(),
+  };
+  const next = [...ideas];
+  next[idx] = updated;
+  await writeStorage('ideaHistory', next);
+  return updated;
+}
+
+/**
+ * 启动时清理孤儿 idea：超过 5 分钟仍处于 pending 的 idea
+ * 一定是上次 SW 异常中止留下的（正常流程 5 分钟内一定完成）。
+ * 把它们标记为 failed，让用户能在历史里看到失败原因，但避免重复执行。
+ */
+export async function cleanupOrphanIdeas(maxAgeMs = 5 * 60 * 1000): Promise<number> {
+  const ideas = await readStorage('ideaHistory');
+  const now = Date.now();
+  let cleanedCount = 0;
+  const next = ideas.map((idea) => {
+    if (idea.status === 'pending' && (now - idea.createdAt) > maxAgeMs) {
+      cleanedCount++;
+      return {
+        ...idea,
+        status: 'failed' as const,
+        failReason: '服务异常中止导致未完成（自动清理）',
+        completedAt: now,
+      };
+    }
+    return idea;
+  });
+  if (cleanedCount > 0) {
+    await writeStorage('ideaHistory', next);
+  }
+  return cleanedCount;
+}
+
 export async function saveArtifact(artifact: ProductArtifact): Promise<ProductArtifact> {
   await appendLimited('artifactHistory', artifact, 30);
   return artifact;
@@ -107,6 +156,11 @@ export async function saveGeneratedMindmap(record: MindmapRecord): Promise<Mindm
 export async function saveHarnessPatch(patch: HarnessPatch): Promise<HarnessPatch> {
   await appendLimited('harnessPatches', patch, 20);
   return patch;
+}
+
+export async function savePipelineRun(trace: ContentPipelineTrace): Promise<ContentPipelineTrace> {
+  await appendLimited('pipelineRuns', trace, 60);
+  return trace;
 }
 
 export async function getContextSnippetsByIds(ids: string[]): Promise<ContextSnippet[]> {
@@ -200,6 +254,7 @@ export async function getMemorySummary(): Promise<MemorySummary> {
     profileHistory: snapshot.profileHistory.slice(0, 10),
     stateBackups: snapshot.stateBackups.slice(0, 5),
     harnessPatches: snapshot.harnessPatches.slice(0, 20),
+    pipelineRuns: snapshot.pipelineRuns.slice(0, 10),
     generatedImages: snapshot.generatedImages.slice(0, 10),
     generatedMindmaps: snapshot.generatedMindmaps.slice(0, 10),
     pendingPatches: snapshot.harnessPatches.filter((item) => item.status === 'pending').slice(0, 3),
@@ -213,6 +268,7 @@ export async function getMemorySummary(): Promise<MemorySummary> {
       approvedMemories: snapshot.approvedMemories.length,
       profileChanges: snapshot.profileHistory.length,
       backups: snapshot.stateBackups.length,
+      pipelineRuns: snapshot.pipelineRuns.length,
       images: snapshot.generatedImages.length,
       mindmaps: snapshot.generatedMindmaps.length,
     },

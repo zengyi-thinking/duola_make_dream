@@ -4,6 +4,7 @@ import type {
   MemoryCandidate,
   UserProfile,
 } from '@/lib/agent/types';
+import { matchTopics } from '@/lib/agent/topics';
 import { DEFAULT_PROFILE } from '@/lib/storage/schema';
 
 export function createProfile(): UserProfile {
@@ -42,15 +43,9 @@ export function applyFeedbackToProfile(
 }
 
 export function extractThemesFromIdea(text: string): string[] {
-  const candidates = [
-    { label: '浏览器插件', rule: /插件|extension|chrome/i },
-    { label: '效率工具', rule: /效率|整理|任务|计划|时间/i },
-    { label: '创作辅助', rule: /创作|灵感|设计|prompt|图片/i },
-    { label: '学习工具', rule: /学习|记忆|课程|知识/i },
-    { label: 'AI 产品', rule: /ai|agent|智能|模型/i },
-  ];
-
-  return candidates.filter((item) => item.rule.test(text)).map((item) => item.label);
+  // 委托给共享主题词库（lib/agent/topics.ts）—— router 和这里共用同一份正则。
+  // 保留本函数以保持外部 import 路径不变。
+  return matchTopics(text);
 }
 
 export function createApprovedMemory(candidate: MemoryCandidate): ApprovedMemory {

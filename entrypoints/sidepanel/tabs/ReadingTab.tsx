@@ -24,6 +24,7 @@ import { InfoBlock } from '../components/InfoBlock';
 import { useMemo } from 'react';
 import StaggerStack from '@/components/StaggerStack/StaggerStack';
 import { RecallPanel } from '../components/RecallPanel';
+import PipelineFlow from '../components/PipelineFlow';
 
 interface ReadingTabProps {
   memory: MemorySummary | null;
@@ -254,18 +255,33 @@ export default function ReadingTab(props: ReadingTabProps) {
             <InfoBlock label="页面标题" value={pageRead.pageTitle} />
             <InfoBlock label="Origin" value={pageRead.origin} />
             <InfoBlock label="Page Type" value={pageRead.pageType} />
-            <InfoBlock label="Headings" value={(pageRead.headings ?? []).join(' / ') || '暂无'} />
-            <InfoBlock label="Summary" value={pageRead.visibleTextSummary ?? '暂无'} />
+            <div className="reading-mosaic">
+              <span className="memory-label">Headings</span>
+              <div className="token-list">
+                {renderHeadingChips(pageRead.headings ?? [])}
+              </div>
+            </div>
+            <div className="reading-summary">
+              <span className="memory-label">Summary</span>
+              <p className="reading-summary__preview">{formatPreviewText(pageRead.visibleTextSummary ?? '暂无', 180)}</p>
+              {pageRead.visibleTextSummary && pageRead.visibleTextSummary.length > 180 ? (
+                <details className="reading-summary__details">
+                  <summary>展开全文</summary>
+                  <p className="micro-copy">{pageRead.visibleTextSummary}</p>
+                </details>
+              ) : null}
+            </div>
           </div>
         ) : (
           <p className="soft-text">点击"读取当前页"后，PocketBuddy 才会主动提取这一页的结构化内容。</p>
         )}
       </section>
 
-      {pageAnalysis ? (
+        {pageAnalysis ? (
         <StaggerStack triggerKey={pageAnalysis.id} className="stack">
           <ResultCard title="阅读地图">
             <p className="result-tagline">{pageAnalysis.pageSummary}</p>
+            <PipelineFlow trace={pageAnalysis.pipelineTrace} />
             <div className="detail-grid reading-map__meta">
               <InfoBlock label="标题" value={pageRead?.pageTitle ?? pageContext?.pageTitle ?? pageAnalysis.noteCard.title} />
               <InfoBlock label="类型" value={pageRead?.pageType ?? 'page'} />
@@ -398,4 +414,24 @@ function ChipColumn({ title, items }: { title: string; items: string[] }) {
       </div>
     </section>
   );
+}
+
+function renderHeadingChips(headings: string[]) {
+  const displayHeadings = headings.slice(0, 4);
+  if (displayHeadings.length === 0) {
+    return <span className="soft-text">暂无</span>;
+  }
+
+  return (
+    <>
+      {displayHeadings.map((heading, index) => <span key={`${heading}-${index}`} className="token-chip">{heading}</span>)}
+      {headings.length > displayHeadings.length ? <span className="token-chip">+{headings.length - displayHeadings.length}</span> : null}
+    </>
+  );
+}
+
+function formatPreviewText(text: string, maxLength: number) {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength).trimEnd()}…`;
 }

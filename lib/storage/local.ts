@@ -21,6 +21,7 @@ function normalizeStorageSnapshot(
     ...snapshot,
     generatedImages: normalizeGeneratedImages(snapshot.generatedImages),
     runtimeConfig: normalizeRuntimeConfig(snapshot.runtimeConfig),
+    pipelineRuns: snapshot.pipelineRuns ?? [],
     stateBackups: snapshot.stateBackups ?? [],
   };
 }
@@ -294,6 +295,7 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
     generatedImages: (result.generatedImages as StorageSchema['generatedImages'] | undefined) ?? [],
     generatedMindmaps: (result.generatedMindmaps as StorageSchema['generatedMindmaps'] | undefined) ?? [],
     harnessPatches: (result.harnessPatches as StorageSchema['harnessPatches'] | undefined) ?? [],
+    pipelineRuns: (result.pipelineRuns as StorageSchema['pipelineRuns'] | undefined) ?? [],
     stateBackups: (result.stateBackups as StorageSchema['stateBackups'] | undefined) ?? [],
     runtimeConfig: normalizeRuntimeConfig(
       result.runtimeConfig as Partial<StorageSchema['runtimeConfig']> | undefined,

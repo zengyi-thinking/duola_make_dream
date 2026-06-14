@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import puppeteer from 'puppeteer-core';
 import http from 'node:http';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { setTimeout as wait } from 'node:timers/promises';
 import { join } from 'node:path';
 
@@ -9,9 +9,34 @@ const ROOT = process.cwd();
 const EXT = join(ROOT, '.output/chrome-mv3').replace(/\\/g, '/');
 const PROFILE = join(ROOT, '.test-profile-final');
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+const VIRTUEA_ENV = join(ROOT, '..', 'Virtuea', '.env');
+const BUNDLED_RUNTIME_CONFIG_FILE = join(ROOT, 'config', 'bundled-runtime-config.json');
+
+function getActiveProfile(profiles, activeProfileId) {
+  if (!Array.isArray(profiles) || profiles.length === 0) return null;
+  return profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0];
+}
 
 if (existsSync(PROFILE)) rmSync(PROFILE, { recursive: true, force: true });
 mkdirSync(PROFILE, { recursive: true });
+
+const bundledRuntimeConfig = JSON.parse(readFileSync(BUNDLED_RUNTIME_CONFIG_FILE, 'utf8'));
+const env = { ...process.env };
+if (!env.MINIMAX_API_KEY && existsSync(VIRTUEA_ENV)) {
+  for (const line of readFileSync(VIRTUEA_ENV, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/);
+    if (m && !env[m[1]]) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+}
+const llmProfile = getActiveProfile(bundledRuntimeConfig.llmProfiles, bundledRuntimeConfig.activeLlmProfileId);
+const MODEL = env.MINIMAX_TEXT_MODEL || llmProfile?.model || 'MiniMax-M3';
+const ENDPOINT = env.MINIMAX_API_BASE_URL || llmProfile?.endpoint || 'https://api.minimaxi.com/anthropic';
+const API_KEY = env.MINIMAX_API_KEY || llmProfile?.apiKey;
+if (!API_KEY) {
+  console.error('❌ 缺少 LLM API Key（请检查 ../Virtuea/.env 或环境变量）');
+  process.exit(1);
+}
+console.log(`✅ 凭据已加载 | LLM: ${MODEL}`);
 
 // 准备测试页面
 const TEST_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>PB Test Article</title></head>
@@ -41,12 +66,26 @@ const browser = await puppeteer.launch({
 });
 
 let swTarget = null;
-for (let i = 0; i < 30; i++) {
+for (let i = 0; i < 120 && !swTarget; i++) {
   swTarget = browser.targets().find(t => {
     try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; }
   });
-  if (swTarget) break;
-  await wait(500);
+  if (!swTarget) await wait(500);
+}
+if (!swTarget && typeof browser.waitForTarget === 'function') {
+  try {
+    swTarget = await browser.waitForTarget((t) => {
+      try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; }
+    }, { timeout: 60000 });
+  } catch {
+    swTarget = null;
+  }
+}
+if (!swTarget) {
+  console.error('❌ service worker 未启动');
+  console.error(browser.targets().map((t) => `[${t.type()}] ${t.url()}`).join('\n'));
+  await browser.close();
+  process.exit(1);
 }
 const extId = new URL(swTarget.url()).host;
 console.log('SW extId:', extId);
@@ -56,6 +95,21 @@ await swClient.send('Runtime.enable');
 await swClient.send('Console.enable');
 swClient.on('Console.messageAdded', (msg) => {
   console.log(`  [bg-log] ${msg.message.text}`);
+});
+
+await swClient.send('Runtime.evaluate', {
+  expression: `(async () => {
+    await chrome.storage.local.set({ runtimeConfig: ${JSON.stringify({
+      ...bundledRuntimeConfig,
+      llmProfiles: [{ id: 'llm-test', name: '测试模型', apiKey: API_KEY, endpoint: ENDPOINT, model: MODEL }],
+      activeLlmProfileId: 'llm-test',
+      imageProfiles: [],
+      activeImageProfileId: null,
+    })} });
+    return 'ok';
+  })()`,
+  returnByValue: true,
+  awaitPromise: true,
 });
 
 // 步骤 1：用户打开普通网页
@@ -87,6 +141,7 @@ const readResult = await sidePanel.evaluate(async () => {
             title: resp.payload?.page?.pageTitle,
             textLen: resp.payload?.page?.mainText?.length,
             pageContextsCount: resp.payload?.memorySummary?.counts?.pageContexts,
+            pipelineRunsCount: resp.payload?.memorySummary?.counts?.pipelineRuns,
           } : null,
           runtimeLastError: chrome.runtime.lastError?.message,
         });
@@ -110,6 +165,7 @@ const analyzeResult = await sidePanel.evaluate(async () => {
             noteTitle: resp.payload?.analysis?.noteCard?.title,
             keyIdeas: resp.payload?.analysis?.keyIdeas?.length,
             memoryCandidates: resp.payload?.analysis?.memoryCandidates?.length,
+            pipelineRunsCount: resp.payload?.memorySummary?.counts?.pipelineRuns,
           } : null,
           runtimeLastError: chrome.runtime.lastError?.message,
         });
@@ -133,6 +189,7 @@ const ideaResult = await sidePanel.evaluate(async () => {
             artifactName: resp.payload?.artifact?.concept?.name,
             tagline: resp.payload?.artifact?.concept?.tagline,
             features: resp.payload?.artifact?.concept?.features?.length,
+            pipelineRunsCount: resp.payload?.memorySummary?.counts?.pipelineRuns,
           } : null,
           runtimeLastError: chrome.runtime.lastError?.message,
         });

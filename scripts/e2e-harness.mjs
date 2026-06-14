@@ -78,9 +78,22 @@ const browser = await puppeteer.launch({
 });
 
 let sw = null;
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 120 && !sw; i++) {
   sw = browser.targets().find((t) => { try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; } });
-  if (sw) break; await wait(500);
+  if (!sw) await wait(500);
+}
+if (!sw && typeof browser.waitForTarget === 'function') {
+  try {
+    sw = await browser.waitForTarget((t) => { try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; } }, { timeout: 60000 });
+  } catch {
+    sw = null;
+  }
+}
+if (!sw) {
+  console.error('❌ 没找到扩展 service worker');
+  console.error(browser.targets().map((t) => `[${t.type()}] ${t.url()}`).join('\n'));
+  await browser.close();
+  process.exit(1);
 }
 const extId = new URL(sw.url()).host;
 const swClient = await sw.createCDPSession();
@@ -106,7 +119,12 @@ sidePanel.setDefaultTimeout(60000);
 const res = await sidePanel.evaluate(() => new Promise((resolve) => {
   chrome.runtime.sendMessage(
     { type: 'idea.submit', requestId: 'harness-1', source: 'popup', payload: { text: '做一个读书笔记整理工具', selectedContextIds: [], selectedArchiveNoteIds: [] } },
-    (resp) => resolve(resp ? { success: resp.success, error: resp.error, name: resp.payload?.artifact?.concept?.name } : { success: false, error: chrome.runtime.lastError?.message }),
+    (resp) => resolve(resp ? {
+      success: resp.success,
+      error: resp.error,
+      name: resp.payload?.artifact?.concept?.name,
+      pipelineRunsCount: resp.payload?.memorySummary?.counts?.pipelineRuns,
+    } : { success: false, error: chrome.runtime.lastError?.message }),
   );
 }));
 console.log('\n=== idea.submit ===');
@@ -125,12 +143,14 @@ await browser.close();
 // 断言
 const A = logs.some((l) => l.includes('应用自学习提示'));
 const B = patchState.result.value === 'applied';
+const C = (res.pipelineRunsCount ?? 0) > 0;
 console.log('\n=== 闭环断言 ===');
 console.log(`A 补丁注入 system（bg-log「应用自学习提示」）: ${A ? '✅' : '❌'}`);
 console.log(`B 补丁 status → applied（消费闭环收尾）      : ${B ? '✅' : '❌'} (实际=${patchState.result.value})`);
+console.log(`C 流水线已落盘                              : ${C ? '✅' : '❌'}`);
 if (A) console.log('   相关日志:', logs.filter((l) => l.includes('自学习')).slice(0, 2));
 
-const pass = A && B;
+const pass = A && B && C;
 console.log(pass ? '\n🎉 harness 自学习闭环验证通过：补丁真正影响了下次输出。' : '\n⚠️ 闭环未完整，见上。');
 process.exit(pass ? 0 : 1);
 

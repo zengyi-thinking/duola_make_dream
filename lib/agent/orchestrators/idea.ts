@@ -9,10 +9,12 @@ import {
   mergeRecentThemes,
   saveArtifact,
   saveIdea,
+  savePipelineRun,
   saveProfile,
 } from '@/lib/memory';
 import { getLlmClient } from '@/lib/llm';
 import { buildHarnessHint } from '../harness';
+import { buildPipelineTrace, createPipelineStage } from '../pipeline';
 import { buildToneHint, POCKET_AGENT_VOICE } from '../personality';
 import { routeIdeaIntent } from '../router';
 import { getRuntimeConfig } from '@/lib/storage/local';
@@ -71,6 +73,19 @@ export async function processIdeaSubmission(
   }, client, hint);
   const imagePrompt = await runProductCamera(concept, client, hint);
   const shrinkResult = await runShrinkLight(concept, client, hint);
+  const pipelineTrace = buildPipelineTrace({
+    kind: 'idea',
+    title: concept.name,
+    summary: concept.tagline,
+    sourceId: idea.id,
+    stages: [
+      createPipelineStage('plan', '规划', '锁定输入与目标', `${selectedContexts.length} 个片段 · ${selectedNotes.length} 条笔记`),
+      createPipelineStage('research', '调研', '整理上下文与记忆线索', contextLine || '没有带入额外上下文'),
+      createPipelineStage('reflect', '反思', '结合画像偏好与近期主题', profile.recentThemes.slice(0, 2).join(' / ') || '暂无近期主题'),
+      createPipelineStage('outline', '信息编排', '生成概念和 MVP 路径', concept.features.slice(0, 2).join(' / ') || '功能点待补'),
+      createPipelineStage('generate', '生成', '输出产品雏形', shrinkResult.mvpPlan[0] || concept.name),
+    ],
+  });
   // 补丁已注入本轮输出，标记为已应用（status → applied）
   if (activePatches.length > 0) {
     await markHarnessPatchesApplied(activePatches.map((p) => p.id));
@@ -84,15 +99,23 @@ export async function processIdeaSubmission(
     imagePrompt,
     mvpPlan: shrinkResult.mvpPlan,
     nextTasks: shrinkResult.nextTasks,
-    appliedGadgets: ['IdeaLens', 'ProductCamera', 'ShrinkLight', 'MemoryBread', 'AnywhereDoor'],
+    // 实际在本轮 orchestrator 中调用过的 gadget：
+    //   - IdeaLens: 生成产品概念
+    //   - ProductCamera: 生成图片 prompt
+    //   - ShrinkLight: 压缩为 MVP 计划
+    // 注意：AnywhereDoor 是片段拼接纯函数（不是 gadget），MemoryBread 只在系统提示层面
+    // 起作用（不产生产物）—— 因此不列入"工具痕迹"。
+    appliedGadgets: ['IdeaLens', 'ProductCamera', 'ShrinkLight'],
     selectedContextIds,
     selectedArchiveNoteIds,
+    pipelineTrace,
     createdAt: Date.now(),
   };
 
   const themedProfile = mergeRecentThemes(profile, extractThemesFromIdea(ideaText));
   await saveIdea(idea);
   await saveArtifact(artifact);
+  await savePipelineRun(pipelineTrace);
   await saveProfile(themedProfile, 'idea');
 
   const memoryHints = runMemoryBread(themedProfile);

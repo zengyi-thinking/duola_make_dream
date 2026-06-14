@@ -63,7 +63,7 @@ const SEED = {
   ],
   ideaHistory: [], feedbackLog: [], contextSnippets: [], pageContexts: [],
   memoryCandidates: [], approvedMemories: [], generatedImages: [],
-  generatedMindmaps: [], harnessPatches: [], profileHistory: [],
+  generatedMindmaps: [], harnessPatches: [], pipelineRuns: [], profileHistory: [],
 };
 
 if (existsSync(PROFILE)) rmSync(PROFILE, { recursive: true, force: true });

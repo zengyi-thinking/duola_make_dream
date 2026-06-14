@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import MindmapPreview from '../../components/MindmapPreview';
+import PipelineFlow from '../../components/PipelineFlow';
 import type { MemorySummary } from '@/lib/agent/types';
 import {
   createImageDeleteMessage,
@@ -8,7 +9,6 @@ import {
   createMindmapDeleteMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
-import { InfoBlock } from '../../components/InfoBlock';
 import { CollapsibleCard } from '../../components/CollapsibleCard';
 
 interface ObservationLibrarySectionProps {
@@ -111,19 +111,19 @@ function PatchLibrary({
               <strong>{patch.target}</strong>
               <span className={`status-pill status-pill--${patch.status === 'applied' ? 'approved' : patch.status}`}>{patch.status}</span>
             </div>
-            <p className="micro-copy">{patch.reason}</p>
-            <div className="detail-grid">
-              <InfoBlock label="范围" value={patch.scope} />
-              <InfoBlock label="风险" value={patch.riskLevel} />
-              <InfoBlock label="需要审批" value={patch.requireUserApproval ? '是' : '否'} />
+            <p className="micro-copy">{shorten(patch.reason, 88)}</p>
+            <div className="token-list">
+              <span className="token-chip">{patch.scope}</span>
+              <span className="token-chip">{patch.riskLevel}</span>
+              <span className="token-chip">{patch.requireUserApproval ? '需要审批' : '无需审批'}</span>
             </div>
-            <div className="subsection">
-              <h4>Before / After</h4>
-              <div className="stack stack--tight">
+            <details className="reading-accordion" style={{ marginTop: 8 }}>
+              <summary>查看补丁内容</summary>
+              <div className="stack stack--tight" style={{ marginTop: 8 }}>
                 <pre className="prompt-block">{patch.before}</pre>
                 <pre className="prompt-block">{patch.after}</pre>
               </div>
-            </div>
+            </details>
             <div className="inline-actions">
               <LineButton variant="ghost" onClick={() => onCopy(`${patch.before}\n\n${patch.after}`, '补丁内容已复制。')}>
                 复制补丁
@@ -159,8 +159,18 @@ function ApprovedMemoryLibrary({
               <strong>{item.title}</strong>
               <span className="status-pill status-pill--approved">{item.category}</span>
             </div>
-            <p className="micro-copy">{item.content}</p>
-            <p className="micro-copy">{item.reason}</p>
+            <p className="micro-copy">{shorten(item.reason ?? '', 96)}</p>
+            <div className="token-list">
+              <span className="token-chip">{shorten(item.content ?? '', 18)}</span>
+              <span className="token-chip">{item.category}</span>
+            </div>
+            <details className="reading-accordion" style={{ marginTop: 8 }}>
+              <summary>展开记忆详情</summary>
+              <div className="subsection">
+                <p className="micro-copy">{item.content}</p>
+                <p className="micro-copy">{item.reason}</p>
+              </div>
+            </details>
             <div className="inline-actions">
               <LineButton variant="ghost" onClick={() => onDelete(item.id)} disabled={Boolean(busyAction)}>
                 删除这条记忆
@@ -198,14 +208,20 @@ function ImageLibrary({
               <strong>{item.request.title || item.model || 'gpt-image-2'}</strong>
               <span className={`status-pill status-pill--${item.status}`}>{item.status}</span>
             </div>
-            <p className="micro-copy">
-              {item.request.sourceType} · {item.request.style} · {formatDate(item.createdAt)}
-            </p>
+            <div className="token-list">
+              <span className="token-chip">{item.request.sourceType}</span>
+              <span className="token-chip">{item.request.style}</span>
+              <span className="token-chip">{formatDate(item.createdAt)}</span>
+            </div>
             {item.imageUrl ? (
               <img src={item.imageUrl} alt={item.prompt.slice(0, 40)} className="generated-image" />
             ) : null}
-            <pre className="prompt-block">{item.prompt}</pre>
-            <p className="micro-copy">{item.previewText}</p>
+            {item.pipelineTrace ? <PipelineFlow trace={item.pipelineTrace} compact /> : null}
+            <p className="micro-copy">{shorten(item.previewText ?? '', 88)}</p>
+            <details className="reading-accordion" style={{ marginTop: 8 }}>
+              <summary>展开生成 Prompt</summary>
+              <pre className="prompt-block">{item.prompt}</pre>
+            </details>
             <div className="inline-actions">
               <LineButton variant="ghost" onClick={() => onCopy(item.prompt, '图片 Prompt 已复制。')}>复制 Prompt</LineButton>
               <LineButton variant="ghost" onClick={() => onDelete(item.id)} disabled={Boolean(busyAction)}>删除记录</LineButton>
@@ -245,7 +261,13 @@ function MindmapLibrary({
             <div className="tree-preview">
               <MindmapPreview node={item.result.root} />
             </div>
-            {item.imagePrompt ? <pre className="prompt-block">{item.imagePrompt}</pre> : null}
+            {item.pipelineTrace ? <PipelineFlow trace={item.pipelineTrace} compact /> : null}
+            {item.imagePrompt ? (
+              <details className="reading-accordion" style={{ marginTop: 8 }}>
+                <summary>展开图谱 Prompt</summary>
+                <pre className="prompt-block">{item.imagePrompt}</pre>
+              </details>
+            ) : null}
             <div className="inline-actions">
               {item.imagePrompt ? (
                 <LineButton variant="ghost" onClick={() => onCopy(item.imagePrompt!, '图谱 Prompt 已复制。')}>复制 Prompt</LineButton>
@@ -267,4 +289,9 @@ function formatDate(timestamp: number) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(timestamp));
+}
+
+function shorten(text: string, max: number) {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  return compact.length > max ? `${compact.slice(0, max)}…` : compact;
 }

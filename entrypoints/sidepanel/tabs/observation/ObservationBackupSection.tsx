@@ -108,6 +108,7 @@ export default function ObservationBackupSection(props: ObservationBackupSection
               画像 {backup.snapshot.profileHistory.length} ·
               记忆 {backup.snapshot.archiveNotes.length} ·
               创意 {backup.snapshot.ideaHistory.length} ·
+              流水线 {backup.snapshot.pipelineRuns?.length ?? 0} ·
               补丁 {backup.snapshot.harnessPatches.length}
             </p>
             <div className="inline-actions">
@@ -135,12 +136,19 @@ export default function ObservationBackupSection(props: ObservationBackupSection
             <InfoBlock label="较新快照" value={backupComparison.leftLabel} />
             <InfoBlock label="较旧快照" value={backupComparison.rightLabel} />
           </div>
-          <div className="subsection">
-            <h4>差异摘要</h4>
-            <ol className="bullet-list">
-              {backupComparison.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
-            </ol>
+          <div className="token-list">
+            {backupComparison.changes.slice(0, 3).map((change, index) => (
+              <span key={`${index}-${change}`} className="token-chip">{shorten(change, 18)}</span>
+            ))}
           </div>
+          <details className="reading-accordion" style={{ marginTop: 10 }}>
+            <summary>展开差异明细 ({backupComparison.changes.length})</summary>
+            <div className="subsection">
+              <ol className="bullet-list">
+                {backupComparison.changes.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+              </ol>
+            </div>
+          </details>
         </div>
       ) : (
         <p className="soft-text" style={{ marginTop: 8 }}>至少保存两份快照后，这里会自动显示回滚差异。</p>
@@ -156,4 +164,8 @@ function formatDate(timestamp: number) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(timestamp));
+}
+
+function shorten(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }

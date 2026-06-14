@@ -105,14 +105,27 @@ const browser = await puppeteer.launch({
 });
 
 let swTarget = null;
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 120 && !swTarget; i++) {
   swTarget = browser.targets().find((t) => {
     try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; }
   });
-  if (swTarget) break;
-  await wait(500);
+  if (!swTarget) await wait(500);
 }
-if (!swTarget) { console.error('❌ service worker 未启动'); await browser.close(); process.exit(1); }
+if (!swTarget && typeof browser.waitForTarget === 'function') {
+  try {
+    swTarget = await browser.waitForTarget((t) => {
+      try { return t.type() === 'service_worker' && t.url().startsWith('chrome-extension://'); } catch { return false; }
+    }, { timeout: 60000 });
+  } catch {
+    swTarget = null;
+  }
+}
+if (!swTarget) {
+  console.error('❌ service worker 未启动');
+  console.error(browser.targets().map((t) => `[${t.type()}] ${t.url()}`).join('\n'));
+  await browser.close();
+  process.exit(1);
+}
 const extId = new URL(swTarget.url()).host;
 console.log('SW extId:', extId);
 
@@ -180,6 +193,7 @@ if (ideaRes.success && art) {
   const nameIsTemplate = TEMPLATE_SUFFIXES.some((s) => name.endsWith(s));
   const featuresIsTemplate = art.concept?.features?.[0] === TEMPLATE_FEATURE;
   results.liveLlm = !nameIsTemplate && !featuresIsTemplate && name.length > 0;
+  console.log('  pipelineRuns :', ideaRes.payload?.memorySummary?.counts?.pipelineRuns ?? 0);
   console.log(results.liveLlm ? '✅ 真实 LLM 返回（与输入语义相关，非模板）' : '⚠️ 返回疑似模板，请人工核对 name/features');
 } else {
   console.log('❌ idea.submit 失败:', ideaRes.error);
@@ -199,6 +213,7 @@ if (rec) {
   console.log('  status      :', rec.status);
   console.log('  previewText :', String(rec.previewText ?? '').slice(0, 80));
   console.log('  imageUrl    :', String(rec.imageUrl ?? '').slice(0, 70));
+  console.log('  pipelineRuns :', imgRes.payload?.memorySummary?.counts?.pipelineRuns ?? 0);
   results.liveImage = rec.status === 'done' && !!rec.imageUrl;
   console.log(results.liveImage ? '✅ 真实图片生成成功' : '❌ 图片未成功生成');
 } else {

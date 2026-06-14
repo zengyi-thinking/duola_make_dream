@@ -36,6 +36,28 @@ export type FeedbackAction =
   | 'more-tech'
   | 'dislike-direction';
 
+export type ContentPipelineKind = 'idea' | 'page' | 'archive' | 'image' | 'mindmap';
+export type ContentPipelineStageId = 'plan' | 'research' | 'reflect' | 'outline' | 'generate';
+export type ContentPipelineStageStatus = 'done' | 'skipped';
+
+export interface ContentPipelineStage {
+  id: ContentPipelineStageId;
+  label: string;
+  summary: string;
+  detail?: string;
+  status: ContentPipelineStageStatus;
+}
+
+export interface ContentPipelineTrace {
+  id: string;
+  kind: ContentPipelineKind;
+  title: string;
+  summary: string;
+  stages: ContentPipelineStage[];
+  sourceId?: string;
+  createdAt: number;
+}
+
 export type ProfileHistorySource =
   | 'init'
   | 'idea'
@@ -77,6 +99,8 @@ export interface ContextSnippet {
   createdAt: number;
 }
 
+export type IdeaCommitStatus = 'pending' | 'committed' | 'failed';
+
 export interface IdeaRecord {
   id: string;
   rawInput: string;
@@ -84,6 +108,16 @@ export interface IdeaRecord {
   selectedContextIds: string[];
   selectedArchiveNoteIds: string[];
   createdAt: number;
+  /**
+   * 提交状态。processIdeaSubmission 事务支持：
+   * - 'pending'   idea 已存但 artifact/profile 还没存（中途 SW 被杀或 LLM 失败）
+   * - 'committed' 完整闭环成功
+   * - 'failed'    LLM 失败但 idea 已留下让用户能看到失败原因
+   * 启动时清理超过 5 分钟仍为 pending 的孤儿 idea。
+   */
+  status?: IdeaCommitStatus;
+  failReason?: string;
+  completedAt?: number;
 }
 
 export interface ProductConcept {
@@ -108,6 +142,7 @@ export interface ProductArtifact {
   appliedGadgets: string[];
   selectedContextIds: string[];
   selectedArchiveNoteIds: string[];
+  pipelineTrace: ContentPipelineTrace;
   createdAt: number;
 }
 
@@ -171,6 +206,7 @@ export type ArchiveNote = {
   summary: string;
   bullets: string[];
   tags: string[];
+  pipelineTrace?: ContentPipelineTrace;
   createdAt: number;
   savedByUser: boolean;
   relatedContextIds: string[];
@@ -219,6 +255,7 @@ export interface MemorySummary {
   profileHistory: ProfileHistoryEntry[];
   stateBackups: import('@/lib/storage/schema').StateBackup[];
   harnessPatches: HarnessPatch[];
+  pipelineRuns: ContentPipelineTrace[];
   generatedImages: GeneratedImageRecord[];
   generatedMindmaps: MindmapRecord[];
   pendingPatches: HarnessPatch[];
@@ -232,6 +269,7 @@ export interface MemorySummary {
     approvedMemories: number;
     profileChanges: number;
     backups: number;
+    pipelineRuns: number;
     images: number;
     mindmaps: number;
   };
@@ -263,6 +301,7 @@ export interface PageAnalyzeResponse {
   page: PageReadResult;
   savedContext: PageContextRecord;
   analysis: PageAnalysisResult;
+  pipelineTrace: ContentPipelineTrace;
   memorySummary: MemorySummary;
 }
 

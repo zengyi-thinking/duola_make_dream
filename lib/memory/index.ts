@@ -1,5 +1,6 @@
 export {
   approveMemoryCandidate,
+  cleanupOrphanIdeas,
   clearApprovedMemories,
   clearArchiveNotes,
   clearGeneratedImages,
@@ -36,10 +37,12 @@ export {
   saveGeneratedImage,
   saveGeneratedMindmap,
   saveHarnessPatch,
+  savePipelineRun,
   saveIdea,
   saveMemoryCandidates,
   savePageContext,
   saveProfile,
+  updateIdeaStatus,
 } from './store';
 export {
   applyApprovedMemoryToProfile,

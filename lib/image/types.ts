@@ -1,3 +1,5 @@
+import type { ContentPipelineTrace } from '@/lib/agent/types';
+
 export type ImageGenerationSourceType =
   | 'idea'
   | 'page-summary'
@@ -32,5 +34,6 @@ export type GeneratedImageRecord = {
   model?: string;
   /** 真实生成成功后的图片 URL（base64 data URL 或 https） */
   imageUrl?: string;
+  pipelineTrace?: ContentPipelineTrace;
   createdAt: number;
 };

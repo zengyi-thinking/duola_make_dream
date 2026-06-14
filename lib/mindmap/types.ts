@@ -1,3 +1,5 @@
+import type { ContentPipelineTrace } from '@/lib/agent/types';
+
 export type MindmapNode = {
   id: string;
   label: string;
@@ -19,5 +21,6 @@ export type MindmapRecord = {
   sourceType: 'paper' | 'article' | 'idea';
   result: MindmapResult;
   imagePrompt?: string;
+  pipelineTrace?: ContentPipelineTrace;
   createdAt: number;
 };

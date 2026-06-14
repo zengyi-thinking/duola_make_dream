@@ -1,4 +1,4 @@
-import type { MemoryCandidate } from '@/lib/agent/types';
+import type { ContentPipelineTrace, MemoryCandidate } from '@/lib/agent/types';
 
 export type PageType = 'paper' | 'article' | 'generic';
 export type PageReadMode = 'selection' | 'current-page' | 'study-archive';
@@ -51,5 +51,6 @@ export type PageAnalysisResult = {
     relationToMyProjects: string[];
   };
   memoryCandidates: MemoryCandidate[];
+  pipelineTrace: ContentPipelineTrace;
   createdAt: number;
 };

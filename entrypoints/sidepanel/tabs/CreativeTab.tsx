@@ -11,6 +11,7 @@ import type { GeneratedImageRecord } from '@/lib/image/types';
 import { ResultCard, EmptyCard } from '../components/ResultCard';
 import { InfoBlock } from '../components/InfoBlock';
 import { ListBlock } from '../components/ListBlock';
+import PipelineFlow from '../components/PipelineFlow';
 import { SelectionGroup, toggleSelection } from '../components/ContextSelector';
 import { RecallPanel } from '../components/RecallPanel';
 
@@ -245,6 +246,8 @@ export default function CreativeTab(props: CreativeTabProps) {
             <p className="result-tagline">{artifact.concept.name}</p>
             <p className="soft-text">{artifact.concept.tagline}</p>
             <p className="soft-text">{artifact.concept.positioning}</p>
+
+            <PipelineFlow trace={artifact.pipelineTrace} />
 
             <div className="token-list">
               {artifact.concept.features.map((feature) => <span key={feature} className="token-chip">{feature}</span>)}

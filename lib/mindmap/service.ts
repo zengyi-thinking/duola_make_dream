@@ -1,3 +1,4 @@
+import { buildPipelineTrace, createPipelineStage } from '@/lib/agent/pipeline';
 import type { MindmapRecord, MindmapResult, MindmapNode } from './types';
 
 type GenerateMindmapInput = {
@@ -68,6 +69,19 @@ export function generateMindmapRecord(input: GenerateMindmapInput): MindmapRecor
     sourceType: input.sourceType,
     createdAt: Date.now(),
   };
+  const pipelineTrace = buildPipelineTrace({
+    kind: 'mindmap',
+    title: input.title,
+    summary: '把来源内容压成节点关系图',
+    sourceId: input.noteId ?? input.sourceId,
+    stages: [
+      createPipelineStage('plan', '规划', '锁定图谱来源', input.sourceType),
+      createPipelineStage('research', '调研', '拆分内容为节点线索', input.content.slice(0, 48) || '没有正文内容'),
+      createPipelineStage('reflect', '反思', '抽取主线与延展', result.root.children?.length ? `${result.root.children.length} 个分支` : '暂无分支'),
+      createPipelineStage('outline', '信息编排', '整理树状结构', result.root.label),
+      createPipelineStage('generate', '生成', '输出图谱记录', input.title),
+    ],
+  });
 
   return {
     id: crypto.randomUUID(),
@@ -75,6 +89,7 @@ export function generateMindmapRecord(input: GenerateMindmapInput): MindmapRecor
     sourceType: input.sourceType,
     result,
     imagePrompt: buildMindmapImagePrompt(input.title, input.content),
+    pipelineTrace,
     createdAt: Date.now(),
   };
 }
