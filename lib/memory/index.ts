@@ -50,6 +50,7 @@ export {
   getGlobalGraph,
   deleteGraphView,
   mergeIntoGlobalGraph,
+  replaceGlobalGraph,
   // Skill 注册表
   saveSkill,
   getSkillRegistry,

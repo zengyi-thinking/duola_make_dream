@@ -520,6 +520,23 @@ export async function mergeIntoGlobalGraph(
   await run;
 }
 
+/**
+ * 用指定 view 替换全局记忆图（scope='global'）。
+ * 用于 Memory 页删除/编辑节点后整图写回：避免 saveGraphView 的 append 语义导致重复 global view。
+ * 复用 graphViewWriteQueue，与 mergeIntoGlobalGraph 串行，避免读-写竞态。
+ */
+export async function replaceGlobalGraph(view: GraphView): Promise<void> {
+  const run = graphViewWriteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const views = await readStorage('graphViews');
+      const filtered = views.filter((v) => v.scope !== 'global');
+      await writeStorage('graphViews', [...filtered, { ...view, scope: 'global' }]);
+    });
+  graphViewWriteQueue = run.then(() => undefined, () => undefined);
+  await run;
+}
+
 // ---------- Skill 注册表 ----------
 
 export async function saveSkill(skill: SkillDefinition): Promise<SkillDefinition> {

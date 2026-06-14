@@ -37,6 +37,7 @@ import {
   updateIdeaStatus,
   getGlobalGraph,
   saveGraphView,
+  replaceGlobalGraph,
   deleteGraphView,
   getSkillRegistry,
   saveSkill,
@@ -297,7 +298,12 @@ async function handlePocketGraphLoad() {
 }
 
 async function handlePocketGraphSave(view: GraphView) {
-  await saveGraphView(view);
+  // scope='global' 的写回走 replace 语义（删旧 global + 存新），避免 append 产生重复全局图
+  if (view.scope === 'global') {
+    await replaceGlobalGraph(view);
+  } else {
+    await saveGraphView(view);
+  }
   return getMemorySummary();
 }
 
