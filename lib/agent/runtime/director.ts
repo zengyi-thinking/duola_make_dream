@@ -64,7 +64,7 @@ import {
   savePipelineRun,
   saveProfile,
 } from '@/lib/memory';
-import { runAnywhereDoor } from '@/lib/agent/gadgets';
+import { runAnywhereDoor, runMemoryBread } from '@/lib/agent/gadgets';
 import { buildArchiveNoteFromAnalysis } from '@/lib/agent/core';
 import { buildPipelineTrace, createPipelineStage } from '@/lib/agent/pipeline';
 import { createGraphEdge, createGraphView } from '@/lib/graph/types';
@@ -141,6 +141,7 @@ export class PocketAgentDirector {
    * 生图（image）不在本链路，由 runImageStage 在用户确认计划图后单独触发。
    */
   async runInventPipeline(input: InventInput): Promise<PipelineRun<InventResult>> {
+    if (!input.text.trim()) throw new Error('想法不能为空');
     const events: AgentEvent[] = [];
     const { ctx, patches } = await buildContext('invent', input.text.slice(0, 40), (e) => events.push(e));
 
@@ -233,7 +234,8 @@ export class PocketAgentDirector {
     await saveIdea(idea);
     await saveArtifact(artifact);
     await savePipelineRun(pipelineTrace);
-    await saveProfile(mergeRecentThemes(ctx.profile, extractThemesFromIdea(input.text)), 'idea');
+    const themedProfile = mergeRecentThemes(ctx.profile, extractThemesFromIdea(input.text));
+    await saveProfile(themedProfile, 'idea');
     if (patches.length > 0) {
       await markHarnessPatchesApplied(patches.map((p) => p.id));
     }
@@ -249,12 +251,14 @@ export class PocketAgentDirector {
 
     events.push({ agentId: 'structure', status: 'done', stage: 'outline', message: '计划图就绪，等待确认' });
 
+    const memoryHints = runMemoryBread(themedProfile);
     const assistantSummary = [
       selectedContexts.length > 0 || selectedNotes.length > 0
         ? '我把你放进口袋的上下文也带进来了。'
         : '我先根据你的想法起草一个方向。',
       `收束为 ${labelIntent(artifact.intent)} 方向：${artifact.concept.name}。`,
-    ].join(' ');
+      memoryHints[0] ? `我也记得你最近的偏好是"${memoryHints[0]}"。` : '',
+    ].filter(Boolean).join(' ');
 
     return { events, result: { artifact, planGraph, assistantSummary } };
   }
@@ -288,7 +292,7 @@ export class PocketAgentDirector {
    */
   async runFeedPipeline(input: FeedInput): Promise<PipelineRun<FeedResult>> {
     const events: AgentEvent[] = [];
-    const { ctx } = await buildContext('feed', input.page.pageTitle.slice(0, 40), (e) => events.push(e));
+    const { ctx, patches } = await buildContext('feed', input.page.pageTitle.slice(0, 40), (e) => events.push(e));
 
     const feedResult = await feedAgent.run(
       { page: input.page, context: input.context, profile: ctx.profile },
@@ -299,8 +303,11 @@ export class PocketAgentDirector {
     const stageEdges: GraphEdge[] = [];
     collectResult(feedResult, stageNodes, stageEdges, experiences);
 
-    // 持久化（对应 handlePageAnalyze 的 savePipelineRun + saveMemoryCandidates）
+    // 持久化（对应 handlePageAnalyze 的 savePipelineRun + saveMemoryCandidates + markHarnessPatchesApplied）
     await savePipelineRun(feedResult.output.analysis.pipelineTrace);
+    if (patches.length > 0) {
+      await markHarnessPatchesApplied(patches.map((p) => p.id));
+    }
     for (const exp of experiences) await saveExperience(exp);
 
     const feedGraph = createGraphView({

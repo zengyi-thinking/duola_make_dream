@@ -105,7 +105,6 @@ export interface InventInput {
 export interface FeedInput {
   page: PageReadResult;
   context: PageContextRecord;
-  selectedText?: string;
 }
 
 /**
