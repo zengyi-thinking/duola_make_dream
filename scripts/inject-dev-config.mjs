@@ -42,11 +42,26 @@ function loadDotEnv() {
 
 if (!isClean) loadDotEnv();
 
-const pick = (k) => (isClean ? '' : process.env[k] || '');
+const pick = (...keys) => {
+  if (isClean) return '';
+  for (const k of keys) {
+    if (process.env[k]) return process.env[k];
+  }
+  return '';
+};
 
+// 支持多组变量名别名，兼容常见命名：LLM_*（通用）/ MINIMAX_* / ANTHROPIC_* / GPT_IMAGE_*
 const config = {
-  llm: { apiKey: pick('LLM_API_KEY'), endpoint: pick('LLM_ENDPOINT'), model: pick('LLM_MODEL') },
-  image: { apiKey: pick('IMAGE_API_KEY'), endpoint: pick('IMAGE_ENDPOINT'), model: pick('IMAGE_MODEL') },
+  llm: {
+    apiKey: pick('LLM_API_KEY', 'MINIMAX_API_KEY', 'ANTHROPIC_API_KEY'),
+    endpoint: pick('LLM_ENDPOINT', 'MINIMAX_API_BASE_URL', 'ANTHROPIC_BASE_URL'),
+    model: pick('LLM_MODEL', 'MINIMAX_TEXT_MODEL'),
+  },
+  image: {
+    apiKey: pick('IMAGE_API_KEY', 'GPT_IMAGE_API_KEY'),
+    endpoint: pick('IMAGE_ENDPOINT', 'GPT_IMAGE_API_URL'),
+    model: pick('IMAGE_MODEL', 'GPT_IMAGE_MODEL'),
+  },
 };
 
 writeFileSync(targetPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
