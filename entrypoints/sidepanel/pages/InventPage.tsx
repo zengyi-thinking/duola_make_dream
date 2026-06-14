@@ -245,8 +245,22 @@ export default function InventPage() {
     }
   }
 
+  /** 开始新发明：清空当前记录（keep-alive 下切换不丢，New 主动开新）。 */
+  function handleNew() {
+    setIdeaText('');
+    setSelectedContextIds([]);
+    setSelectedArchiveNoteIds([]);
+    setArtifact(null);
+    setPlanGraph(null);
+    setGeneratedImage(null);
+    setLastFeedback('');
+    setCurrentStage(0);
+    setErrorText(''); setNoticeText(''); setStatusText('');
+  }
+
   const inventing = busyAction === 'invent';
   const planBoard = artifact?.planBoard;
+  const hasRecord = Boolean(artifact || planGraph || generatedImage);
 
   return (
     <div className="tab-panel">
@@ -256,6 +270,9 @@ export default function InventPage() {
             <p className="section-label">Idea Inventor</p>
             <h2>想法发明器</h2>
           </div>
+          {hasRecord ? (
+            <LineButton variant="ghost" onClick={handleNew} disabled={Boolean(busyAction)}>New</LineButton>
+          ) : null}
         </div>
 
         <div style={{ position: 'relative' }}>

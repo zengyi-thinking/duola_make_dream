@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { LayoutGroup } from 'framer-motion';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import Aurora from '@/components/Aurora/Aurora';
 import TabIndicator from '@/components/TabIndicator/TabIndicator';
 import type { PocketBuddyMood } from '@/lib/agent/types';
-import { usePocketReducedMotion } from '@/lib/ui/reduced-motion';
-import { PB_EASE } from '@/lib/ui/motion-presets';
 import {
   AppProviders,
   useBusy,
@@ -30,12 +28,26 @@ const PAGE_DEFS: Array<{ key: AppPage; label: string }> = [
   { key: 'settings', label: '设置' },
 ];
 
+/** 渲染单个页面（keep-alive 下所有页面常驻 mount）。 */
+function renderPage(key: AppPage) {
+  switch (key) {
+    case 'invent': return <InventPage />;
+    case 'feed': return <FeedPage />;
+    case 'memory': return <MemoryPage />;
+    case 'observe': return <ObservePage />;
+    case 'settings': return <SettingsPage />;
+    default: return null;
+  }
+}
+
 /**
- * App 内壳：导航 + hero + 五页切换。所有状态由 6 个 Context 承载，无 props drilling。
- * 初始化时刷新记忆/配置/产物/图片四个数据源（各 Context 自管）。
+ * App 内壳：导航 + hero + 五页切换。
+ *
+ * keep-alive 渲染（产品重设计修复）：所有 5 页常驻 mount，用 CSS display 切换。
+ * 切走不 unmount，各页 state 保留（解决"切换后看不到之前记录"）；New 按钮主动开新记录。
+ * 所有状态由 6 个 Context 承载，无 props drilling。
  */
 function AppShell() {
-  const reduced = usePocketReducedMotion();
   const { page, setPage } = useNavigation();
   const { statusText, errorText, noticeText } = useToast();
   const { busyAction } = useBusy();
@@ -45,7 +57,6 @@ function AppShell() {
 
   useEffect(() => {
     void Promise.all([refreshMemory(), refreshConfig(), refreshArtifacts(), refreshImages()]).catch((err) => {
-      // 初始化失败不阻塞渲染，错误会在 banner 显示
       console.error('初始化工作区失败', err);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,22 +104,14 @@ function AppShell() {
       {noticeText ? <div className="banner banner--info">{noticeText}</div> : null}
 
       <div className="tab-panel-wrap">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={page}
-            className="tab-panel-anim"
-            initial={reduced ? false : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-            transition={{ duration: 0.22, ease: PB_EASE }}
+        {PAGE_DEFS.map(({ key }) => (
+          <div
+            key={key}
+            className={`tab-panel-page${page === key ? ' tab-panel-page--active' : ''}`}
           >
-            {page === 'invent' && <InventPage />}
-            {page === 'feed' && <FeedPage />}
-            {page === 'memory' && <MemoryPage />}
-            {page === 'observe' && <ObservePage />}
-            {page === 'settings' && <SettingsPage />}
-          </motion.div>
-        </AnimatePresence>
+            {renderPage(key)}
+          </div>
+        ))}
       </div>
     </div>
   );

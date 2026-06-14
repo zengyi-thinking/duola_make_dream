@@ -366,7 +366,16 @@ async function handlePocketAgentImage(planGraph: GraphView) {
 
 async function handlePocketAgentFeed(input: FeedInput) {
   const director = new PocketAgentDirector();
-  const { events, result } = await director.runFeedPipeline(input);
+  const onEvent = (e: AgentEvent) => {
+    try {
+      browser.runtime.sendMessage({ type: 'pocket.agent.stream', event: e }).catch(() => {
+        /* 接收端不存在（sidepanel 未开），忽略 */
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+  const { events, result } = await director.runFeedPipeline(input, onEvent);
   return { events, result, memorySummary: await getMemorySummary() };
 }
 

@@ -301,9 +301,13 @@ export class PocketAgentDirector {
    * 喂养链路：feedAgent（页面提取+结构化分析），产出知识节点图。
    * 对应 buildPageAnalysisResult orchestrator。归档（archive）由调用方在用户确认后单独触发。
    */
-  async runFeedPipeline(input: FeedInput): Promise<PipelineRun<FeedResult>> {
+  async runFeedPipeline(input: FeedInput, onEvent?: (e: AgentEvent) => void): Promise<PipelineRun<FeedResult>> {
     const events: AgentEvent[] = [];
-    const { ctx, patches } = await buildContext('feed', input.page.pageTitle.slice(0, 40), (e) => events.push(e));
+    const emit = (e: AgentEvent) => {
+      events.push(e);
+      try { onEvent?.(e); } catch { /* 流式推送失败不影响主链路 */ }
+    };
+    const { ctx, patches } = await buildContext('feed', input.page.pageTitle.slice(0, 40), emit);
 
     const feedResult = await feedAgent.run(
       { page: input.page, context: input.context, profile: ctx.profile },
