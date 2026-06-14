@@ -16,6 +16,8 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@types/d3-force": "^3.0.10",
+    "d3-force": "^3.0.0",
     "framer-motion": "^12.40.0",
     "idb": "^8.0.2",
     "react": "^19.1.0",
