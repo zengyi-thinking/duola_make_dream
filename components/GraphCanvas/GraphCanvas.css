@@ -1,0 +1,102 @@
+/* GraphCanvas —— SVG 力导向图视觉样式 */
+
+.graph-canvas-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.graph-canvas {
+  width: 100%;
+  min-height: 300px;
+  position: relative;
+}
+
+.graph-canvas__svg {
+  display: block;
+  width: 100%;
+  background: var(--pb-tone-blue-soft);
+  border-radius: 12px;
+  border: 1px solid var(--pb-line);
+}
+
+.graph-canvas__empty {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+}
+
+/* ===== 节点 ===== */
+.graph-canvas__node {
+  cursor: grab;
+  /* 鼠标悬停时由 CSS 提供选中反馈（不影响 d3 物理位置） */
+  transition: filter 0.18s ease;
+}
+.graph-canvas__node:hover {
+  filter: brightness(1.08) drop-shadow(0 2px 4px rgba(37, 87, 218, 0.25));
+}
+.graph-canvas__node:active {
+  cursor: grabbing;
+}
+
+.graph-canvas__node--selected .graph-canvas__node-inner rect {
+  stroke: var(--pb-primary);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px var(--pb-primary));
+}
+
+/* 内层 g:作为入场动画载体,scale 不会冲突 d3 控制的外层 transform */
+.graph-canvas__node-inner {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.graph-canvas__node-inner rect {
+  stroke: transparent;
+  stroke-width: 0;
+  transition: stroke 0.18s ease, stroke-width 0.18s ease, filter 0.18s ease;
+}
+
+.graph-canvas__node-emoji {
+  font-size: 12px;
+  pointer-events: none;
+  user-select: none;
+}
+.graph-canvas__node-label {
+  font-size: 10.5px;
+  fill: #fff;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--pb-font-sans, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif);
+}
+
+/* ===== 入场动画 =====
+   - 仅 opacity + 内层 transform(已通过内层 g 隔离)
+   - 动画结束由 React 端 onAnimationEnd 回调清掉 class,避免 d3 后续 tick 干扰
+   - reduced-motion 降级为直接显示 */
+@keyframes pb-graph-node-enter {
+  0%   { opacity: 0; transform: scale(0.4); }
+  60%  { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.graph-canvas__node--enter .graph-canvas__node-inner {
+  animation: pb-graph-node-enter 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* both 保留终态（opacity:1, scale:1），避免 d3 后续 tick 强制重绘时回退 */
+}
+
+/* ===== 边 ===== */
+.graph-canvas__edge {
+  stroke: var(--pb-line);
+  stroke-width: 1.2;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-canvas__node--enter .graph-canvas__node-inner {
+    animation: none !important;
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
 import {
   forceCenter,
@@ -10,33 +10,41 @@ import {
 } from 'd3-force';
 import type { GraphNode, GraphNodeType, GraphView } from '@/lib/graph/types';
 import NodeDetailDrawer from './NodeDetailDrawer';
+import './GraphCanvas.css';
 
 /**
- * 节点类型 → 颜色（沿用 App.css 的 --pb-primary 蓝色系 + timeline-badge 语义色）。
- * 注意：SVG 用 CSS 变量字符串色，不再需要 three.js 数字色，但保留映射供类型推断。
+ * 节点类型 → 颜色（CSS 变量字符串，运行时由 SVG 解析为 var(--pb-node-*)）
+ * 颜色集中维护在 entrypoints/sidepanel/App.css 的 :root，主题切换只需改一处。
  */
 const NODE_COLOR_CSS: Record<GraphNodeType, string> = {
-  idea: '#2557da',
-  plan: '#4a90e2',
-  research: '#7b68ee',
-  reflect: '#9370db',
-  structure: '#6a5acd',
-  note: '#2e8b57',
-  image: '#e67e22',
-  mindmap: '#16a085',
-  memory: '#8e44ad',
-  success: '#27ae60',
-  failure: '#c0392b',
-  tool: '#34495e',
-  skill: '#2980b9',
-  profile: '#f39c12',
-  feedback: '#e74c3c',
+  idea: 'var(--pb-node-idea)',
+  plan: 'var(--pb-node-plan)',
+  research: 'var(--pb-node-research)',
+  reflect: 'var(--pb-node-reflect)',
+  structure: 'var(--pb-node-structure)',
+  note: 'var(--pb-node-note)',
+  image: 'var(--pb-node-image)',
+  mindmap: 'var(--pb-node-mindmap)',
+  memory: 'var(--pb-node-memory)',
+  success: 'var(--pb-node-success)',
+  failure: 'var(--pb-node-failure)',
+  tool: 'var(--pb-node-tool)',
+  skill: 'var(--pb-node-skill)',
+  profile: 'var(--pb-node-profile)',
+  feedback: 'var(--pb-node-feedback)',
 };
 
 const NODE_EMOJI: Partial<Record<GraphNodeType, string>> = {
   idea: '💡', plan: '🧭', research: '🔍', reflect: '🪞', structure: '🧩',
   note: '📝', image: '🖼️', mindmap: '🗂️', memory: '🧠', success: '✅',
   failure: '⚠️', tool: '🔧', skill: '⚡', profile: '👤', feedback: '💬',
+};
+
+/** 节点类型 → 标签最大字符数。note/structure/memory 信息量大放宽；image/emoji-only 收紧 */
+const NODE_LABEL_MAX: Partial<Record<GraphNodeType, number>> = {
+  note: 9, structure: 8, plan: 7, idea: 6, research: 7, reflect: 7, mindmap: 6,
+  memory: 6, feedback: 6, profile: 5, skill: 5, tool: 5,
+  image: 4, success: 4, failure: 4,
 };
 
 interface SimNode extends GraphNode {
@@ -72,8 +80,11 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const nodeGRefs = useRef<Map<string, SVGGElement>>(new Map());
+  const innerGRefs = useRef<Map<string, SVGGElement>>(new Map());
   const edgeRefs = useRef<Map<string, SVGLineElement>>(new Map());
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
+  /** 标记「首次出现」的 node id，触发 CSS 入场动画，动画结束后移除 */
+  const [enteringIds, setEnteringIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [dims, setDims] = useState({ width: 360, height: 300 });
 
@@ -106,6 +117,38 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
       .map((e) => ({ source: e.source, target: e.target, id: e.id }));
     return { nodes: ns, links: ls };
   }, [graph, dims]);
+
+  /**
+   * 入场动画状态：每次 graph.nodes 变化时,把"首次出现"的 id 加入 enteringIds。
+   * 渲染时新节点挂 .graph-canvas__node--enter class 触发 CSS keyframe。
+   * onAnimationEnd 回调里把该 id 移出 enteringIds（避免重复触发）。
+   * 设计要点：CSS 动画只动 opacity + 内层 g 的 transform，不碰外层 d3 控制的 transform attribute，避免冲突。
+   */
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const next = new Set<string>();
+    for (const n of graph.nodes) {
+      if (!seenIdsRef.current.has(n.id)) next.add(n.id);
+    }
+    if (next.size > 0) {
+      setEnteringIds((prev) => {
+        const merged = new Set(prev);
+        next.forEach((id) => merged.add(id));
+        return merged;
+      });
+    }
+    // 更新已见集合（保留，避免下次再触发）
+    for (const n of graph.nodes) seenIdsRef.current.add(n.id);
+  }, [graph.nodes]);
+
+  const handleEnterEnd = useCallback((id: string) => {
+    setEnteringIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (nodes.length === 0) return;
@@ -227,9 +270,15 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
             </g>
             <g className="graph-canvas__nodes">
               {nodes.map((n) => {
-                const color = NODE_COLOR_CSS[n.type] ?? '#2557da';
+                const color = NODE_COLOR_CSS[n.type] ?? 'var(--pb-node-idea)';
                 const emoji = NODE_EMOJI[n.type] ?? '●';
-                const label = truncateLabel(n.title, 5);
+                const label = truncateLabel(n.title, NODE_LABEL_MAX[n.type] ?? 5);
+                const isEntering = enteringIds.has(n.id);
+                const nodeClass = [
+                  'graph-canvas__node',
+                  selected?.id === n.id ? 'graph-canvas__node--selected' : '',
+                  isEntering ? 'graph-canvas__node--enter' : '',
+                ].filter(Boolean).join(' ');
                 return (
                   <g
                     key={n.id}
@@ -238,13 +287,23 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
                       else nodeGRefs.current.delete(n.id);
                     }}
                     transform={`translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`}
-                    className={`graph-canvas__node${selected?.id === n.id ? ' graph-canvas__node--selected' : ''}`}
+                    className={nodeClass}
                     onPointerDown={(e) => onNodePointerDown(e, n)}
                     onClick={(e) => onNodeClick(e, n)}
                   >
-                    <rect x={-40} y={-13} width={80} height={26} rx={13} fill={color} />
-                    <text x={-30} y={1} className="graph-canvas__node-emoji" dominantBaseline="middle">{emoji}</text>
-                    <text x={-12} y={1} className="graph-canvas__node-label" dominantBaseline="middle">{label}</text>
+                    {/* 内层 g 由 CSS 动画控制 scale + opacity,不影响 d3 控制的外层 transform */}
+                    <g
+                      ref={(el) => {
+                        if (el) innerGRefs.current.set(n.id, el);
+                        else innerGRefs.current.delete(n.id);
+                      }}
+                      className="graph-canvas__node-inner"
+                      onAnimationEnd={isEntering ? () => handleEnterEnd(n.id) : undefined}
+                    >
+                      <rect x={-40} y={-13} width={80} height={26} rx={13} fill={color} />
+                      <text x={-30} y={1} className="graph-canvas__node-emoji" dominantBaseline="middle">{emoji}</text>
+                      <text x={-12} y={1} className="graph-canvas__node-label" dominantBaseline="middle">{label}</text>
+                    </g>
                   </g>
                 );
               })}
@@ -261,7 +320,7 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
   );
 }
 
-function truncateLabel(title: string, max = 5): string {
+function truncateLabel(title: string, max: number = 5): string {
   const t = (title ?? '').trim();
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }

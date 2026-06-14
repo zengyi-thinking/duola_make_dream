@@ -7,6 +7,55 @@
   --pb-panel: rgba(255, 255, 255, 0.96);
   --pb-line: rgba(21, 48, 74, 0.12);
   --pb-radius: 16px;
+
+  /* === 节点色 token（GraphCanvas 14 种 + 4 象限共用）=== */
+  --pb-node-idea: #2557da;
+  --pb-node-plan: #4a90e2;
+  --pb-node-research: #7b68ee;
+  --pb-node-reflect: #9370db;
+  --pb-node-structure: #6a5acd;
+  --pb-node-note: #2e8b57;
+  --pb-node-image: #e67e22;
+  --pb-node-mindmap: #16a085;
+  --pb-node-memory: #8e44ad;
+  --pb-node-success: #27ae60;
+  --pb-node-failure: #c0392b;
+  --pb-node-tool: #34495e;
+  --pb-node-skill: #2980b9;
+  --pb-node-profile: #f39c12;
+  --pb-node-feedback: #e74c3c;
+
+  /* === 象限色调（FeedReport/PlanBoard/InfographicPanel 共享语义）===
+     每个 tone 提供 3 档：纯色 + soft 背景 + 边框色(用于左侧 3px 强调边) */
+  --pb-tone-blue: #2557da;
+  --pb-tone-blue-soft: #f3f7ff;
+  --pb-tone-blue-border: rgba(37, 87, 218, 0.16);
+  --pb-tone-green: #2e8b57;
+  --pb-tone-green-soft: #f0faf4;
+  --pb-tone-green-border: rgba(46, 139, 87, 0.18);
+  --pb-tone-purple: #7b68ee;
+  --pb-tone-purple-soft: #f4f1ff;
+  --pb-tone-purple-border: rgba(123, 104, 238, 0.18);
+  --pb-tone-amber: #d69e2e;
+  --pb-tone-amber-soft: #fff9ec;
+  --pb-tone-amber-border: rgba(214, 158, 46, 0.2);
+  --pb-tone-amber-strong: #b7791f; /* 深色文字用，amber 软背景上 */
+  --pb-tone-red: #c0392b;
+  --pb-tone-red-soft: #fff0f0;
+  --pb-tone-red-border: rgba(192, 57, 43, 0.18);
+
+  /* === 报告封面渐变（FeedReport + InfographicPanel hero 共用）=== */
+  --pb-grad-hero: linear-gradient(135deg, #2a5bd4 0%, #5b4bd4 100%);
+
+  /* === PlanBoard hero 渐变（蓝白紫三段）=== */
+  --pb-grad-plan-hero: linear-gradient(135deg, var(--pb-primary-soft) 0%, #eef3ff 60%, #f6f0ff 100%);
+
+  /* === 粒子视觉专用色（PocketBurst 等动效组件）=== */
+  --pb-particle-hi: #92b4ff;
+  --pb-particle-lo: var(--pb-primary);
+
+  /* === 论文深读背景 === */
+  --pb-paper-bg: #f8fbff;
 }
 
 * { box-sizing: border-box; }

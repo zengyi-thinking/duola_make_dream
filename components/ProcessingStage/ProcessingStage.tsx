@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import type { PocketAvatarId } from '@/lib/brand/avatars';
 import type { PocketBuddyMood } from '@/lib/agent/types';
@@ -59,6 +59,11 @@ export default function ProcessingStage({ active, avatar = 'yunyu-main', hint, m
   const stage = controlled ? currentStage! : internalStage;
   const stages = mode === 'feed' ? FEED_STAGES : INVENT_STAGES;
 
+  // 用 ref 持有最新 stages,避免 useEffect 依赖循环(setInternalStage → re-render → stages 新数组 → 依赖变更 → 重建 timers)
+  // 旧实现把 stages 排除在依赖外,eslint 报警;这里用 ref 模式既符合 lint 又行为正确
+  const stagesRef = useRef(stages);
+  stagesRef.current = stages;
+
   useEffect(() => {
     if (!active) {
       setInternalStage(0);
@@ -66,11 +71,11 @@ export default function ProcessingStage({ active, avatar = 'yunyu-main', hint, m
     }
     if (mode === 'image') return; // image 模式不推进阶段
     if (controlled) return; // 受控模式（事件流驱动），不内部推进
-    const timers = stages.map((_, i) =>
+    const currentStages = stagesRef.current;
+    const timers = currentStages.map((_, i) =>
       window.setTimeout(() => setInternalStage(i), i * STAGE_DURATION),
     );
     return () => timers.forEach((t) => window.clearTimeout(t));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, mode, controlled]);
 
   const current = stages[Math.min(stage, stages.length - 1)];

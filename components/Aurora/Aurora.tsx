@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 import type { PocketBuddyMood } from '@/lib/agent/types';
 import { usePocketReducedMotion } from '@/lib/ui/reduced-motion';
 import './Aurora.css';
@@ -43,6 +44,18 @@ const AURORA_PRESETS: Record<PocketBuddyMood, {
 export default function Aurora({ mood }: AuroraProps) {
   const reduced = usePocketReducedMotion();
   const preset = AURORA_PRESETS[mood];
+  // spark 脉冲计数器：每次 mood 从非 spark → spark 时 +1，配合 AnimatePresence 实现一次性动画
+  const [sparkKey, setSparkKey] = useState(0);
+  const wasSparkRef = useRef(false);
+
+  useEffect(() => {
+    const isSpark = mood === 'spark';
+    // 仅在「进入 spark」时递增 key，相同 mood 不重复触发
+    if (isSpark && !wasSparkRef.current) {
+      setSparkKey((k) => k + 1);
+    }
+    wasSparkRef.current = isSpark;
+  }, [mood]);
 
   // 持续呼吸（mood ≠ spark）：scale 在 1.0 ↔ 1.05 间缓慢起伏
   const breatheAnimation = !reduced && preset.breathing
@@ -78,17 +91,26 @@ export default function Aurora({ mood }: AuroraProps) {
         />
       )}
 
-      {/* spark 时加一道扩散光环（一次性脉冲） */}
-      {mood === 'spark' && !reduced && (
-        <motion.div
-          key={`spark-${Date.now()}`}
-          aria-hidden
-          className="pb-aurora pb-aurora--spark"
-          initial={{ scale: 0.6, opacity: 0.8 }}
-          animate={{ scale: 1.6, opacity: 0 }}
-          transition={{ duration: 1.1, ease: 'easeOut' }}
-        />
-      )}
+      {/* spark 一次性扩散光环：仅 mood=spark 且非 reduced 时渲染，
+          用 AnimatePresence + sparkKey 触发一次完整动画后自动卸载（避免 Date.now 当 key 的抖动） */}
+      <AnimatePresence>
+        {mood === 'spark' && !reduced && (
+          <motion.div
+            key={sparkKey}
+            aria-hidden
+            className="pb-aurora pb-aurora--spark"
+            initial={{ scale: 0.6, opacity: 0.8 }}
+            animate={{ scale: 1.6, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.1, ease: 'easeOut' }}
+            onAnimationComplete={() => {
+              // 动画完成后强制卸载（与 AnimatePresence 协同）
+              // 当 mood 切走时，AnimatePresence 触发 exit；这里只在相同 mood 下兜底清理
+              if (mood !== 'spark') setSparkKey(0);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

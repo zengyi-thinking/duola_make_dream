@@ -13,7 +13,7 @@
 .pb-pocket-burst__particle {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(circle, #92b4ff 0%, #2557da 60%, rgba(37, 87, 218, 0) 100%);
+  background: radial-gradient(circle, var(--pb-particle-hi) 0%, var(--pb-particle-lo) 60%, rgba(37, 87, 218, 0) 100%);
   box-shadow: 0 0 10px rgba(120, 160, 255, 0.7);
   will-change: transform, opacity;
 }

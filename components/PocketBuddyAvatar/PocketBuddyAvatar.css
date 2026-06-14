@@ -80,7 +80,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #2557da;
+  background: var(--pb-primary);
   animation: pb-dot 1.2s ease-in-out infinite;
 }
 

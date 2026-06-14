@@ -89,12 +89,12 @@
 
 .processing-stage__step--done {
   opacity: 0.85;
-  color: #2e8b57;
-  background: #f0faf4;
+  color: var(--pb-tone-green);
+  background: var(--pb-tone-green-soft);
   border-color: rgba(46, 139, 87, 0.25);
 }
 .processing-stage__step--done .processing-stage__step-dot {
-  background: #2e8b57;
+  background: var(--pb-tone-green);
   color: #fff;
 }
 

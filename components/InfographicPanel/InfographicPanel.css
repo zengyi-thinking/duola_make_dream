@@ -4,7 +4,7 @@
   width: 100%;
   border-radius: 18px;
   overflow: hidden;
-  background: linear-gradient(160deg, #f8fbff 0%, #f3f0ff 100%);
+  background: linear-gradient(160deg, var(--pb-tone-blue-soft) 0%, var(--pb-tone-purple-soft) 100%);
   border: 1.5px solid var(--pb-line);
   box-shadow: 0 8px 24px -12px rgba(37, 87, 218, 0.18);
 }
@@ -22,7 +22,7 @@
   position: relative;
   padding: 16px 18px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #2a5bd4 0%, #5b4bd4 100%);
+  background: var(--pb-grad-hero);
   color: #fff;
   overflow: hidden;
 }
@@ -145,10 +145,10 @@
   border-radius: 11px;
   border: 1px solid transparent;
 }
-.infographic__quad-block--purple { background: #f4f1ff; border-color: rgba(123, 104, 238, 0.22); }
-.infographic__quad-block--green { background: #f0faf4; border-color: rgba(46, 139, 87, 0.22); }
-.infographic__quad-block--amber { background: #fff9ec; border-color: rgba(214, 158, 46, 0.24); }
-.infographic__quad-block--red { background: #fff0f0; border-color: rgba(192, 57, 43, 0.22); }
+.infographic__quad-block--purple { background: var(--pb-tone-purple-soft); border-color: var(--pb-tone-purple-border); }
+.infographic__quad-block--green { background: var(--pb-tone-green-soft); border-color: var(--pb-tone-green-border); }
+.infographic__quad-block--amber { background: var(--pb-tone-amber-soft); border-color: var(--pb-tone-amber-border); }
+.infographic__quad-block--red { background: var(--pb-tone-red-soft); border-color: var(--pb-tone-red-border); }
 
 .infographic__quad-head {
   display: flex;

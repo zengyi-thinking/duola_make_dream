@@ -12,7 +12,7 @@
   position: relative;
   padding: 16px 18px;
   border-radius: var(--pb-radius);
-  background: linear-gradient(135deg, var(--pb-primary-soft) 0%, #eef3ff 60%, #f6f0ff 100%);
+  background: var(--pb-grad-plan-hero);
   border: 1px solid var(--pb-line);
   overflow: hidden;
 }
@@ -153,11 +153,11 @@
   border: 1px solid var(--pb-line);
   background: var(--pb-panel);
 }
-.plan-board__module--grid { background: #f3f7ff; border-color: rgba(37, 87, 218, 0.16); }
-.plan-board__module--stack { background: #f4f1ff; border-color: rgba(123, 104, 238, 0.18); border-left: 3px solid #7b68ee; }
-.plan-board__module--timeline { background: #f0faf4; border-color: rgba(46, 139, 87, 0.18); border-left: 3px solid #2e8b57; }
-.plan-board__module--compare { background: #fff9ec; border-color: rgba(214, 158, 46, 0.2); }
-.plan-board__module--risk { background: #fff0f0; border-color: rgba(192, 57, 43, 0.18); border-left: 3px solid #c0392b; }
+.plan-board__module--grid { background: var(--pb-tone-blue-soft); border-color: var(--pb-tone-blue-border); }
+.plan-board__module--stack { background: var(--pb-tone-purple-soft); border-color: var(--pb-tone-purple-border); border-left: 3px solid var(--pb-tone-purple); }
+.plan-board__module--timeline { background: var(--pb-tone-green-soft); border-color: var(--pb-tone-green-border); border-left: 3px solid var(--pb-tone-green); }
+.plan-board__module--compare { background: var(--pb-tone-amber-soft); border-color: var(--pb-tone-amber-border); }
+.plan-board__module--risk { background: var(--pb-tone-red-soft); border-color: var(--pb-tone-red-border); border-left: 3px solid var(--pb-tone-red); }
 
 .plan-board__module-head {
   display: flex;
@@ -167,7 +167,7 @@
 .plan-board__module-index {
   font-size: 10px;
   font-weight: 700;
-  color: #2e8b57;
+  color: var(--pb-tone-green);
   background: rgba(46, 139, 87, 0.14);
   padding: 1px 6px;
   border-radius: 6px;

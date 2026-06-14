@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { browser } from 'wxt/browser';
 import LineButton from '@/components/LineArt/LineButton';
+import BurstButton from '@/components/BurstButton/BurstButton';
 import StaggerStack from '@/components/StaggerStack/StaggerStack';
 import GraphCanvas from '@/components/GraphCanvas/GraphCanvas';
 import ProcessingStage from '@/components/ProcessingStage/ProcessingStage';
@@ -97,8 +98,8 @@ export default function FeedPage() {
     }
   }
 
-  async function handleFeed() {
-    if (!pageRead || !pageContext) return;
+  async function handleFeed(): Promise<boolean> {
+    if (!pageRead || !pageContext) return false;
     setBusyAction('feed');
     setErrorText(''); setNoticeText('');
     setCurrentStage(0);
@@ -109,22 +110,24 @@ export default function FeedPage() {
       );
       if (!response.success || !response.payload.result) {
         setErrorText(response.error ?? '加工失败。');
-        return;
+        return false;
       }
       const { analysis, feedGraph: graph } = response.payload.result;
       setPageAnalysis(analysis);
       setFeedGraph(graph);
       setMemory(response.payload.memorySummary);
       setNoticeText('阅读报告已生成，确认无误后可归档为笔记节点。');
+      return true;
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '加工失败。');
+      return false;
     } finally {
       setBusyAction('');
     }
   }
 
-  async function handleArchive() {
-    if (!pageAnalysis || !pageContext) return;
+  async function handleArchive(): Promise<boolean> {
+    if (!pageAnalysis || !pageContext) return false;
     setBusyAction('archive-save');
     setErrorText('');
     setStatusText('正在归档…');
@@ -132,26 +135,34 @@ export default function FeedPage() {
       const response = await sendRuntimeMessage(
         createArchiveSaveMessage({ analysis: pageAnalysis, sourceContext: pageContext }),
       );
-      if (!response.success) { setErrorText(response.error ?? '保存笔记失败。'); return; }
+      if (!response.success) {
+        setErrorText(response.error ?? '保存笔记失败。');
+        return false;
+      }
       setMemory(response.payload.memorySummary);
       setNoticeText('已归档为笔记节点，跳转记忆页查看图节点。');
       setPage('memory');
+      return true;
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '保存笔记失败。');
+      return false;
     } finally {
       setBusyAction('');
     }
   }
 
   /** 把划词碎片归纳成知识笔记（LLM 归纳 → ArchiveNote + 图节点）。 */
-  async function handleSynthesizeSnippets() {
-    if (snippets.length < 3) return;
+  async function handleSynthesizeSnippets(): Promise<boolean> {
+    if (snippets.length < 3) return false;
     setBusyAction('snippets-synthesize');
     setErrorText(''); setNoticeText('');
     setStatusText(`正在用 LLM 归纳 ${snippets.length} 条划词碎片…`);
     try {
       const response = await sendRuntimeMessage(createPocketSnippetsSynthesizeMessage());
-      if (!response.success) { setErrorText(response.error ?? '归纳失败。'); return; }
+      if (!response.success) {
+        setErrorText(response.error ?? '归纳失败。');
+        return false;
+      }
       const result = response.payload as { note: { title: string; bullets?: string[] } | null; memorySummary?: { recentContextSnippets: ContextSnippet[] } };
       if (result.memorySummary && memory) {
         setMemory({ ...memory, recentContextSnippets: result.memorySummary.recentContextSnippets });
@@ -161,8 +172,10 @@ export default function FeedPage() {
         setNoticeText(`已归纳为笔记：${result.note.title}（${result.note.bullets?.length ?? 0} 要点），可在记忆页查看。`);
       }
       await refreshSnippets();
+      return true;
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '归纳失败。');
+      return false;
     } finally {
       setBusyAction('');
     }
@@ -216,20 +229,20 @@ export default function FeedPage() {
           <LineButton variant="primary" onClick={handleReadCurrentPage} disabled={Boolean(busyAction)}>
             读取当前页
           </LineButton>
-          <LineButton
+          <BurstButton
             variant="secondary"
             onClick={handleFeed}
             disabled={Boolean(busyAction) || !pageRead}
           >
             加工成报告
-          </LineButton>
-          <LineButton
+          </BurstButton>
+          <BurstButton
             variant="ghost"
             onClick={handleArchive}
             disabled={Boolean(busyAction) || !pageAnalysis || !pageContext}
           >
             确认归档
-          </LineButton>
+          </BurstButton>
         </div>
 
         {pageRead && !pageAnalysis ? (
@@ -270,13 +283,13 @@ export default function FeedPage() {
             ))}
           </div>
           <div className="inline-actions" style={{ marginTop: 8 }}>
-            <LineButton
+            <BurstButton
               variant="primary"
               onClick={handleSynthesizeSnippets}
               disabled={!canSynthesize || Boolean(busyAction)}
             >
               {busyAction === 'snippets-synthesize' ? '归纳中…' : '归纳成文档'}
-            </LineButton>
+            </BurstButton>
             {suggestSynthesize ? <span className="micro-status">碎片已达 {snippets.length} 条，建议归纳</span> : null}
             {!canSynthesize ? <span className="micro-status">至少 3 条碎片可归纳（当前 {snippets.length}）</span> : null}
           </div>
