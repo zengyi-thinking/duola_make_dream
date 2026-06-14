@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { browser } from 'wxt/browser';
 import { motion } from 'framer-motion';
 import LineButton from '@/components/LineArt/LineButton';
 import StaggerStack from '@/components/StaggerStack/StaggerStack';
@@ -7,11 +8,12 @@ import InkRipple, { type InkRippleHandle } from '@/components/InkRipple/InkRippl
 import GraphCanvas from '@/components/GraphCanvas/GraphCanvas';
 import ProcessingStage from '@/components/ProcessingStage/ProcessingStage';
 import PlanBoard from '@/components/PlanBoard/PlanBoard';
-import InfographicPanel from '@/components/InfographicPanel/InfographicPanel';
 import type { FeedbackAction, ProductArtifact } from '@/lib/agent/types';
+import type { GeneratedImageRecord } from '@/lib/image/types';
 import type { GraphView } from '@/lib/graph/types';
 import {
   createFeedbackMessage,
+  createPocketAgentImageMessage,
   createPocketAgentInventMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
@@ -35,15 +37,15 @@ const FEEDBACK_OPTIONS: Array<{ label: string; action: FeedbackAction }> = [
  * 发明页（产品重设计全链路版）。
  *
  * 三大功能：
- * 1. 输入想法 → 加工动画（规划/调研/反思/编排/审查 阶段状态机）→ 精美 HTML 计划面板（PlanBoard）
- * 2. 计划后面以图展示关联笔记 + LLM 调研（GraphCanvas，节点带标签，地位相同）
- * 3. 确认后点"生成计划图"→ HTML 信息图（InfographicPanel）原地展示（不跳走，不调文生图）
+ * 1. 输入想法 → 加工动画（规划/调研/反思/编排 阶段状态机，事件流同步）→ 精美 HTML 计划面板（PlanBoard）
+ * 2. 计划后面以图展示关联笔记 + LLM 调研（GraphCanvas SVG，节点带标签，地位相同）
+ * 3. 确认后点"生成计划图"→ 调用生图模型（gpt-image-2，用 planBoard 组装信息密集 prompt）→ 原地展示图片
  */
 export default function InventPage() {
   const { setStatusText, setErrorText, setNoticeText } = useToast();
   const { busyAction, setBusyAction } = useBusy();
   const { memory, setMemory } = useMemory();
-  const { setArtifactHistory } = useWorkspace();
+  const { setArtifactHistory, setImageHistory } = useWorkspace();
   const { config } = useRuntimeConfig();
 
   const [ideaText, setIdeaText] = useState('');
@@ -51,8 +53,9 @@ export default function InventPage() {
   const [selectedArchiveNoteIds, setSelectedArchiveNoteIds] = useState<string[]>([]);
   const [artifact, setArtifact] = useState<ProductArtifact | null>(null);
   const [planGraph, setPlanGraph] = useState<GraphView | null>(null);
-  const [showInfographic, setShowInfographic] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<GeneratedImageRecord | null>(null);
   const [lastFeedback, setLastFeedback] = useState('');
+  const [currentStage, setCurrentStage] = useState(0);
 
   const [burstActive, setBurstActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -67,11 +70,24 @@ export default function InventPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ideaText.length]);
 
+  // 监听 SW 流式推送的 AgentEvent，驱动加工阶段动画与真实 agent 同步（产品重设计反馈第1点）。
+  // background 在 director 每个 agent emit 时推 pocket.agent.stream，这里映射 agentId→阶段索引。
+  useEffect(() => {
+    const listener = (msg: { type?: string; event?: { agentId?: string; status?: string } }) => {
+      if (msg?.type !== 'pocket.agent.stream' || !msg.event) return;
+      const s = eventToStage(msg.event.agentId, msg.event.status);
+      if (s >= 0) setCurrentStage(s);
+    };
+    browser.runtime.onMessage.addListener(listener);
+    return () => browser.runtime.onMessage.removeListener(listener);
+  }, []);
+
   async function handleInvent() {
     if (!ideaText.trim()) return;
     setBusyAction('invent');
     setErrorText(''); setNoticeText(''); setLastFeedback('');
-    setShowInfographic(false);
+    setGeneratedImage(null);
+    setCurrentStage(0);
     setStatusText('正在生成计划…');
     setBurstActive(false);
     requestAnimationFrame(() => setBurstActive(true));
@@ -96,7 +112,8 @@ export default function InventPage() {
       setMemory(response.payload.memorySummary);
       setArtifactHistory((cur) => [art, ...cur.filter((a) => a.id !== art.id)]);
       setStatusText(assistantSummary);
-      setIdeaText(''); setSelectedContextIds([]); setSelectedArchiveNoteIds([]);
+      // 保留 ideaText 不清空：用户能看到刚输入的想法（产品重设计反馈第3点）
+      setSelectedContextIds([]); setSelectedArchiveNoteIds([]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '生成失败。';
       setErrorText(msg); setStatusText(msg);
@@ -106,19 +123,39 @@ export default function InventPage() {
   }
 
   /**
-   * 生成计划图：不再调文生图（中文渲染会乱码），改为前端用 planBoard 渲染 HTML 信息图原地展示。
-   * 短暂播放 image 模式动画后展示 InfographicPanel。
+   * 生成计划图：调用生图模型（gpt-image-2），用 planBoard 组装信息密集 prompt。
+   * 生成后在发明页原地展示图片（不跳走）。
    */
   async function handleImage() {
-    if (!artifact?.planBoard) return;
+    if (!planGraph) return;
     setBusyAction('image');
     setErrorText('');
-    setStatusText('正在生成计划图…');
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 1100));
-    setShowInfographic(true);
-    setNoticeText('计划信息图已生成。');
-    setStatusText('计划信息图已生成，可继续调整或开始下一个想法。');
-    setBusyAction('');
+    setNoticeText('');
+    setGeneratedImage(null);
+    setStatusText('正在调用生图模型生成计划图…（异步任务，约 30-90 秒）');
+    try {
+      const response = await sendRuntimeMessage(createPocketAgentImageMessage(planGraph));
+      if (!response.success || !response.payload.result) {
+        setErrorText(response.error ?? '图片生成失败。');
+        setStatusText(response.error ?? '图片生成失败。');
+        return;
+      }
+      const { imageRecord } = response.payload.result;
+      setGeneratedImage(imageRecord);
+      setMemory(response.payload.memorySummary);
+      setImageHistory((cur) => [imageRecord, ...cur.filter((i) => i.id !== imageRecord.id)]);
+      if (imageRecord.status === 'done') {
+        setNoticeText('计划图片已生成。');
+        setStatusText('计划图片已生成。');
+      } else {
+        setErrorText(imageRecord.previewText ?? `图片未生成（${imageRecord.status}），请检查设置中的生图模型配置。`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '图片生成失败。';
+      setErrorText(msg); setStatusText(msg);
+    } finally {
+      setBusyAction('');
+    }
   }
 
   async function handleFeedback(action: FeedbackAction) {
@@ -205,17 +242,22 @@ export default function InventPage() {
         active={inventing}
         avatar={config?.avatarId}
         mode="invent"
-        hint="正在加工：规划 → 调研 → 反思 → 编排 → 审查"
+        currentStage={currentStage}
+        hint="正在加工：规划 → 调研 → 反思 → 编排"
       />
 
       {planBoard && artifact ? (
         <StaggerStack triggerKey={artifact.id}>
+          {ideaText.trim() ? (
+            <p className="soft-text plan-source-idea">💡 你的想法：{ideaText.trim()}</p>
+          ) : null}
+
           <PlanBoard board={planBoard} intentLabel={labelIntent(artifact.intent)} />
 
           <section className="panel-card plan-actions">
             <div className="inline-actions">
-              <LineButton variant="primary" onClick={handleImage} disabled={Boolean(busyAction)}>
-                {busyAction === 'image' ? '生成中…' : '生成计划图'}
+              <LineButton variant="primary" onClick={handleImage} disabled={Boolean(busyAction) || !planGraph}>
+                {busyAction === 'image' ? '生图中…' : '生成计划图'}
               </LineButton>
               <LineButton
                 variant="ghost"
@@ -258,14 +300,14 @@ export default function InventPage() {
           </div>
           <GraphCanvas graph={planGraph} emptyHint="关联图还没长出节点。" />
           <p className="soft-text" style={{ marginTop: 8 }}>
-            节点含你的笔记（召回）与 Agent 内置调研，地位相同。点开节点查看内容。
+            节点含你的笔记（召回）与 Agent 内置调研，地位相同。点开节点查看内容，可拖拽。
           </p>
         </motion.section>
       ) : null}
 
       <ProcessingStage active={busyAction === 'image'} avatar={config?.avatarId} mode="image" />
 
-      {showInfographic && planBoard ? (
+      {generatedImage ? (
         <motion.section
           className="panel-card"
           initial={{ opacity: 0, y: 12 }}
@@ -273,11 +315,20 @@ export default function InventPage() {
         >
           <div className="panel-head">
             <div>
-              <p className="section-label">Plan Infographic</p>
-              <h2>计划信息图（16:9）</h2>
+              <p className="section-label">Plan Image</p>
+              <h2>计划图片</h2>
             </div>
+            <span className="micro-status">{generatedImage.model ?? 'image'}</span>
           </div>
-          <InfographicPanel board={planBoard} createdAt={artifact?.createdAt} />
+          {generatedImage.status === 'done' && generatedImage.imageUrl ? (
+            <img
+              className="invent-image"
+              src={generatedImage.imageUrl}
+              alt={generatedImage.request.title}
+            />
+          ) : (
+            <p className="soft-text">{generatedImage.previewText ?? `图片状态：${generatedImage.status}`}</p>
+          )}
         </motion.section>
       ) : null}
     </div>
@@ -291,5 +342,17 @@ function labelIntent(intent: ProductArtifact['intent']): string {
     case 'learning-tool': return '学习工具';
     case 'playful-tool': return '陪伴型小工具';
     default: return '效率工具';
+  }
+}
+
+/** AgentEvent → ProcessingStage 阶段索引（事件流驱动动画与真实 agent 同步）。 */
+function eventToStage(agentId?: string, status?: string): number {
+  if (agentId === 'structure' && status === 'done') return 4; // 审查就绪
+  switch (agentId) {
+    case 'plan': return 0; // 规划
+    case 'research': return 1; // 调研
+    case 'reflect': return 2; // 反思
+    case 'structure': return 3; // 编排（running）
+    default: return -1; // 未知事件，不更新
   }
 }

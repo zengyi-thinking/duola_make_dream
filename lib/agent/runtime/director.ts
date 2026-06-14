@@ -40,6 +40,7 @@ import {
   researchAgent,
   structureAgent,
 } from './agents';
+import type { StructureOutput } from './agents/structure';
 import { getLlmClient } from '@/lib/llm';
 import { buildVoiceHint, getVoice } from '@/lib/agent/voices';
 import { buildToneHint } from '@/lib/agent/personality';
@@ -141,10 +142,14 @@ export class PocketAgentDirector {
    * 对应 processIdeaSubmission，artifact 字段行为等价。
    * 生图（image）不在本链路，由 runImageStage 在用户确认计划图后单独触发。
    */
-  async runInventPipeline(input: InventInput): Promise<PipelineRun<InventResult>> {
+  async runInventPipeline(input: InventInput, onEvent?: (e: AgentEvent) => void): Promise<PipelineRun<InventResult>> {
     if (!input.text.trim()) throw new Error('想法不能为空');
     const events: AgentEvent[] = [];
-    const { ctx, patches } = await buildContext('invent', input.text.slice(0, 40), (e) => events.push(e));
+    const emit = (e: AgentEvent) => {
+      events.push(e);
+      try { onEvent?.(e); } catch { /* 流式推送失败不影响主链路 */ }
+    };
+    const { ctx, patches } = await buildContext('invent', input.text.slice(0, 40), emit);
 
     const selectedContextIds = input.selectedContextIds ?? [];
     const selectedArchiveNoteIds = input.selectedArchiveNoteIds ?? [];
@@ -271,13 +276,15 @@ export class PocketAgentDirector {
   async runImageStage(planGraph: GraphView): Promise<PipelineRun<ImageResult>> {
     const events: AgentEvent[] = [];
     const structureNode = planGraph.nodes.find((n) => n.type === 'structure');
-    const concept = structureNode?.payload as ProductArtifact['concept'] | undefined;
-    if (!concept) throw new Error('计划图中找不到 structure 节点，无法生图');
+    const structureOutput = structureNode?.payload as StructureOutput | undefined;
+    const concept = structureOutput?.concept;
+    const planBoard = structureOutput?.planBoard;
+    if (!concept || !planBoard) throw new Error('计划图中找不到 structure 节点，无法生图');
 
     const { ctx } = await buildContext('invent', `生图：${concept.name}`, (e) => events.push(e));
     const runtimeConfig = await getRuntimeConfig();
 
-    const imageResult = await imageAgent.run({ concept, style: 'product-ui', runtimeConfig }, ctx);
+    const imageResult = await imageAgent.run({ concept, planBoard, style: 'knowledge-card', runtimeConfig }, ctx);
     const experiences: ExperienceSeed[] = [];
     const nodes: GraphNode[] = [];
     const edges: GraphEdge[] = [];

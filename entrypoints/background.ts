@@ -60,6 +60,7 @@ import type { GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
 import type { FeedInput, InventInput } from '@/lib/agent/runtime/types';
 import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult, PageAnalysisResult, PageContextRecord } from '@/lib/agent/types';
+import type { AgentEvent } from '@/lib/agent/runtime/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
 import type { PageReadResult } from '@/lib/page/types';
@@ -342,7 +343,18 @@ async function handlePocketModelTest(kind: 'llm' | 'image', profileId?: string) 
 
 async function handlePocketAgentInvent(input: InventInput) {
   const director = new PocketAgentDirector();
-  const { events, result } = await director.runInventPipeline(input);
+  // 流式推送 AgentEvent 给 sidepanel，驱动加工阶段动画与真实 agent 同步（产品重设计反馈第1点）。
+  // fire-and-forget：sidepanel 未打开时 sendMessage 会 reject，静默忽略。
+  const onEvent = (e: AgentEvent) => {
+    try {
+      browser.runtime.sendMessage({ type: 'pocket.agent.stream', event: e }).catch(() => {
+        /* 接收端不存在（sidepanel 未开），忽略 */
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+  const { events, result } = await director.runInventPipeline(input, onEvent);
   return { events, result, memorySummary: await getMemorySummary() };
 }
 

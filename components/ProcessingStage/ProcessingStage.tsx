@@ -7,7 +7,7 @@ import { usePocketReducedMotion } from '@/lib/ui/reduced-motion';
 import { PB_EASE } from '@/lib/ui/motion-presets';
 import './ProcessingStage.css';
 
-/** 发明链路 5 个加工阶段（含 mood 与描述）。invent 模式按时序依次激活。 */
+/** 发明链路 5 个加工阶段（含 mood 与描述）。 */
 interface InventStage {
   id: 'plan' | 'research' | 'reflect' | 'outline' | 'review';
   label: string;
@@ -32,35 +32,41 @@ interface ProcessingStageProps {
   hint?: string;
   /** invent = 5 阶段状态机；image = 单阶段进度环（生图专属） */
   mode?: 'invent' | 'image';
+  /** 受控当前阶段索引（由真实 AgentEvent 流驱动）。传入时覆盖内部时序，实现动画与真实 agent 同步。 */
+  currentStage?: number;
 }
 
 /**
  * 加工动画层（产品重设计升级版）：
- * - invent 模式：阶段状态机按时序推进（规划→调研→反思→编排→审查），
- *   当前阶段高亮脉冲、已完成打勾、未到置灰；角色 mood 随阶段切换。
+ * - invent 模式：阶段状态机。currentStage 传入时受控（事件流驱动，与真实 agent 同步）；
+ *   未传入时内部按固定时序推进（FeedPage 等无事件流的场景兜底）。
  * - image 模式：生图专属，角色 spark mood + 进度环。
- * TODO：后续接 director 真实 AgentEvent 流（port 流式），当前用时序驱动（阶段名与真实 agent 一致）。
+ * 事件流：background 在 director 每个 agent emit 时推 pocket.agent.stream，
+ * InventPage 监听并映射 agentId→stage 传入 currentStage。
  */
-export default function ProcessingStage({ active, avatar = 'yunyu-main', hint, mode = 'invent' }: ProcessingStageProps) {
+export default function ProcessingStage({ active, avatar = 'yunyu-main', hint, mode = 'invent', currentStage }: ProcessingStageProps) {
   const reduced = usePocketReducedMotion();
-  const [stage, setStage] = useState(0);
+  const [internalStage, setInternalStage] = useState(0);
+  const controlled = currentStage !== undefined;
+  const stage = controlled ? currentStage! : internalStage;
 
   useEffect(() => {
     if (!active) {
-      setStage(0);
+      setInternalStage(0);
       return;
     }
     if (mode === 'image') return; // image 模式不推进阶段
+    if (controlled) return; // 受控模式（事件流驱动），不内部推进
     const timers = INVENT_STAGES.map((_, i) =>
-      window.setTimeout(() => setStage(i), i * STAGE_DURATION),
+      window.setTimeout(() => setInternalStage(i), i * STAGE_DURATION),
     );
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [active, mode]);
+  }, [active, mode, controlled]);
 
   const current = INVENT_STAGES[Math.min(stage, INVENT_STAGES.length - 1)];
   const avatarMood: PocketBuddyMood = mode === 'image' ? 'spark' : current.mood;
   const hintText =
-    hint ?? (mode === 'image' ? '正在生成计划图…' : `${current.label}：${current.desc}`);
+    hint ?? (mode === 'image' ? '正在调用生图模型…' : `${current.label}：${current.desc}`);
 
   return (
     <AnimatePresence>
