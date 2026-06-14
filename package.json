@@ -5,15 +5,18 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/inject-dev-config.mjs",
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
+    "prebuild": "node scripts/inject-dev-config.mjs --clean",
     "build": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs build",
     "build:firefox": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs build -b firefox",
     "zip": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs zip",
     "zip:firefox": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs zip -b firefox",
+    "precompile": "node scripts/inject-dev-config.mjs",
     "compile": "node scripts/run-build-step.mjs ./node_modules/typescript/bin/tsc --noEmit",
     "privacy-check": "node scripts/privacy-check.mjs",
-    "postinstall": "wxt prepare"
+    "postinstall": "node scripts/inject-dev-config.mjs && wxt prepare"
   },
   "dependencies": {
     "@types/d3-force": "^3.0.10",

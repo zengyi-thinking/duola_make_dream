@@ -27,3 +27,6 @@ Thumbs.db
 # other
 .wxt-cache/
 .test-*/
+
+# Local dev config（inject-dev-config.mjs 从 .env 生成的 API Key 副本，不入库）
+config/local-runtime-config.json

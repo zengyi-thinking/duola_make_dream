@@ -20,6 +20,7 @@ import type { PageContextRecord } from '@/lib/page/types';
 import type { GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
 import bundledRuntimeConfigJson from '../../config/bundled-runtime-config.json';
+import localRuntimeConfigJson from '../../config/local-runtime-config.json';
 
 export const STORAGE_KEYS = {
   profile: 'profile',
@@ -86,10 +87,11 @@ export const DEFAULT_PROFILE: UserProfile = {
 
 export function createBundledRuntimeConfig(): RuntimeConfig {
   const bundled = bundledRuntimeConfigJson as RuntimeConfig;
+  const local = localRuntimeConfigJson as LocalRuntimeConfig;
   return {
     ...bundled,
-    llmProfiles: (bundled.llmProfiles ?? []).map(cloneModelProfile),
-    imageProfiles: (bundled.imageProfiles ?? []).map(cloneModelProfile),
+    llmProfiles: (bundled.llmProfiles ?? []).map((p) => mergeLocalProfile(p, local.llm)),
+    imageProfiles: (bundled.imageProfiles ?? []).map((p) => mergeLocalProfile(p, local.image)),
   };
 }
 
@@ -119,6 +121,26 @@ export function createDefaultStorageState(): StorageSchema {
   };
 }
 
-function cloneModelProfile(profile: ModelProfile): ModelProfile {
-  return { ...profile };
+interface LocalProfile {
+  apiKey?: string;
+  endpoint?: string;
+  model?: string;
+}
+interface LocalRuntimeConfig {
+  llm?: LocalProfile;
+  image?: LocalProfile;
+}
+
+/**
+ * 合并 env 注入的本地凭据（config/local-runtime-config.json，gitignore）到 bundled profile。
+ * apiKey/endpoint/model 非空则覆盖；本地副本由 scripts/inject-dev-config.mjs 从 .env 生成。
+ * 合并顺序：bundled 默认 → 本地副本(env) → 用户 storage（后者覆盖前者，在 normalizeRuntimeConfig）。
+ */
+function mergeLocalProfile(profile: ModelProfile, local: LocalProfile | undefined): ModelProfile {
+  const merged = { ...profile };
+  if (!local) return merged;
+  if (local.apiKey) merged.apiKey = local.apiKey;
+  if (local.endpoint) merged.endpoint = local.endpoint;
+  if (local.model) merged.model = local.model;
+  return merged;
 }
