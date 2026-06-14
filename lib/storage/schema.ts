@@ -3,6 +3,7 @@ import type {
   ArchiveNote,
   ContextSnippet,
   ContentPipelineTrace,
+  ExperienceRecord,
   FeedbackRecord,
   HarnessPatch,
   IdeaRecord,
@@ -16,6 +17,8 @@ import type {
 import type { GeneratedImageRecord } from '@/lib/image/types';
 import type { MindmapRecord } from '@/lib/mindmap/types';
 import type { PageContextRecord } from '@/lib/page/types';
+import type { GraphView } from '@/lib/graph/types';
+import type { SkillDefinition } from '@/lib/skills/types';
 import bundledRuntimeConfigJson from '../../config/bundled-runtime-config.json';
 
 export const STORAGE_KEYS = {
@@ -34,6 +37,9 @@ export const STORAGE_KEYS = {
   harnessPatches: 'harnessPatches',
   pipelineRuns: 'pipelineRuns',
   stateBackups: 'stateBackups',
+  graphViews: 'graphViews',
+  skillRegistry: 'skillRegistry',
+  experienceRecords: 'experienceRecords',
   runtimeConfig: 'runtimeConfig',
 } as const;
 
@@ -53,6 +59,9 @@ export interface StorageSnapshot {
   harnessPatches: HarnessPatch[];
   pipelineRuns: ContentPipelineTrace[];
   runtimeConfig: RuntimeConfig;
+  graphViews: GraphView[];
+  skillRegistry: SkillDefinition[];
+  experienceRecords: ExperienceRecord[];
 }
 
 export interface StateBackup {
@@ -103,6 +112,9 @@ export function createDefaultStorageState(): StorageSchema {
     harnessPatches: [],
     pipelineRuns: [],
     stateBackups: [],
+    graphViews: [],
+    skillRegistry: [],
+    experienceRecords: [],
     runtimeConfig: createBundledRuntimeConfig(),
   };
 }

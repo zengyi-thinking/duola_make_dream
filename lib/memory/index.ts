@@ -44,6 +44,19 @@ export {
   savePageContext,
   saveProfile,
   updateIdeaStatus,
+  // Graph 视图
+  saveGraphView,
+  getGraphViews,
+  getGlobalGraph,
+  deleteGraphView,
+  mergeIntoGlobalGraph,
+  // Skill 注册表
+  saveSkill,
+  getSkillRegistry,
+  deleteSkill,
+  // 经验沉淀
+  saveExperience,
+  getExperiences,
 } from './store';
 export {
   applyApprovedMemoryToProfile,

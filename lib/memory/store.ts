@@ -3,6 +3,8 @@ import type {
   ArchiveNote,
   ContentPipelineTrace,
   ContextSnippet,
+  ExperienceRecord,
+  ExperienceSeed,
   FeedbackRecord,
   HarnessPatch,
   IdeaRecord,
@@ -16,6 +18,8 @@ import type {
 import type { GeneratedImageRecord } from '@/lib/image/types';
 import type { MindmapRecord } from '@/lib/mindmap/types';
 import type { PageContextRecord } from '@/lib/page/types';
+import type { GraphEdge, GraphNode, GraphView } from '@/lib/graph/types';
+import type { SkillDefinition } from '@/lib/skills/types';
 import {
   appendLimited,
   clearArrayStorage,
@@ -306,6 +310,9 @@ export async function getMemorySummary(): Promise<MemorySummary> {
     generatedImages: snapshot.generatedImages.slice(0, 10),
     generatedMindmaps: snapshot.generatedMindmaps.slice(0, 10),
     pendingPatches: snapshot.harnessPatches.filter((item) => item.status === 'pending').slice(0, 3),
+    graphViews: snapshot.graphViews.slice(0, 10),
+    recentExperiences: snapshot.experienceRecords.slice(0, 20),
+    skillRegistry: snapshot.skillRegistry.slice(0, 60),
     counts: {
       ideas: snapshot.ideaHistory.length,
       artifacts: snapshot.artifactHistory.length,
@@ -319,6 +326,9 @@ export async function getMemorySummary(): Promise<MemorySummary> {
       pipelineRuns: snapshot.pipelineRuns.length,
       images: snapshot.generatedImages.length,
       mindmaps: snapshot.generatedMindmaps.length,
+      graphViews: snapshot.graphViews.length,
+      experiences: snapshot.experienceRecords.length,
+      skills: snapshot.skillRegistry.length,
     },
   };
 }
@@ -422,4 +432,121 @@ export async function clearGeneratedImages(): Promise<MemorySummary> {
 export async function clearGeneratedMindmaps(): Promise<MemorySummary> {
   await clearArrayStorage('generatedMindmaps');
   return getMemorySummary();
+}
+
+// ---------- Graph 视图 ----------
+
+export async function saveGraphView(view: GraphView): Promise<GraphView> {
+  await appendLimited('graphViews', view, 30);
+  return view;
+}
+
+export async function getGraphViews(limit = 30): Promise<GraphView[]> {
+  const views = await readStorage('graphViews');
+  return views.slice(0, limit);
+}
+
+export async function deleteGraphView(viewId: string): Promise<MemorySummary> {
+  await removeById('graphViews', viewId);
+  return getMemorySummary();
+}
+
+/**
+ * 取全局记忆图（scope='global'）。若不存在则返回一个空图壳（不落库），
+ * 供 Memory 页在没有加工历史时也能渲染空 canvas。
+ */
+export async function getGlobalGraph(): Promise<GraphView> {
+  const views = await readStorage('graphViews');
+  const found = views.find((view) => view.scope === 'global');
+  if (found) return found;
+  return {
+    id: crypto.randomUUID(),
+    scope: 'global',
+    title: '全局记忆图',
+    nodes: [],
+    edges: [],
+    createdAt: Date.now(),
+  };
+}
+
+/**
+ * 把新节点/边幂等合并进全局图（按 id 去重）。
+ * 迁移链路和子 Agent 产出都走这里，让全局图持续生长。
+ */
+export async function mergeIntoGlobalGraph(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+): Promise<void> {
+  if (nodes.length === 0 && edges.length === 0) return;
+  const views = await readStorage('graphViews');
+  const idx = views.findIndex((view) => view.scope === 'global');
+  const now = Date.now();
+
+  if (idx < 0) {
+    const globalView: GraphView = {
+      id: crypto.randomUUID(),
+      scope: 'global',
+      title: '全局记忆图',
+      nodes,
+      edges,
+      createdAt: now,
+    };
+    await appendLimited('graphViews', globalView, 30);
+    return;
+  }
+
+  const existing = views[idx];
+  const nodeIds = new Set(existing.nodes.map((node) => node.id));
+  const edgeIds = new Set(existing.edges.map((edge) => edge.id));
+  const merged: GraphView = {
+    ...existing,
+    nodes: [...existing.nodes, ...nodes.filter((node) => !nodeIds.has(node.id))],
+    edges: [...existing.edges, ...edges.filter((edge) => !edgeIds.has(edge.id))],
+  };
+  const next = [...views];
+  next[idx] = merged;
+  await writeStorage('graphViews', next);
+}
+
+// ---------- Skill 注册表 ----------
+
+export async function saveSkill(skill: SkillDefinition): Promise<SkillDefinition> {
+  const skills = await readStorage('skillRegistry');
+  const exists = skills.some((item) => item.id === skill.id);
+  const next = exists
+    ? skills.map((item) => (item.id === skill.id ? skill : item))
+    : [skill, ...skills];
+  await writeStorage('skillRegistry', next.slice(0, 60));
+  return skill;
+}
+
+export async function getSkillRegistry(limit = 60): Promise<SkillDefinition[]> {
+  const skills = await readStorage('skillRegistry');
+  return skills.slice(0, limit);
+}
+
+export async function deleteSkill(skillId: string): Promise<MemorySummary> {
+  await removeById('skillRegistry', skillId);
+  return getMemorySummary();
+}
+
+// ---------- 经验沉淀 ----------
+
+export async function saveExperience(seed: ExperienceSeed): Promise<ExperienceRecord> {
+  const record: ExperienceRecord = {
+    id: crypto.randomUUID(),
+    outcome: seed.outcome,
+    agentId: seed.agentId,
+    summary: seed.summary,
+    lesson: seed.lesson,
+    relatedNodeIds: seed.relatedNodeIds ?? [],
+    createdAt: Date.now(),
+  };
+  await appendLimited('experienceRecords', record, 60);
+  return record;
+}
+
+export async function getExperiences(limit = 60): Promise<ExperienceRecord[]> {
+  const records = await readStorage('experienceRecords');
+  return records.slice(0, limit);
 }

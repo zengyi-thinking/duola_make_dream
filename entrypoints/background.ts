@@ -898,6 +898,9 @@ function buildEmptyPayload(type: AppMessage['type']) {
     generatedImages: [],
     generatedMindmaps: [],
     pendingPatches: [],
+    graphViews: [],
+    recentExperiences: [],
+    skillRegistry: [],
     counts: {
       ideas: 0,
       artifacts: 0,
@@ -911,6 +914,9 @@ function buildEmptyPayload(type: AppMessage['type']) {
       pipelineRuns: 0,
       images: 0,
       mindmaps: 0,
+      graphViews: 0,
+      experiences: 0,
+      skills: 0,
     },
   };
 

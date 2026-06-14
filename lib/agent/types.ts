@@ -13,6 +13,8 @@ import type {
   PageReadResult,
   PageType,
 } from '@/lib/page/types';
+import type { GraphView } from '@/lib/graph/types';
+import type { SkillDefinition } from '@/lib/skills/types';
 
 export type { ImageGenerationRequest, ImageGenerationSourceType, ImageGenerationStyle } from '@/lib/image/types';
 export type { MindmapNode, MindmapRecord, MindmapResult } from '@/lib/mindmap/types';
@@ -271,6 +273,9 @@ export interface MemorySummary {
   generatedImages: GeneratedImageRecord[];
   generatedMindmaps: MindmapRecord[];
   pendingPatches: HarnessPatch[];
+  graphViews: GraphView[];
+  recentExperiences: ExperienceRecord[];
+  skillRegistry: SkillDefinition[];
   counts: {
     ideas: number;
     artifacts: number;
@@ -284,6 +289,9 @@ export interface MemorySummary {
     pipelineRuns: number;
     images: number;
     mindmaps: number;
+    graphViews: number;
+    experiences: number;
+    skills: number;
   };
 }
 
@@ -385,4 +393,44 @@ export interface RecallItem {
 export interface MemoryRecallResult {
   query: string;
   items: RecallItem[];
+}
+
+// ---------- 子 Agent 运行时与经验沉淀（Graph Agent 架构） ----------
+
+/** 子 Agent 的 id —— 对应 PocketAgentDirector 调度的 8 个独立单元（见 docs/reaction-plan.md 第四节） */
+export type AgentId =
+  | 'plan'
+  | 'research'
+  | 'reflect'
+  | 'structure'
+  | 'image'
+  | 'feed'
+  | 'memory-graph'
+  | 'observe';
+
+/** 经验沉淀：记录子 Agent 在加工中的成功/失败经验，供 Observe 页经验图展示与后续复用 */
+export interface ExperienceRecord {
+  id: string;
+  outcome: 'success' | 'failure';
+  agentId: AgentId;
+  summary: string;
+  lesson: string;
+  relatedNodeIds: string[];
+  createdAt: number;
+}
+
+/** 经验种子：子 Agent run() 结束时产出，由 Director 汇总落库为 ExperienceRecord */
+export interface ExperienceSeed {
+  outcome: 'success' | 'failure';
+  agentId: AgentId;
+  summary: string;
+  lesson: string;
+  relatedNodeIds?: string[];
+}
+
+/** 子 Agent 单次运行的产物：领域输出 + 可选的阶段图节点 + 可选的经验种子 */
+export interface AgentRunResult<O> {
+  output: O;
+  stageNode?: import('@/lib/graph/types').GraphNode;
+  experience?: ExperienceSeed;
 }

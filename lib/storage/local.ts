@@ -23,6 +23,9 @@ function normalizeStorageSnapshot(
     runtimeConfig: normalizeRuntimeConfig(snapshot.runtimeConfig),
     pipelineRuns: snapshot.pipelineRuns ?? [],
     stateBackups: snapshot.stateBackups ?? [],
+    graphViews: snapshot.graphViews ?? [],
+    skillRegistry: snapshot.skillRegistry ?? [],
+    experienceRecords: snapshot.experienceRecords ?? [],
   };
 }
 
@@ -297,6 +300,9 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
     harnessPatches: (result.harnessPatches as StorageSchema['harnessPatches'] | undefined) ?? [],
     pipelineRuns: (result.pipelineRuns as StorageSchema['pipelineRuns'] | undefined) ?? [],
     stateBackups: (result.stateBackups as StorageSchema['stateBackups'] | undefined) ?? [],
+    graphViews: (result.graphViews as StorageSchema['graphViews'] | undefined) ?? [],
+    skillRegistry: (result.skillRegistry as StorageSchema['skillRegistry'] | undefined) ?? [],
+    experienceRecords: (result.experienceRecords as StorageSchema['experienceRecords'] | undefined) ?? [],
     runtimeConfig: normalizeRuntimeConfig(
       result.runtimeConfig as Partial<StorageSchema['runtimeConfig']> | undefined,
     ),
