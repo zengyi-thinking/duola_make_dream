@@ -1,1 +1,0 @@
-export { routeIdeaIntent } from './router';
