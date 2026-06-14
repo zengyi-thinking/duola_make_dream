@@ -54,8 +54,10 @@ import { buildKnowledgeRecall } from '@/lib/agent/recall';
 import { migrateLegacyToGraph } from '@/lib/graph/migrate';
 import { getActiveModelProfile } from '@/lib/agent/model-profiles';
 import { testModelConnection } from '@/lib/model/connection-test';
+import { PocketAgentDirector } from '@/lib/agent/runtime/director';
 import type { GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
+import type { FeedInput, InventInput } from '@/lib/agent/runtime/types';
 import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult } from '@/lib/agent/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
@@ -269,6 +271,13 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
       return successResponse('pocket.experience.list', message.requestId, await handlePocketExperienceList());
     case 'pocket.model.test':
       return successResponse('pocket.model.test', message.requestId, await handlePocketModelTest(message.payload.kind, message.payload.profileId));
+
+    case 'pocket.agent.invent':
+      return successResponse('pocket.agent.invent', message.requestId, await handlePocketAgentInvent(message.payload));
+    case 'pocket.agent.image':
+      return successResponse('pocket.agent.image', message.requestId, await handlePocketAgentImage(message.payload.planGraph));
+    case 'pocket.agent.feed':
+      return successResponse('pocket.agent.feed', message.requestId, await handlePocketAgentFeed(message.payload));
   }
 }
 
@@ -319,6 +328,26 @@ async function handlePocketModelTest(kind: 'llm' | 'image', profileId?: string) 
     return { ok: false, reachable: false, status: 0, latencyMs: 0, error: '未找到匹配的配置档' };
   }
   return testModelConnection(target);
+}
+
+// ---------- PocketAgent Director 链路 ----------
+
+async function handlePocketAgentInvent(input: InventInput) {
+  const director = new PocketAgentDirector();
+  const { events, result } = await director.runInventPipeline(input);
+  return { events, result, memorySummary: await getMemorySummary() };
+}
+
+async function handlePocketAgentImage(planGraph: GraphView) {
+  const director = new PocketAgentDirector();
+  const { events, result } = await director.runImageStage(planGraph);
+  return { events, result, memorySummary: await getMemorySummary() };
+}
+
+async function handlePocketAgentFeed(input: FeedInput) {
+  const director = new PocketAgentDirector();
+  const { events, result } = await director.runFeedPipeline(input);
+  return { events, result, memorySummary: await getMemorySummary() };
 }
 
 async function handleFeedbackRecord(
@@ -1252,6 +1281,10 @@ function buildEmptyPayload(type: AppMessage['type']) {
 
   if (type === 'pocket.model.test') {
     return { ok: false, reachable: false, status: 0, latencyMs: 0, error: '' };
+  }
+
+  if (type === 'pocket.agent.invent' || type === 'pocket.agent.image' || type === 'pocket.agent.feed') {
+    return { events: [], result: null, memorySummary: emptySummary };
   }
 
   return emptySummary;

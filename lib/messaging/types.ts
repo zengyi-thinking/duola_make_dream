@@ -23,6 +23,8 @@ import type { MindmapRecord } from '@/lib/mindmap/types';
 import type { GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
 import type { ConnectionTestResult } from '@/lib/model/types';
+import type { AgentEvent, FeedInput, InventInput } from '@/lib/agent/runtime/types';
+import type { FeedResult, ImageResult, InventResult } from '@/lib/agent/runtime/director';
 
 export type MessageSource = 'popup' | 'content' | 'background';
 
@@ -58,7 +60,10 @@ export type ExtensionMessageType =
   | 'pocket.skill.save'
   | 'pocket.skill.delete'
   | 'pocket.experience.list'
-  | 'pocket.model.test';
+  | 'pocket.model.test'
+  | 'pocket.agent.invent'
+  | 'pocket.agent.image'
+  | 'pocket.agent.feed';
 
 export type MessageType = ExtensionMessageType;
 
@@ -258,6 +263,10 @@ export type PocketModelTestRequest = MessageEnvelope<
   { kind: 'llm' | 'image'; profileId?: string }
 >;
 
+export type PocketAgentInventRequest = MessageEnvelope<'pocket.agent.invent', InventInput>;
+export type PocketAgentImageRequest = MessageEnvelope<'pocket.agent.image', { planGraph: GraphView }>;
+export type PocketAgentFeedRequest = MessageEnvelope<'pocket.agent.feed', FeedInput>;
+
 export type AppMessage =
   | IdeaSubmitRequest
   | FeedbackRecordRequest
@@ -290,7 +299,10 @@ export type AppMessage =
   | PocketSkillSaveRequest
   | PocketSkillDeleteRequest
   | PocketExperienceListRequest
-  | PocketModelTestRequest;
+  | PocketModelTestRequest
+  | PocketAgentInventRequest
+  | PocketAgentImageRequest
+  | PocketAgentFeedRequest;
 
 export type InternalExtractCurrentMessage = {
   type: 'content.page.extract-current';
@@ -358,6 +370,9 @@ export type MessageResponseMap = {
   'pocket.skill.delete': ResponseEnvelope<'pocket.skill.delete', MemorySummary>;
   'pocket.experience.list': ResponseEnvelope<'pocket.experience.list', { experiences: ExperienceRecord[]; memorySummary: MemorySummary }>;
   'pocket.model.test': ResponseEnvelope<'pocket.model.test', ConnectionTestResult>;
+  'pocket.agent.invent': ResponseEnvelope<'pocket.agent.invent', { events: AgentEvent[]; result: InventResult | null; memorySummary: MemorySummary }>;
+  'pocket.agent.image': ResponseEnvelope<'pocket.agent.image', { events: AgentEvent[]; result: ImageResult | null; memorySummary: MemorySummary }>;
+  'pocket.agent.feed': ResponseEnvelope<'pocket.agent.feed', { events: AgentEvent[]; result: FeedResult | null; memorySummary: MemorySummary }>;
 };
 
 export type AppMessageResponse =
@@ -392,4 +407,7 @@ export type AppMessageResponse =
   | MessageResponseMap['pocket.skill.save']
   | MessageResponseMap['pocket.skill.delete']
   | MessageResponseMap['pocket.experience.list']
-  | MessageResponseMap['pocket.model.test'];
+  | MessageResponseMap['pocket.model.test']
+  | MessageResponseMap['pocket.agent.invent']
+  | MessageResponseMap['pocket.agent.image']
+  | MessageResponseMap['pocket.agent.feed'];

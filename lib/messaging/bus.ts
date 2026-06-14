@@ -38,6 +38,9 @@ import type {
   PocketSkillDeleteRequest,
   PocketExperienceListRequest,
   PocketModelTestRequest,
+  PocketAgentInventRequest,
+  PocketAgentImageRequest,
+  PocketAgentFeedRequest,
 } from './types';
 
 function createRequestId(type: MessageType): string {
@@ -356,6 +359,27 @@ export function createPocketModelTestMessage(
     source,
     payload: profileId ? { kind, profileId } : { kind },
   };
+}
+
+export function createPocketAgentInventMessage(
+  input: PocketAgentInventRequest['payload'],
+  source: MessageSource = 'popup',
+): PocketAgentInventRequest {
+  return { type: 'pocket.agent.invent', requestId: createRequestId('pocket.agent.invent'), source, payload: input };
+}
+
+export function createPocketAgentImageMessage(
+  planGraph: PocketAgentImageRequest['payload']['planGraph'],
+  source: MessageSource = 'popup',
+): PocketAgentImageRequest {
+  return { type: 'pocket.agent.image', requestId: createRequestId('pocket.agent.image'), source, payload: { planGraph } };
+}
+
+export function createPocketAgentFeedMessage(
+  input: PocketAgentFeedRequest['payload'],
+  source: MessageSource = 'popup',
+): PocketAgentFeedRequest {
+  return { type: 'pocket.agent.feed', requestId: createRequestId('pocket.agent.feed'), source, payload: input };
 }
 
 export {
