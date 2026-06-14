@@ -24,12 +24,18 @@ export async function testModelConnection(profile: ModelProfile): Promise<Connec
       headers: profile.apiKey ? { Authorization: `Bearer ${profile.apiKey}` } : {},
       signal: controller.signal,
     });
+    // GET 探针判断：200=完美；404/405=端点可达但根路径无 GET 响应（MiniMax/Anthropic 均如此，属正常）；
+    // 401=API Key 无效；5xx=服务器错误；0/超时=不可达
+    const ok = res.status < 500 && res.status !== 401;
     return {
-      ok: res.status === 200,
+      ok,
       reachable: true,
       status: res.status,
       latencyMs: Date.now() - start,
-      error: res.status === 200 ? undefined : `HTTP ${res.status}`,
+      error: res.status === 200 ? undefined
+        : res.status === 401 ? 'API Key 无效 (401)'
+        : res.status >= 500 ? `服务器错误 (HTTP ${res.status})`
+        : `HTTP ${res.status}（端点可达，GET 探针无响应属正常）`,
     };
   } catch (err) {
     const aborted = err instanceof DOMException && err.name === 'AbortError';

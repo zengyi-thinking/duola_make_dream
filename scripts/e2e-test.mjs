@@ -131,14 +131,14 @@ console.log(`✅ service worker: ${swUrl}`);
 console.log(`   扩展 ID: ${extId}\n`);
 
 // ── 在 service worker 里 evaluate ──────────────────────────
-async function swEval(expression) {
+async function swEval(expression, timeout = 20000) {
   const client = await swTarget.createCDPSession();
   try {
     const r = await client.send('Runtime.evaluate', {
       expression,
       returnByValue: true,
       awaitPromise: true,
-      timeout: 20000,
+      timeout,
     });
     if (r.exceptionDetails) {
       const msg = r.exceptionDetails.exception?.description
@@ -232,6 +232,70 @@ if (ping1.connected) {
   console.log(`   动态注入结果: ${JSON.stringify(inject)}`);
   record('动态注入兜底', inject.ok, JSON.stringify(inject).slice(0, 200));
 }
+
+// ── Test 9: 模型连接测试（经 content script 发消息，真实链路 content→SW） ───
+console.log('\n─── Test 9: pocket.model.test 连接测试（content→SW） ───');
+const modelTest = await swEval(`
+  (async () => {
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: ${tabIdToTest} },
+        func: async () => {
+          try {
+            const resp = await chrome.runtime.sendMessage({
+              type: 'pocket.model.test',
+              requestId: 'e2e-model-' + Date.now(),
+              source: 'content',
+              payload: { kind: 'llm' },
+            });
+            return { ok: resp?.success ?? false, status: resp?.payload?.status, latency: resp?.payload?.latencyMs, err: resp?.payload?.error ?? resp?.error };
+          } catch (e) { return { ok: false, error: String(e) }; }
+        },
+      });
+      return results?.[0]?.result ?? { ok: false, error: 'executeScript 无返回' };
+    } catch (e) { return { ok: false, error: String(e) }; }
+  })()
+`);
+console.log(`   连接结果: ${JSON.stringify(modelTest)}`);
+record('pocket.model.test 连接测试',
+  modelTest.ok,
+  modelTest.ok ? `HTTP ${modelTest.status}, ${modelTest.latency}ms` : (modelTest.err ?? modelTest.error ?? '失败'));
+
+// ── Test 10: 真实 LLM 发明链路（经 content 发，消耗 token） ───
+console.log('\n─── Test 10: pocket.agent.invent 真实 LLM 加工（content→SW→MiniMax） ───');
+const invent = await swEval(`
+  (async () => {
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: ${tabIdToTest} },
+        func: async () => {
+          try {
+            const resp = await chrome.runtime.sendMessage({
+              type: 'pocket.agent.invent',
+              requestId: 'e2e-invent-' + Date.now(),
+              source: 'content',
+              payload: { text: '一个能自动整理浏览器标签页的小工具', source: 'popup' },
+            });
+            const r = resp?.payload?.result;
+            return {
+              ok: resp?.success ?? false,
+              conceptName: r?.artifact?.concept?.name,
+              planNodes: r?.planGraph?.nodes?.length ?? 0,
+              error: resp?.error,
+            };
+          } catch (e) { return { ok: false, error: String(e) }; }
+        },
+      });
+      return results?.[0]?.result ?? { ok: false, error: 'executeScript 无返回' };
+    } catch (e) { return { ok: false, error: String(e) }; }
+  })()
+`, 90000);
+console.log(`   发明结果: ${JSON.stringify(invent)}`);
+record('pocket.agent.invent 真实 LLM 加工',
+  invent.ok && invent.planNodes > 0 && !!invent.conceptName,
+  invent.conceptName
+    ? `concept="${invent.conceptName}" (${invent.planNodes} 节点)`
+    : (invent.error ?? '失败'));
 
 // ── Test 3: page.extract-current 全链路 ───────────────────
 console.log('\n─── Test 3: page.extract-current 提取正文 ───');
@@ -416,11 +480,11 @@ const memorySummary = await swEval(`
       error: resp?.error,
     };
   })()
-`);
+`).catch((e) => ({ __error: e.message }));
 console.log(`   memory 摘要: ${JSON.stringify(memorySummary)}`);
 record('memory.get 数据闭环',
-  memorySummary.ok,
-  `pageContexts=${memorySummary.counts?.pageContexts}, notes=${memorySummary.counts?.notes}`);
+  memorySummary.ok && !memorySummary.__error,
+  memorySummary.__error ?? `pageContexts=${memorySummary.counts?.pageContexts}, notes=${memorySummary.counts?.notes}`);
 
 // ── 收尾 ────────────────────────────────────────────────
 console.log('\n═══════════════════════════════════════');

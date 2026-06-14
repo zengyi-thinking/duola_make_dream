@@ -8,7 +8,7 @@
     "predev": "node scripts/inject-dev-config.mjs",
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "prebuild": "node scripts/inject-dev-config.mjs --clean",
+    "prebuild": "node scripts/inject-dev-config.mjs",
     "build": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs build",
     "build:firefox": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs build -b firefox",
     "zip": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs zip",
