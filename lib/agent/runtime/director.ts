@@ -106,6 +106,7 @@ async function buildContext(
     buildVoiceHint(voice, runtimeConfig.voiceOverrides?.[voice.id]),
     buildToneHint(runtimeConfig.defaultTone),
     buildHarnessHint(patches),
+    profile.creativeBrief?.trim() ? `【创作画像】${profile.creativeBrief.trim()}` : '',
   ].filter(Boolean).join('\n');
 
   return {

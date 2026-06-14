@@ -11,7 +11,7 @@ import {
   getModelProfiles,
   maskApiKey,
 } from '@/lib/agent/model-profiles';
-import { pocketAvatarIds, pocketAvatars } from '@/lib/brand/avatars';
+import { pocketAvatarIds, pocketAvatars, type PocketAvatarId } from '@/lib/brand/avatars';
 import { getVoice } from '@/lib/agent/voices';
 import { saveProfile } from '@/lib/memory';
 import {
@@ -29,11 +29,7 @@ import { useRuntimeConfig } from '../context/RuntimeConfigContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 
 interface ProfileDraft {
-  visualLikes: string;
-  visualDislikes: string;
-  tonePreference: string;
-  productPreferences: string;
-  recentThemes: string;
+  creativeBrief: string;
 }
 
 interface ModelProfileDraft {
@@ -124,18 +120,16 @@ export default function SettingsPage() {
     setBusyAction('profile-save');
     setErrorText('');
     try {
+      const base = memory.profile ?? DEFAULT_PROFILE;
       const nextProfile: UserProfile = {
-        visualLikes: parseProfileList(profileDraft.visualLikes),
-        visualDislikes: parseProfileList(profileDraft.visualDislikes),
-        tonePreference: profileDraft.tonePreference.trim(),
-        productPreferences: parseProfileList(profileDraft.productPreferences),
-        recentThemes: parseProfileList(profileDraft.recentThemes),
+        ...base,
+        creativeBrief: profileDraft.creativeBrief.trim(),
         lastUpdated: Date.now(),
       };
       await saveProfile(nextProfile, 'manual');
       await refreshMemory();
       setProfileDirty(false);
-      setNoticeText('用户画像已保存。');
+      setNoticeText('创作画像已保存。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '保存画像失败');
     } finally {
@@ -275,7 +269,7 @@ export default function SettingsPage() {
                 >
                   <PocketBuddyAvatar avatar={candidateAvatarId} mood={active ? 'spark' : 'warm'} size={40} />
                   <strong>{meta.name}</strong>
-                  <span>{meta.usage}</span>
+                  <span>{describeAvatarStyle(candidateAvatarId)}</span>
                 </button>
               );
             })}
@@ -304,61 +298,35 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* 模块2：用户画像 */}
+      {/* 模块2：创作画像（单自由文本框，注入所有加工链路 system prompt） */}
       <section className="panel-card settings-console-card">
         <div className="panel-head">
           <div>
             <p className="section-label">Persona Lab</p>
-            <h2>用户画像</h2>
+            <h2>创作画像</h2>
           </div>
           <span className="micro-status">{memory ? `${memory.counts.profileChanges} 次历史变化` : '等待记忆加载'}</span>
         </div>
-        <div className="signal-chip-row settings-profile-summary__chips">
-          <span className="signal-chip">{(memory?.profile ?? DEFAULT_PROFILE).visualLikes.length} 视觉偏好</span>
-          <span className="signal-chip">{(memory?.profile ?? DEFAULT_PROFILE).productPreferences.length} 产品偏好</span>
-          <span className="signal-chip">{(memory?.profile ?? DEFAULT_PROFILE).recentThemes.length} 近期主题</span>
-        </div>
-        <details className="settings-advanced">
-          <summary className="settings-advanced__summary">
-            <span>编辑画像细项</span>
-            <span className="micro-status">折叠</span>
-          </summary>
-          <div className="settings-advanced__body">
-            <div className="settings-section">
-              <label>视觉偏好</label>
-              <textarea className="settings-input settings-textarea" value={profileDraft.visualLikes}
-                onChange={(e) => updateProfileField('visualLikes', e.target.value)} placeholder="蓝白线条&#10;口袋感" disabled={Boolean(busyAction)} />
-            </div>
-            <div className="settings-section">
-              <label>视觉排斥</label>
-              <textarea className="settings-input settings-textarea" value={profileDraft.visualDislikes}
-                onChange={(e) => updateProfileField('visualDislikes', e.target.value)} placeholder="太花哨" disabled={Boolean(busyAction)} />
-            </div>
-            <div className="settings-section">
-              <label>语气偏好</label>
-              <input type="text" className="settings-input" value={profileDraft.tonePreference}
-                onChange={(e) => updateProfileField('tonePreference', e.target.value)} placeholder="温暖、直接、产品化" disabled={Boolean(busyAction)} />
-            </div>
-            <div className="settings-section">
-              <label>产品偏好</label>
-              <textarea className="settings-input settings-textarea" value={profileDraft.productPreferences}
-                onChange={(e) => updateProfileField('productPreferences', e.target.value)} placeholder="轻量工具&#10;浏览器插件" disabled={Boolean(busyAction)} />
-            </div>
-            <div className="settings-section">
-              <label>近期主题</label>
-              <textarea className="settings-input settings-textarea" value={profileDraft.recentThemes}
-                onChange={(e) => updateProfileField('recentThemes', e.target.value)} placeholder="效率工具&#10;创作辅助" disabled={Boolean(busyAction)} />
-            </div>
-            <div className="inline-actions">
-              <LineButton variant="primary" onClick={handleSaveProfile} disabled={!profileDirty || Boolean(busyAction) || !memory}>
-                保存画像
-              </LineButton>
-              <LineButton variant="ghost" onClick={resetProfileDraft} disabled={!profileDirty || Boolean(busyAction)}>
-                恢复当前画像
-              </LineButton>
-            </div>
+        <div className="settings-section">
+          <label>你的创作画像</label>
+          <p className="micro-copy">告诉 Agent 你的领域、受众、风格与偏好。它会注入到所有加工链路（发明/喂养/生图）的 system prompt，让产出更贴合你。</p>
+          <textarea
+            className="settings-input settings-textarea"
+            value={profileDraft.creativeBrief}
+            onChange={(e) => updateProfileField('creativeBrief', e.target.value)}
+            placeholder={'例如：\n· 我做面向独立开发者的效率工具，偏爱蓝白极简风\n· 受众是技术人，喜欢直接、有数据支撑的表达\n· 近期关注 AI Agent 与浏览器插件'}
+            disabled={Boolean(busyAction)}
+            rows={6}
+          />
+          <div className="inline-actions">
+            <LineButton variant="primary" onClick={handleSaveProfile} disabled={!profileDirty || Boolean(busyAction) || !memory}>
+              保存画像
+            </LineButton>
+            <LineButton variant="ghost" onClick={resetProfileDraft} disabled={!profileDirty || Boolean(busyAction)}>
+              恢复当前画像
+            </LineButton>
           </div>
-        </details>
+        </div>
       </section>
 
       {/* 模块3：模型配置档（含连接测试） */}
@@ -492,7 +460,13 @@ function ModelProfileSection(props: {
       await onUpdate(kind === 'llm' ? { llmProfiles: nextProfiles, activeLlmProfileId: nextActiveId } : { imageProfiles: nextProfiles, activeImageProfileId: nextActiveId });
       setSelectedId(nextProfile.id);
       setDraft(profileToDraft(nextProfile));
-      setNoticeText(`${title}已保存。`);
+      // 保存后自动测连通性（apiKey + endpoint 齐全才测）
+      if (nextProfile.apiKey.trim() && nextProfile.endpoint.trim()) {
+        setNoticeText(`${title}已保存，正在测试连通性…`);
+        await onTest(kind, nextProfile.id);
+      } else {
+        setNoticeText(`${title}已保存。`);
+      }
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : `${title}保存失败`);
     }
@@ -635,18 +609,17 @@ function defaultProfileName(kind: 'llm' | 'image'): string {
 
 function buildProfileDraft(profile: UserProfile): ProfileDraft {
   return {
-    visualLikes: joinProfileList(profile.visualLikes),
-    visualDislikes: joinProfileList(profile.visualDislikes),
-    tonePreference: profile.tonePreference,
-    productPreferences: joinProfileList(profile.productPreferences),
-    recentThemes: joinProfileList(profile.recentThemes),
+    creativeBrief: profile.creativeBrief ?? '',
   };
 }
 
-function joinProfileList(values: string[]): string {
-  return values.join('\n');
-}
-
-function parseProfileList(value: string): string[] {
-  return Array.from(new Set(value.split(/[\n,，]/).map((item) => item.trim()).filter(Boolean)));
+/** 四人格风格标签（用于 avatar 卡片） */
+function describeAvatarStyle(avatarId: PocketAvatarId): string {
+  switch (getVoice(avatarId).outputStyle) {
+    case 'divergent': return '探索发散型';
+    case 'warm': return '温暖陪伴型';
+    case 'focused': return '聚焦落地型';
+    case 'rigorous': return '严谨学者型';
+    default: return getVoice(avatarId).name;
+  }
 }

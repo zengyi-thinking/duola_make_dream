@@ -202,6 +202,8 @@ export interface UserProfile {
   tonePreference: string;
   productPreferences: string[];
   recentThemes: string[];
+  /** 创作画像（自由文本）：领域/受众/风格/偏好，注入所有加工链路 system prompt */
+  creativeBrief: string;
   lastUpdated: number;
 }
 

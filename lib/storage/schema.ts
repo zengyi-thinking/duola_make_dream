@@ -82,6 +82,7 @@ export const DEFAULT_PROFILE: UserProfile = {
   tonePreference: '温暖、直接、产品化',
   productPreferences: ['轻量工具', '浏览器插件'],
   recentThemes: [],
+  creativeBrief: '',
   lastUpdated: Date.now(),
 };
 
