@@ -16,7 +16,6 @@ import type {
 import type { GraphView } from '@/lib/graph/types';
 import {
   createArchiveSaveMessage,
-  createMemoryGetMessage,
   createPageReadMessage,
   createPocketAgentFeedMessage,
   createPocketSnippetsSynthesizeMessage,
@@ -62,13 +61,12 @@ export default function FeedPage() {
     return () => browser.runtime.onMessage.removeListener(listener);
   }, []);
 
-  // 拉取全部划词碎片（归档后 memorySummary 会更新，但本地 snippets 用于管理/删除）
+  // 拉取全部划词碎片（全量，不靠 memory.recentContextSnippets 的 slice 3）。
+  // 直接 import store 函数（sidepanel 可用 chrome.storage），同 handleDeleteSnippet 模式。
   async function refreshSnippets() {
     try {
-      const res = await sendRuntimeMessage(createMemoryGetMessage());
-      if (res.success && res.payload) {
-        setSnippets(res.payload.recentContextSnippets);
-      }
+      const { getAllContextSnippets } = await import('@/lib/memory');
+      setSnippets(await getAllContextSnippets());
     } catch {
       /* ignore */
     }
@@ -76,7 +74,7 @@ export default function FeedPage() {
 
   useEffect(() => {
     void refreshSnippets();
-  }, [memory?.recentContextSnippets?.length]);
+  }, []);
 
   async function handleReadCurrentPage() {
     setBusyAction('page-read');

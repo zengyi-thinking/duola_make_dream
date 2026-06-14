@@ -6,6 +6,7 @@ import type { ArchiveNote, ProductArtifact } from '@/lib/agent/types';
 import type { GeneratedImageRecord } from '@/lib/image/types';
 import { createGraphEdge, createGraphNode, createGraphView } from '@/lib/graph/types';
 import type { GraphView } from '@/lib/graph/types';
+import { createArchiveDeleteMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
 import { useMemory } from '../context/MemoryContext';
 
 /**
@@ -61,26 +62,11 @@ export default function MemoryPage() {
       return;
     }
     try {
-      const next = await (await import('@/lib/messaging/bus')).sendRuntimeMessage(
-        (await import('@/lib/messaging/bus')).createArchiveDeleteMessage(noteId),
-      );
+      const next = await sendRuntimeMessage(createArchiveDeleteMessage(noteId));
       if (next.success) {
         setMemory(next.payload);
         setAllNotes((cur) => cur.filter((n) => n.id !== noteId));
         setConfirmDeleteNoteId(null);
-        await refreshMemory();
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  async function handleDeleteNode(nodeId: string) {
-    try {
-      const next = await (await import('@/lib/messaging/bus')).sendRuntimeMessage(
-        (await import('@/lib/messaging/bus')).createPocketGraphDeleteMessage(nodeId),
-      );
-      if (next.success) {
         await refreshMemory();
       }
     } catch {
@@ -105,7 +91,7 @@ export default function MemoryPage() {
         </div>
         {hasIdeaNodes ? (
           <>
-            <GraphCanvas graph={ideaGraph} emptyHint="还没有 idea 成果，去发明页生成想法。" onDeleteNode={handleDeleteNode} />
+            <GraphCanvas graph={ideaGraph} emptyHint="还没有 idea 成果，去发明页生成想法。" />
             <p className="soft-text" style={{ marginTop: 8 }}>
               节点是 agent 发明产物（点开看 PlanBoard 执行计划+图片）；蓝边节点是生图模型返回的成品。
             </p>
@@ -129,7 +115,7 @@ export default function MemoryPage() {
           <span className="timeline-badge timeline-badge--pipeline">{notesGraph.nodes.length} 节点</span>
         </div>
         {hasNoteNodes ? (
-          <GraphCanvas graph={notesGraph} emptyHint="还没有网页笔记，去喂养页归档或划词归纳。" onDeleteNode={handleDeleteNode} />
+          <GraphCanvas graph={notesGraph} emptyHint="还没有网页笔记，去喂养页归档或划词归纳。" />
         ) : (
           <p className="soft-text">还没有网页笔记。点喂养页归档阅读笔记，或划词积累后归纳成文档。</p>
         )}
