@@ -21,7 +21,7 @@ import type {
 // re-export：SubAgent.run 返回 AgentRunResult，agent 实现文件从本模块统一导入
 export type { AgentRunResult };
 import type { GraphNode, GraphView } from '@/lib/graph/types';
-import type { PageReadResult } from '@/lib/page/types';
+import type { PageContextRecord, PageReadResult } from '@/lib/page/types';
 
 /** 子 Agent 状态机：前端订阅事件驱动 ProcessingStage 加工动画 */
 export type AgentStatus = 'idle' | 'running' | 'done' | 'skipped' | 'error';
@@ -104,6 +104,7 @@ export interface InventInput {
 /** 喂养页输入 */
 export interface FeedInput {
   page: PageReadResult;
+  context: PageContextRecord;
   selectedText?: string;
 }
 
