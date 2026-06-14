@@ -22,6 +22,7 @@ import type { ImageGenerationSourceType, ImageGenerationStyle } from '@/lib/imag
 import type { MindmapRecord } from '@/lib/mindmap/types';
 import type { GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
+import type { ToolDefinition } from '@/lib/tools/types';
 import type { ConnectionTestResult } from '@/lib/model/types';
 import type { AgentEvent, FeedInput, InventInput } from '@/lib/agent/runtime/types';
 import type { FeedResult, ImageResult, InventResult } from '@/lib/agent/runtime/director';
@@ -59,6 +60,10 @@ export type ExtensionMessageType =
   | 'pocket.skill.list'
   | 'pocket.skill.save'
   | 'pocket.skill.delete'
+  | 'pocket.tool.list'
+  | 'pocket.tool.save'
+  | 'pocket.tool.delete'
+  | 'pocket.tool.toggle'
   | 'pocket.experience.list'
   | 'pocket.model.test'
   | 'pocket.agent.invent'
@@ -96,6 +101,7 @@ export type MemoryDeleteScope =
   | 'harnessPatches'
   | 'graphViews'
   | 'skillRegistry'
+  | 'toolRegistry'
   | 'experienceRecords';
 
 export type IdeaSubmitRequest = MessageEnvelope<
@@ -258,6 +264,10 @@ export type PocketGraphDeleteRequest = MessageEnvelope<'pocket.graph.delete', { 
 export type PocketSkillListRequest = MessageEnvelope<'pocket.skill.list', Record<string, never>>;
 export type PocketSkillSaveRequest = MessageEnvelope<'pocket.skill.save', { skill: SkillDefinition }>;
 export type PocketSkillDeleteRequest = MessageEnvelope<'pocket.skill.delete', { skillId: string }>;
+export type PocketToolListRequest = MessageEnvelope<'pocket.tool.list', Record<string, never>>;
+export type PocketToolSaveRequest = MessageEnvelope<'pocket.tool.save', { tool: ToolDefinition }>;
+export type PocketToolDeleteRequest = MessageEnvelope<'pocket.tool.delete', { toolId: string }>;
+export type PocketToolToggleRequest = MessageEnvelope<'pocket.tool.toggle', { toolId: string; enabled: boolean }>;
 export type PocketExperienceListRequest = MessageEnvelope<'pocket.experience.list', Record<string, never>>;
 export type PocketModelTestRequest = MessageEnvelope<
   'pocket.model.test',
@@ -272,6 +282,11 @@ export type PocketSnippetsSynthesizeRequest = MessageEnvelope<'pocket.snippets.s
 
 export type SnippetsSynthesizeResult = {
   note: import('@/lib/agent/types').ArchiveNote | null;
+  memorySummary: MemorySummary;
+};
+
+export type ToolRegistryResult = {
+  tools: ToolDefinition[];
   memorySummary: MemorySummary;
 };
 
@@ -306,6 +321,10 @@ export type AppMessage =
   | PocketSkillListRequest
   | PocketSkillSaveRequest
   | PocketSkillDeleteRequest
+  | PocketToolListRequest
+  | PocketToolSaveRequest
+  | PocketToolDeleteRequest
+  | PocketToolToggleRequest
   | PocketExperienceListRequest
   | PocketModelTestRequest
   | PocketAgentInventRequest
@@ -377,6 +396,10 @@ export type MessageResponseMap = {
   'pocket.skill.list': ResponseEnvelope<'pocket.skill.list', { skills: SkillDefinition[]; memorySummary: MemorySummary }>;
   'pocket.skill.save': ResponseEnvelope<'pocket.skill.save', MemorySummary>;
   'pocket.skill.delete': ResponseEnvelope<'pocket.skill.delete', MemorySummary>;
+  'pocket.tool.list': ResponseEnvelope<'pocket.tool.list', ToolRegistryResult>;
+  'pocket.tool.save': ResponseEnvelope<'pocket.tool.save', { tools: ToolDefinition[] }>;
+  'pocket.tool.delete': ResponseEnvelope<'pocket.tool.delete', { tools: ToolDefinition[] }>;
+  'pocket.tool.toggle': ResponseEnvelope<'pocket.tool.toggle', { tools: ToolDefinition[] }>;
   'pocket.experience.list': ResponseEnvelope<'pocket.experience.list', { experiences: ExperienceRecord[]; memorySummary: MemorySummary }>;
   'pocket.model.test': ResponseEnvelope<'pocket.model.test', ConnectionTestResult>;
   'pocket.agent.invent': ResponseEnvelope<'pocket.agent.invent', { events: AgentEvent[]; result: InventResult | null; memorySummary: MemorySummary }>;
@@ -416,6 +439,10 @@ export type AppMessageResponse =
   | MessageResponseMap['pocket.skill.list']
   | MessageResponseMap['pocket.skill.save']
   | MessageResponseMap['pocket.skill.delete']
+  | MessageResponseMap['pocket.tool.list']
+  | MessageResponseMap['pocket.tool.save']
+  | MessageResponseMap['pocket.tool.delete']
+  | MessageResponseMap['pocket.tool.toggle']
   | MessageResponseMap['pocket.experience.list']
   | MessageResponseMap['pocket.model.test']
   | MessageResponseMap['pocket.agent.invent']

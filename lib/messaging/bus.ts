@@ -36,6 +36,10 @@ import type {
   PocketSkillListRequest,
   PocketSkillSaveRequest,
   PocketSkillDeleteRequest,
+  PocketToolListRequest,
+  PocketToolSaveRequest,
+  PocketToolDeleteRequest,
+  PocketToolToggleRequest,
   PocketExperienceListRequest,
   PocketModelTestRequest,
   PocketAgentInventRequest,
@@ -343,6 +347,25 @@ export function createPocketSkillSaveMessage(
 
 export function createPocketSkillDeleteMessage(skillId: string, source: MessageSource = 'popup'): PocketSkillDeleteRequest {
   return { type: 'pocket.skill.delete', requestId: createRequestId('pocket.skill.delete'), source, payload: { skillId } };
+}
+
+export function createPocketToolListMessage(source: MessageSource = 'popup'): PocketToolListRequest {
+  return { type: 'pocket.tool.list', requestId: createRequestId('pocket.tool.list'), source, payload: {} };
+}
+
+export function createPocketToolSaveMessage(
+  tool: PocketToolSaveRequest['payload']['tool'],
+  source: MessageSource = 'popup',
+): PocketToolSaveRequest {
+  return { type: 'pocket.tool.save', requestId: createRequestId('pocket.tool.save'), source, payload: { tool } };
+}
+
+export function createPocketToolDeleteMessage(toolId: string, source: MessageSource = 'popup'): PocketToolDeleteRequest {
+  return { type: 'pocket.tool.delete', requestId: createRequestId('pocket.tool.delete'), source, payload: { toolId } };
+}
+
+export function createPocketToolToggleMessage(toolId: string, enabled: boolean, source: MessageSource = 'popup'): PocketToolToggleRequest {
+  return { type: 'pocket.tool.toggle', requestId: createRequestId('pocket.tool.toggle'), source, payload: { toolId, enabled } };
 }
 
 export function createPocketExperienceListMessage(source: MessageSource = 'popup'): PocketExperienceListRequest {

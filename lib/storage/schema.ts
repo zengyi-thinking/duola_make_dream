@@ -19,6 +19,7 @@ import type { MindmapRecord } from '@/lib/mindmap/types';
 import type { PageContextRecord } from '@/lib/page/types';
 import type { GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
+import type { ToolDefinition } from '@/lib/tools/types';
 import bundledRuntimeConfigJson from '../../config/bundled-runtime-config.json';
 import localRuntimeConfigJson from '../../config/local-runtime-config.json';
 
@@ -40,6 +41,7 @@ export const STORAGE_KEYS = {
   stateBackups: 'stateBackups',
   graphViews: 'graphViews',
   skillRegistry: 'skillRegistry',
+  toolRegistry: 'toolRegistry',
   experienceRecords: 'experienceRecords',
   runtimeConfig: 'runtimeConfig',
 } as const;
@@ -62,6 +64,7 @@ export interface StorageSnapshot {
   runtimeConfig: RuntimeConfig;
   graphViews: GraphView[];
   skillRegistry: SkillDefinition[];
+  toolRegistry: ToolDefinition[];
   experienceRecords: ExperienceRecord[];
 }
 
@@ -117,6 +120,7 @@ export function createDefaultStorageState(): StorageSchema {
     stateBackups: [],
     graphViews: [],
     skillRegistry: [],
+    toolRegistry: [],
     experienceRecords: [],
     runtimeConfig: createBundledRuntimeConfig(),
   };

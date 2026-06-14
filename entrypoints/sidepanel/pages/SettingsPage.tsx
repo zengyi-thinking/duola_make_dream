@@ -3,6 +3,7 @@ import LineButton from '@/components/LineArt/LineButton';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
 import type { MemorySummary, ModelProfile, RuntimeConfig, UserProfile } from '@/lib/agent/types';
 import type { SkillDefinition } from '@/lib/skills/types';
+import { createToolDefinition, labelToolCategory, type ToolDefinition } from '@/lib/tools/types';
 import {
   describeProfileHealth,
   formatEndpointHost,
@@ -18,6 +19,10 @@ import {
   createMemoryDeleteMessage,
   createPocketModelTestMessage,
   createPocketSkillListMessage,
+  createPocketToolDeleteMessage,
+  createPocketToolListMessage,
+  createPocketToolSaveMessage,
+  createPocketToolToggleMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
 import { flushRuntimeConfigWrites, updateRuntimeConfig } from '@/lib/storage/local';
@@ -59,6 +64,9 @@ export default function SettingsPage() {
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => buildProfileDraft(DEFAULT_PROFILE));
   const [profileDirty, setProfileDirty] = useState(false);
   const [skills, setSkills] = useState<SkillDefinition[]>([]);
+  const [tools, setTools] = useState<ToolDefinition[]>([]);
+  const [toolDraft, setToolDraft] = useState<{ name: string; description: string; promptHint: string }>({ name: '', description: '', promptHint: '' });
+  const [showToolForm, setShowToolForm] = useState(false);
   const [voiceDraft, setVoiceDraft] = useState('');
   const [voiceDirty, setVoiceDirty] = useState(false);
 
@@ -70,6 +78,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     void loadSkills();
+    void loadTools();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -89,6 +98,58 @@ export default function SettingsPage() {
       }
     } catch {
       // 静默：skill 系统阶段4 才完善，加载失败不阻塞设置页
+    }
+  }
+
+  async function loadTools() {
+    try {
+      const response = await sendRuntimeMessage(createPocketToolListMessage());
+      if (response.success) setTools(response.payload.tools);
+    } catch {
+      // 静默
+    }
+  }
+
+  async function handleToggleTool(toolId: string, enabled: boolean) {
+    setTools((cur) => cur.map((t) => (t.id === toolId ? { ...t, enabled } : t)));
+    try {
+      const response = await sendRuntimeMessage(createPocketToolToggleMessage(toolId, enabled));
+      if (response.success) setTools(response.payload.tools);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '切换工具失败');
+    }
+  }
+
+  async function handleCreateTool() {
+    if (!toolDraft.name.trim()) { setErrorText('工具名称不能为空'); return; }
+    const tool = createToolDefinition({
+      name: toolDraft.name.trim(),
+      emoji: '🛠️',
+      description: toolDraft.description.trim() || '用户自定义工具',
+      category: 'custom',
+      enabled: true,
+      builtIn: false,
+      promptHint: toolDraft.promptHint.trim() || undefined,
+    });
+    try {
+      const response = await sendRuntimeMessage(createPocketToolSaveMessage(tool));
+      if (response.success) {
+        setTools(response.payload.tools);
+        setToolDraft({ name: '', description: '', promptHint: '' });
+        setShowToolForm(false);
+        setNoticeText('工具已创建。');
+      }
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '创建工具失败');
+    }
+  }
+
+  async function handleDeleteTool(toolId: string) {
+    try {
+      const response = await sendRuntimeMessage(createPocketToolDeleteMessage(toolId));
+      if (response.success) setTools(response.payload.tools);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '删除工具失败');
     }
   }
 
@@ -386,15 +447,61 @@ export default function SettingsPage() {
         )}
       </section>
 
-      {/* 模块5：Tool 注册表（占位） */}
+      {/* 模块5：Tool 注册表（声明式） */}
       <section className="panel-card">
         <div className="panel-head">
           <div>
             <p className="section-label">Tool Registry</p>
             <h2>工具注册表</h2>
           </div>
+          <span className="micro-status">{tools.length} 个</span>
         </div>
-        <p className="soft-text">工具系统将在阶段4 接入：builtin.search / builtin.plan / builtin.execute，以及用户自定义工具注册。</p>
+        <p className="micro-copy">规划/搜索/执行是内置必选工具（对应 agent 能力），可开关。自定义工具的提示词会注入加工链路，让 agent 按你的规则干活。</p>
+        <div className="candidate-stack">
+          {tools.map((t) => (
+            <div key={t.id} className={`candidate-card${t.enabled ? '' : ' candidate-card--disabled'}`}>
+              <div className="candidate-head">
+                <strong>{t.emoji} {t.name}</strong>
+                <span className="token-chip">{labelToolCategory(t.category)}</span>
+              </div>
+              <p className="soft-text">{t.description}</p>
+              {t.promptHint ? <p className="micro-copy">提示词：{t.promptHint}</p> : null}
+              <div className="inline-actions" style={{ marginTop: 6 }}>
+                <label className="tool-toggle">
+                  <input type="checkbox" checked={t.enabled} onChange={(e) => handleToggleTool(t.id, e.target.checked)} disabled={Boolean(busyAction)} />
+                  <span>{t.enabled ? '已启用' : '已停用'}</span>
+                </label>
+                {!t.builtIn ? (
+                  <LineButton variant="ghost" onClick={() => handleDeleteTool(t.id)} disabled={Boolean(busyAction)}>删除</LineButton>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        {showToolForm ? (
+          <div className="settings-tool-form">
+            <div className="settings-section">
+              <label>工具名称</label>
+              <input type="text" className="settings-input" value={toolDraft.name} onChange={(e) => setToolDraft((c) => ({ ...c, name: e.target.value }))} placeholder="例如：竞品对比" disabled={Boolean(busyAction)} />
+            </div>
+            <div className="settings-section">
+              <label>工具描述</label>
+              <input type="text" className="settings-input" value={toolDraft.description} onChange={(e) => setToolDraft((c) => ({ ...c, description: e.target.value }))} placeholder="这个工具帮 agent 做什么" disabled={Boolean(busyAction)} />
+            </div>
+            <div className="settings-section">
+              <label>提示词包（注入 agent）</label>
+              <textarea className="settings-input settings-textarea" value={toolDraft.promptHint} onChange={(e) => setToolDraft((c) => ({ ...c, promptHint: e.target.value }))} placeholder="例如：分析时优先对比 3 个竞品的核心差异，给出差异化建议" rows={3} disabled={Boolean(busyAction)} />
+            </div>
+            <div className="inline-actions">
+              <LineButton variant="primary" onClick={handleCreateTool} disabled={Boolean(busyAction)}>创建工具</LineButton>
+              <LineButton variant="ghost" onClick={() => setShowToolForm(false)} disabled={Boolean(busyAction)}>取消</LineButton>
+            </div>
+          </div>
+        ) : (
+          <div className="inline-actions" style={{ marginTop: 8 }}>
+            <LineButton variant="ghost" onClick={() => setShowToolForm(true)} disabled={Boolean(busyAction)}>+ 让 agent 创建新工具</LineButton>
+          </div>
+        )}
       </section>
 
       {/* 数据管理 */}

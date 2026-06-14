@@ -42,6 +42,10 @@ import {
   getSkillRegistry,
   saveSkill,
   deleteSkill,
+  getToolRegistry,
+  saveTool,
+  deleteTool,
+  setToolEnabled,
   getExperiences,
   getAllContextSnippets,
   mergeIntoGlobalGraph,
@@ -63,6 +67,7 @@ import { runSnippetSynthesizer } from '@/lib/agent/gadgets';
 import type { GraphView } from '@/lib/graph/types';
 import { createGraphEdge, createGraphNode } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
+import type { ToolDefinition } from '@/lib/tools/types';
 import type { FeedInput, InventInput } from '@/lib/agent/runtime/types';
 import type { ArchiveNote, ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult, PageAnalysisResult, PageContextRecord } from '@/lib/agent/types';
 import type { AgentEvent } from '@/lib/agent/runtime/types';
@@ -277,6 +282,14 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
       return successResponse('pocket.skill.save', message.requestId, await handlePocketSkillSave(message.payload.skill));
     case 'pocket.skill.delete':
       return successResponse('pocket.skill.delete', message.requestId, await deleteSkill(message.payload.skillId));
+    case 'pocket.tool.list':
+      return successResponse('pocket.tool.list', message.requestId, await handlePocketToolList());
+    case 'pocket.tool.save':
+      return successResponse('pocket.tool.save', message.requestId, await handlePocketToolSave(message.payload.tool));
+    case 'pocket.tool.delete':
+      return successResponse('pocket.tool.delete', message.requestId, await handlePocketToolDelete(message.payload.toolId));
+    case 'pocket.tool.toggle':
+      return successResponse('pocket.tool.toggle', message.requestId, { tools: await setToolEnabled(message.payload.toolId, message.payload.enabled) });
     case 'pocket.experience.list':
       return successResponse('pocket.experience.list', message.requestId, await handlePocketExperienceList());
     case 'pocket.model.test':
@@ -326,6 +339,19 @@ async function handlePocketSkillList() {
 async function handlePocketSkillSave(skill: SkillDefinition) {
   await saveSkill(skill);
   return getMemorySummary();
+}
+
+async function handlePocketToolList() {
+  const tools = await getToolRegistry();
+  return { tools, memorySummary: await getMemorySummary() };
+}
+async function handlePocketToolSave(tool: ToolDefinition) {
+  await saveTool(tool);
+  return { tools: await getToolRegistry() };
+}
+async function handlePocketToolDelete(toolId: string) {
+  await deleteTool(toolId);
+  return { tools: await getToolRegistry() };
 }
 
 async function handlePocketExperienceList() {

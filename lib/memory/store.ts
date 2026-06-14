@@ -21,6 +21,8 @@ import type { PageContextRecord } from '@/lib/page/types';
 import type { GraphEdge, GraphNode, GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
 import { BUILTIN_SKILLS } from '@/lib/skills/builtin';
+import type { ToolDefinition } from '@/lib/tools/types';
+import { BUILTIN_TOOLS } from '@/lib/tools/builtin';
 import {
   appendLimited,
   clearArrayStorage,
@@ -578,6 +580,50 @@ export async function getSkillRegistry(limit = 60): Promise<SkillDefinition[]> {
 export async function deleteSkill(skillId: string): Promise<MemorySummary> {
   await removeById('skillRegistry', skillId);
   return getMemorySummary();
+}
+
+// ---------- Tool 注册表 ----------
+
+export async function saveTool(tool: ToolDefinition): Promise<ToolDefinition> {
+  const tools = await readStorage('toolRegistry');
+  const exists = tools.some((item) => item.id === tool.id);
+  const next = exists
+    ? tools.map((item) => (item.id === tool.id ? tool : item))
+    : [tool, ...tools];
+  await writeStorage('toolRegistry', next.slice(0, 60));
+  return tool;
+}
+
+export async function getToolRegistry(limit = 60): Promise<ToolDefinition[]> {
+  const userTools = await readStorage('toolRegistry');
+  const userMap = new Map(userTools.map((t) => [t.id, t]));
+  // 内置工具：用 userTools 覆盖 enabled（保留用户开关态）；用户自定义追加
+  const builtin = BUILTIN_TOOLS.map((t) => (userMap.has(t.id) ? { ...t, enabled: userMap.get(t.id)!.enabled } : t));
+  const builtinIds = new Set(BUILTIN_TOOLS.map((t) => t.id));
+  const custom = userTools.filter((t) => !builtinIds.has(t.id));
+  return [...builtin, ...custom].slice(0, limit);
+}
+
+export async function deleteTool(toolId: string): Promise<MemorySummary> {
+  await removeById('toolRegistry', toolId);
+  return getMemorySummary();
+}
+
+export async function setToolEnabled(toolId: string, enabled: boolean): Promise<ToolDefinition[]> {
+  const tools = await readStorage('toolRegistry');
+  const builtin = BUILTIN_TOOLS.find((t) => t.id === toolId);
+  const exists = tools.some((item) => item.id === toolId);
+  let next;
+  if (exists) {
+    next = tools.map((item) => (item.id === toolId ? { ...item, enabled } : item));
+  } else if (builtin) {
+    // 内置工具首次切换：写入覆盖态（保留开关）
+    next = [{ ...builtin, enabled }, ...tools];
+  } else {
+    next = tools;
+  }
+  await writeStorage('toolRegistry', next.slice(0, 60));
+  return getToolRegistry();
 }
 
 // ---------- 经验沉淀 ----------

@@ -58,6 +58,11 @@ export {
   saveSkill,
   getSkillRegistry,
   deleteSkill,
+  // Tool 注册表
+  saveTool,
+  getToolRegistry,
+  deleteTool,
+  setToolEnabled,
   // 经验沉淀
   saveExperience,
   getExperiences,

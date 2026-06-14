@@ -313,6 +313,7 @@ export async function readStorageSnapshot(): Promise<StorageSchema> {
     stateBackups: (result.stateBackups as StorageSchema['stateBackups'] | undefined) ?? [],
     graphViews: (result.graphViews as StorageSchema['graphViews'] | undefined) ?? [],
     skillRegistry: (result.skillRegistry as StorageSchema['skillRegistry'] | undefined) ?? [],
+    toolRegistry: (result.toolRegistry as StorageSchema['toolRegistry'] | undefined) ?? [],
     experienceRecords: (result.experienceRecords as StorageSchema['experienceRecords'] | undefined) ?? [],
     runtimeConfig: normalizeRuntimeConfig(
       result.runtimeConfig as Partial<StorageSchema['runtimeConfig']> | undefined,

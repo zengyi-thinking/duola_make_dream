@@ -53,6 +53,7 @@ import {
   getContextSnippetsByIds,
   getGeneratedImages,
   getMemorySummary,
+  getToolRegistry,
   markHarnessPatchesApplied,
   mergeIntoGlobalGraph,
   mergeRecentThemes,
@@ -102,11 +103,17 @@ async function buildContext(
   const runtimeConfig = await getRuntimeConfig();
   const voice = getVoice(runtimeConfig.avatarId);
   const patches = await getActiveHarnessPatches();
+  const tools = await getToolRegistry();
+  const enabledTools = tools.filter((t) => t.enabled);
+  const toolHint = enabledTools.length > 0
+    ? `【可用工具】${enabledTools.map((t) => `${t.emoji}${t.name}${t.promptHint ? `（${t.promptHint}）` : ''}`).join('、')}`
+    : '';
   const hint = [
     buildVoiceHint(voice, runtimeConfig.voiceOverrides?.[voice.id]),
     buildToneHint(runtimeConfig.defaultTone),
     buildHarnessHint(patches),
     profile.creativeBrief?.trim() ? `【创作画像】${profile.creativeBrief.trim()}` : '',
+    toolHint,
   ].filter(Boolean).join('\n');
 
   return {
