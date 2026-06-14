@@ -17,6 +17,9 @@ import type {
   ContentPipelineStageId,
   UserProfile,
 } from '@/lib/agent/types';
+
+// re-export：SubAgent.run 返回 AgentRunResult，agent 实现文件从本模块统一导入
+export type { AgentRunResult };
 import type { GraphNode, GraphView } from '@/lib/graph/types';
 import type { PageReadResult } from '@/lib/page/types';
 
