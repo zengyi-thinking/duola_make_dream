@@ -10,12 +10,18 @@ import { useMemory } from '../context/MemoryContext';
 
 type ExpFilter = 'all' | 'success' | 'failure';
 
+/** outcome → 节点类型映射（显式覆盖，避免未来新增 outcome 时静默染错色） */
+function outcomeToNodeType(outcome: ExperienceRecord['outcome']): GraphNodeType {
+  if (outcome === 'success') return 'success';
+  return 'failure';
+}
+
 /** 把经验记录转成 observe 图：每条经验一个节点（success=绿 / failure=红） */
 function buildExperienceGraph(experiences: ExperienceRecord[], filter: ExpFilter): GraphView {
   const filtered = experiences.filter((e) => filter === 'all' || e.outcome === filter);
   const nodes = filtered.map((exp) =>
     createGraphNode({
-      type: (exp.outcome === 'success' ? 'success' : 'failure') as GraphNodeType,
+      type: outcomeToNodeType(exp.outcome),
       title: exp.summary,
       summary: exp.lesson || exp.summary,
       payload: { agentId: exp.agentId, outcome: exp.outcome },

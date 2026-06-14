@@ -66,10 +66,12 @@ export default function SettingsPage() {
   useEffect(() => {
     if (profileDirty) return;
     setProfileDraft(buildProfileDraft(memory?.profile ?? DEFAULT_PROFILE));
-  }, [memory?.profile.lastUpdated, profileDirty]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memory?.profile]);
 
   useEffect(() => {
     void loadSkills();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadSkills() {

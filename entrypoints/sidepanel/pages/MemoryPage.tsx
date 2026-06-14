@@ -54,13 +54,17 @@ export default function MemoryPage() {
   }, []);
 
   async function handleDeleteNode(nodeId: string) {
-    if (!globalGraph) return;
+    if (busyAction) return;
     setBusyAction(`node-delete-${nodeId}`);
     try {
+      // 先重新拉最新全局图，避免基于陈旧本地状态覆盖他人并发写入（如刚 merge 进来的新节点）
+      const fresh = await sendRuntimeMessage(createPocketGraphLoadMessage());
+      if (!fresh.success) { setErrorText(fresh.error ?? '加载记忆图失败。'); return; }
+      const base = fresh.payload.view;
       const nextView: GraphView = {
-        ...globalGraph,
-        nodes: globalGraph.nodes.filter((n) => n.id !== nodeId),
-        edges: globalGraph.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+        ...base,
+        nodes: base.nodes.filter((n) => n.id !== nodeId),
+        edges: base.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
       };
       const response = await sendRuntimeMessage(createPocketGraphSaveMessage(nextView));
       if (!response.success) { setErrorText(response.error ?? '删除节点失败。'); return; }

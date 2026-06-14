@@ -152,6 +152,8 @@ export default function FeedPage() {
   }
 
   async function handleApproveAll() {
+    if (busyAction) return;
+    setBusyAction('candidate-approve-all');
     try {
       const pending = currentAnalysisCandidates.filter((c) => c.status === 'pending');
       for (const candidate of pending) {
@@ -162,10 +164,14 @@ export default function FeedPage() {
       setNoticeText('当前这批可记住的信息都已进入长期记忆。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '批量记忆出错。');
+    } finally {
+      setBusyAction('');
     }
   }
 
   async function handleRejectAll() {
+    if (busyAction) return;
+    setBusyAction('candidate-reject-all');
     try {
       const pending = currentAnalysisCandidates.filter((c) => c.status === 'pending');
       for (const candidate of pending) {
@@ -176,6 +182,8 @@ export default function FeedPage() {
       setNoticeText('当前这批候选记忆都已被忽略。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '批量拒绝出错。');
+    } finally {
+      setBusyAction('');
     }
   }
 

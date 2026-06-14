@@ -59,7 +59,7 @@ import { PocketAgentDirector } from '@/lib/agent/runtime/director';
 import type { GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
 import type { FeedInput, InventInput } from '@/lib/agent/runtime/types';
-import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult } from '@/lib/agent/types';
+import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult, PageAnalysisResult, PageContextRecord } from '@/lib/agent/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
 import type { PageReadResult } from '@/lib/page/types';
@@ -67,8 +67,10 @@ import type {
   AppMessage,
   AppMessageResponse,
   ContextCaptureSelectionRequest,
+  ImageGenerateRequest,
   InternalContentMessage,
   MessageSource,
+  MindmapGenerateRequest,
 } from '@/lib/messaging/types';
 
 /**
@@ -544,7 +546,7 @@ async function handlePageAnalyze(mode: 'current-page' | 'study-archive') {
   };
 }
 
-async function handleArchiveSave(analysis: AppMessage extends never ? never : any, sourceContext: any) {
+async function handleArchiveSave(analysis: PageAnalysisResult, sourceContext: PageContextRecord) {
   const note = buildArchiveNoteFromAnalysis(analysis, sourceContext);
   const pipelineTrace = buildPipelineTrace({
     kind: 'archive',
@@ -568,7 +570,7 @@ async function handleArchiveSave(analysis: AppMessage extends never ? never : an
   };
 }
 
-async function handleImageGenerate(payload: AppMessage extends never ? never : any) {
+async function handleImageGenerate(payload: ImageGenerateRequest['payload']) {
   const runtimeConfig = await readStorage('runtimeConfig');
   const { request, record } = await runImageGeneration(payload, runtimeConfig);
   if (record.pipelineTrace) {
@@ -582,7 +584,7 @@ async function handleImageGenerate(payload: AppMessage extends never ? never : a
   };
 }
 
-async function handleMindmapGenerate(payload: AppMessage extends never ? never : any) {
+async function handleMindmapGenerate(payload: MindmapGenerateRequest['payload']) {
   const record = generateMindmapRecord(payload);
   if (record.pipelineTrace) {
     await savePipelineRun(record.pipelineTrace);

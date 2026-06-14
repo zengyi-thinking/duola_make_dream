@@ -523,7 +523,9 @@ export async function mergeIntoGlobalGraph(
 /**
  * 用指定 view 替换全局记忆图（scope='global'）。
  * 用于 Memory 页删除/编辑节点后整图写回：避免 saveGraphView 的 append 语义导致重复 global view。
- * 复用 graphViewWriteQueue，与 mergeIntoGlobalGraph 串行，避免读-写竞态。
+ * 复用 graphViewWriteQueue，与 mergeIntoGlobalGraph 串行。
+ * 限制：写队列只在同一 SW 生命周期内有效；MV3 SW 被杀重启后队列重置，跨实例并发不保证
+ * （后续可用 Web Locks API 跨实例串行化，留作技术债）。
  */
 export async function replaceGlobalGraph(view: GraphView): Promise<void> {
   const run = graphViewWriteQueue
