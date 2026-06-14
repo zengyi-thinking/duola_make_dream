@@ -63,7 +63,8 @@ export type ExtensionMessageType =
   | 'pocket.model.test'
   | 'pocket.agent.invent'
   | 'pocket.agent.image'
-  | 'pocket.agent.feed';
+  | 'pocket.agent.feed'
+  | 'pocket.snippets.synthesize';
 
 export type MessageType = ExtensionMessageType;
 
@@ -267,6 +268,13 @@ export type PocketAgentInventRequest = MessageEnvelope<'pocket.agent.invent', In
 export type PocketAgentImageRequest = MessageEnvelope<'pocket.agent.image', { planGraph: GraphView }>;
 export type PocketAgentFeedRequest = MessageEnvelope<'pocket.agent.feed', FeedInput>;
 
+export type PocketSnippetsSynthesizeRequest = MessageEnvelope<'pocket.snippets.synthesize', Record<string, never>>;
+
+export type SnippetsSynthesizeResult = {
+  note: import('@/lib/agent/types').ArchiveNote | null;
+  memorySummary: MemorySummary;
+};
+
 export type AppMessage =
   | IdeaSubmitRequest
   | FeedbackRecordRequest
@@ -302,7 +310,8 @@ export type AppMessage =
   | PocketModelTestRequest
   | PocketAgentInventRequest
   | PocketAgentImageRequest
-  | PocketAgentFeedRequest;
+  | PocketAgentFeedRequest
+  | PocketSnippetsSynthesizeRequest;
 
 export type InternalExtractCurrentMessage = {
   type: 'content.page.extract-current';
@@ -373,6 +382,7 @@ export type MessageResponseMap = {
   'pocket.agent.invent': ResponseEnvelope<'pocket.agent.invent', { events: AgentEvent[]; result: InventResult | null; memorySummary: MemorySummary }>;
   'pocket.agent.image': ResponseEnvelope<'pocket.agent.image', { events: AgentEvent[]; result: ImageResult | null; memorySummary: MemorySummary }>;
   'pocket.agent.feed': ResponseEnvelope<'pocket.agent.feed', { events: AgentEvent[]; result: FeedResult | null; memorySummary: MemorySummary }>;
+  'pocket.snippets.synthesize': ResponseEnvelope<'pocket.snippets.synthesize', SnippetsSynthesizeResult>;
 };
 
 export type AppMessageResponse =
@@ -410,4 +420,5 @@ export type AppMessageResponse =
   | MessageResponseMap['pocket.model.test']
   | MessageResponseMap['pocket.agent.invent']
   | MessageResponseMap['pocket.agent.image']
-  | MessageResponseMap['pocket.agent.feed'];
+  | MessageResponseMap['pocket.agent.feed']
+  | MessageResponseMap['pocket.snippets.synthesize'];

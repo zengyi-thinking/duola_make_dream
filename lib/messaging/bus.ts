@@ -41,6 +41,7 @@ import type {
   PocketAgentInventRequest,
   PocketAgentImageRequest,
   PocketAgentFeedRequest,
+  PocketSnippetsSynthesizeRequest,
 } from './types';
 
 function createRequestId(type: MessageType): string {
@@ -380,6 +381,10 @@ export function createPocketAgentFeedMessage(
   source: MessageSource = 'popup',
 ): PocketAgentFeedRequest {
   return { type: 'pocket.agent.feed', requestId: createRequestId('pocket.agent.feed'), source, payload: input };
+}
+
+export function createPocketSnippetsSynthesizeMessage(source: MessageSource = 'popup'): PocketSnippetsSynthesizeRequest {
+  return { type: 'pocket.snippets.synthesize', requestId: createRequestId('pocket.snippets.synthesize'), source, payload: {} };
 }
 
 export {

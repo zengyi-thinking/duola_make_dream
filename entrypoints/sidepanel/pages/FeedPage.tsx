@@ -7,6 +7,7 @@ import GraphCanvas from '@/components/GraphCanvas/GraphCanvas';
 import ProcessingStage from '@/components/ProcessingStage/ProcessingStage';
 import FeedReport from '@/components/FeedReport/FeedReport';
 import type {
+  ContextSnippet,
   PageAnalysisResult,
   PageContextRecord,
   PageReadResult,
@@ -14,8 +15,10 @@ import type {
 import type { GraphView } from '@/lib/graph/types';
 import {
   createArchiveSaveMessage,
+  createMemoryGetMessage,
   createPageReadMessage,
   createPocketAgentFeedMessage,
+  createPocketSnippetsSynthesizeMessage,
   sendRuntimeMessage,
 } from '@/lib/messaging/bus';
 import { useToast } from '../context/ToastContext';
@@ -26,12 +29,11 @@ import { useRuntimeConfig } from '../context/RuntimeConfigContext';
 import { EmptyCard } from '../components/ResultCard';
 
 /**
- * 喂养页（产品重设计修复版）。
+ * 喂养页（产品重设计修复 + 划词归纳版）。
  *
  * 流程：读取当前页 → 加工成报告（feed 事件流驱动 3 阶段动画）→ FeedReport HTML 报告
  *      → 关联知识图 → 确认归档为笔记节点（跳记忆页看图节点）。
- * 移除：记忆候选板（与确认归档重复）、输出板（与 FeedReport 重复）。
- * 保留：keep-alive 下切换不丢记录；New 按钮主动开新喂养。
+ * 划词功能：contextSnippets 全量展示（可删单条），≥3 时可"归纳成文档"（LLM 归纳 → ArchiveNote + 图节点）。
  */
 export default function FeedPage() {
   const { setStatusText, setErrorText, setNoticeText } = useToast();
@@ -45,18 +47,35 @@ export default function FeedPage() {
   const [pageAnalysis, setPageAnalysis] = useState<PageAnalysisResult | null>(null);
   const [feedGraph, setFeedGraph] = useState<GraphView | null>(null);
   const [currentStage, setCurrentStage] = useState(0);
+  const [snippets, setSnippets] = useState<ContextSnippet[]>([]);
 
-  // 监听 SW 流式推送的 feed AgentEvent，驱动加工阶段动画与真实 agent 同步（同 InventPage 模式）。
+  // 监听 SW 流式推送的 feed AgentEvent，驱动加工阶段动画与真实 agent 同步。
   useEffect(() => {
     const listener = (msg: { type?: string; event?: { agentId?: string; status?: string } }) => {
       if (msg?.type !== 'pocket.agent.stream' || !msg.event) return;
-      if (msg.event.agentId !== 'feed') return; // 只处理 feed 链路事件
-      if (msg.event.status === 'running') setCurrentStage(1); // 分析中（LLM 慢点停留）
-      else if (msg.event.status === 'done') setCurrentStage(2); // 就绪
+      if (msg.event.agentId !== 'feed') return;
+      if (msg.event.status === 'running') setCurrentStage(1);
+      else if (msg.event.status === 'done') setCurrentStage(2);
     };
     browser.runtime.onMessage.addListener(listener);
     return () => browser.runtime.onMessage.removeListener(listener);
   }, []);
+
+  // 拉取全部划词碎片（归档后 memorySummary 会更新，但本地 snippets 用于管理/删除）
+  async function refreshSnippets() {
+    try {
+      const res = await sendRuntimeMessage(createMemoryGetMessage());
+      if (res.success && res.payload) {
+        setSnippets(res.payload.recentContextSnippets);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    void refreshSnippets();
+  }, [memory?.recentContextSnippets?.length]);
 
   async function handleReadCurrentPage() {
     setBusyAction('page-read');
@@ -82,7 +101,7 @@ export default function FeedPage() {
     if (!pageRead || !pageContext) return;
     setBusyAction('feed');
     setErrorText(''); setNoticeText('');
-    setCurrentStage(0); // 提取阶段
+    setCurrentStage(0);
     setStatusText('正在分析页面…');
     try {
       const response = await sendRuntimeMessage(
@@ -124,7 +143,46 @@ export default function FeedPage() {
     }
   }
 
-  /** 开始新喂养：清空当前记录（keep-alive 下切换不丢，New 主动开新）。 */
+  /** 把划词碎片归纳成知识笔记（LLM 归纳 → ArchiveNote + 图节点）。 */
+  async function handleSynthesizeSnippets() {
+    if (snippets.length < 3) return;
+    setBusyAction('snippets-synthesize');
+    setErrorText(''); setNoticeText('');
+    setStatusText(`正在用 LLM 归纳 ${snippets.length} 条划词碎片…`);
+    try {
+      const response = await sendRuntimeMessage(createPocketSnippetsSynthesizeMessage());
+      if (!response.success) { setErrorText(response.error ?? '归纳失败。'); return; }
+      const result = response.payload as { note: { title: string; bullets?: string[] } | null; memorySummary?: { recentContextSnippets: ContextSnippet[] } };
+      if (result.memorySummary && memory) {
+        setMemory({ ...memory, recentContextSnippets: result.memorySummary.recentContextSnippets });
+        setSnippets(result.memorySummary.recentContextSnippets);
+      }
+      if (result.note) {
+        setNoticeText(`已归纳为笔记：${result.note.title}（${result.note.bullets?.length ?? 0} 要点），可在记忆页查看。`);
+      }
+      await refreshSnippets();
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : '归纳失败。');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  /** 删除单个碎片。 */
+  async function handleDeleteSnippet(snippetId: string) {
+    setSnippets((cur) => cur.filter((s) => s.id !== snippetId));
+    if (memory) {
+      const next = { ...memory, recentContextSnippets: memory.recentContextSnippets.filter((s) => s.id !== snippetId) };
+      setMemory(next);
+    }
+    try {
+      const { deleteContextSnippet } = await import('@/lib/memory');
+      await deleteContextSnippet(snippetId);
+    } catch {
+      /* ignore */
+    }
+  }
+
   function handleNew() {
     setPageRead(null);
     setPageContext(null);
@@ -136,6 +194,8 @@ export default function FeedPage() {
 
   const feeding = busyAction === 'feed';
   const hasRecord = Boolean(pageRead || pageAnalysis);
+  const canSynthesize = snippets.length >= 3;
+  const suggestSynthesize = snippets.length >= 8;
 
   return (
     <div className="tab-panel">
@@ -188,12 +248,47 @@ export default function FeedPage() {
         currentStage={currentStage}
       />
 
+      {/* 划词碎片管理区 */}
+      {snippets.length > 0 ? (
+        <section className="panel-card">
+          <div className="panel-head">
+            <div>
+              <p className="section-label">Snippets</p>
+              <h2>知识碎片</h2>
+            </div>
+            <span className="timeline-badge timeline-badge--pipeline">{snippets.length} 条</span>
+          </div>
+          <div className="snippets-panel">
+            {snippets.map((s) => (
+              <div key={s.id} className="snippet-item">
+                <div className="snippet-item__head">
+                  <span className="snippet-item__source">{s.pageTitle} · {safeHost(s.origin)}</span>
+                  <button type="button" className="snippet-item__remove" onClick={() => handleDeleteSnippet(s.id)} disabled={Boolean(busyAction)}>删除</button>
+                </div>
+                <p className="snippet-item__text">{s.selectedText}</p>
+              </div>
+            ))}
+          </div>
+          <div className="inline-actions" style={{ marginTop: 8 }}>
+            <LineButton
+              variant="primary"
+              onClick={handleSynthesizeSnippets}
+              disabled={!canSynthesize || Boolean(busyAction)}
+            >
+              {busyAction === 'snippets-synthesize' ? '归纳中…' : '归纳成文档'}
+            </LineButton>
+            {suggestSynthesize ? <span className="micro-status">碎片已达 {snippets.length} 条，建议归纳</span> : null}
+            {!canSynthesize ? <span className="micro-status">至少 3 条碎片可归纳（当前 {snippets.length}）</span> : null}
+          </div>
+        </section>
+      ) : null}
+
       {pageAnalysis ? (
         <StaggerStack triggerKey={pageAnalysis.id}>
           <FeedReport analysis={pageAnalysis} origin={pageRead?.origin} />
         </StaggerStack>
       ) : (
-        !feeding && !pageRead ? <EmptyCard avatar title="先读取，再喂养" body="点击「读取当前页」，PocketBuddy 会提炼关键信息并生成阅读报告，归档后成为记忆图节点。" /> : null
+        !feeding && !pageRead ? <EmptyCard avatar title="先读取，再喂养" body="点击「读取当前页」，PocketBuddy 会提炼关键信息并生成阅读报告，归档后成为记忆图节点。或在任意网页划词积累，碎片足够多后归纳成文档。" /> : null
       )}
 
       {feedGraph ? (
@@ -210,4 +305,12 @@ export default function FeedPage() {
       ) : null}
     </div>
   );
+}
+
+function safeHost(origin: string): string {
+  try {
+    return new URL(origin).hostname.replace(/^www\./, '');
+  } catch {
+    return origin;
+  }
 }

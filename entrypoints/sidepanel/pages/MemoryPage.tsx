@@ -1,162 +1,148 @@
 import { useEffect, useMemo, useState } from 'react';
-import LineButton from '@/components/LineArt/LineButton';
-import StaggerStack from '@/components/StaggerStack/StaggerStack';
+import { motion } from 'framer-motion';
 import GraphCanvas from '@/components/GraphCanvas/GraphCanvas';
+import LineButton from '@/components/LineArt/LineButton';
+import type { ArchiveNote, ProductArtifact } from '@/lib/agent/types';
+import type { GeneratedImageRecord } from '@/lib/image/types';
+import { createGraphEdge, createGraphNode, createGraphView } from '@/lib/graph/types';
 import type { GraphView } from '@/lib/graph/types';
-import {
-  createArchiveClearMessage,
-  createArchiveDeleteMessage,
-  createMemoryDeleteMessage,
-  createPocketGraphLoadMessage,
-  createPocketGraphSaveMessage,
-  sendRuntimeMessage,
-} from '@/lib/messaging/bus';
-import { useToast } from '../context/ToastContext';
-import { useBusy } from '../context/BusyContext';
 import { useMemory } from '../context/MemoryContext';
-import { EmptyCard } from '../components/ResultCard';
-
-type SourceTypeFilter = 'all' | 'paper' | 'article' | 'idea';
 
 /**
- * 记忆页（推倒重建自 ArchiveTab）。
+ * 记忆页（产品重设计重做版）。
  *
- * 核心变化：以全局力导向图为主体（scope='global' 的 GraphView），
- * 节点详情由 GraphCanvas 内置的 NodeDetailDrawer 承载；删节点走 pocket.graph.save
- * （scope='global' 时 background 走 replaceGlobalGraph，避免 append 重复）。
- * 笔记列表降为「列表视图」次面板（搜索/过滤/删除笔记）。
+ * 拆两个子图（idea 成果 + 网页笔记），每个用 GraphCanvas SVG 渲染：
+ * - **idea 成果子图**（agent 想法生成成果）：artifacts → structure 节点（payload=ProductArtifact，含 planBoard）；generatedImages → image 节点（关联 artifact）。点开看 PlanBoard + 图片（NodeDetailDrawer）。
+ * - **笔记子图**（网页/划词归纳保存的笔记）：archiveNotes → note 节点（payload=ArchiveNote，summary/bullets/tags）。点开看精美笔记卡片。
+ * 笔记列表（搜索/过滤/删除）保留为次面板。
  */
 export default function MemoryPage() {
-  const { setErrorText, setNoticeText } = useToast();
-  const { busyAction, setBusyAction } = useBusy();
-  const { memory, setMemory } = useMemory();
+  const { memory, setMemory, refresh: refreshMemory } = useMemory();
 
-  const [globalGraph, setGlobalGraph] = useState<GraphView | null>(null);
+  const [allNotes, setAllNotes] = useState<ArchiveNote[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>('all');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<'all' | 'paper' | 'article' | 'idea'>('all');
   const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<string | null>(null);
 
-  async function loadGraph() {
-    try {
-      const response = await sendRuntimeMessage(createPocketGraphLoadMessage());
-      if (response.success) {
-        setGlobalGraph(response.payload.view);
-        setMemory(response.payload.memorySummary);
-      }
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : '加载记忆图失败。');
-    }
-  }
-
   useEffect(() => {
-    void loadGraph();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void refreshMemory();
+  }, [refreshMemory]);
 
-  async function handleDeleteNode(nodeId: string) {
-    if (busyAction) return;
-    setBusyAction(`node-delete-${nodeId}`);
-    try {
-      // 先重新拉最新全局图，避免基于陈旧本地状态覆盖他人并发写入（如刚 merge 进来的新节点）
-      const fresh = await sendRuntimeMessage(createPocketGraphLoadMessage());
-      if (!fresh.success) { setErrorText(fresh.error ?? '加载记忆图失败。'); return; }
-      const base = fresh.payload.view;
-      const nextView: GraphView = {
-        ...base,
-        nodes: base.nodes.filter((n) => n.id !== nodeId),
-        edges: base.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
-      };
-      const response = await sendRuntimeMessage(createPocketGraphSaveMessage(nextView));
-      if (!response.success) { setErrorText(response.error ?? '删除节点失败。'); return; }
-      setGlobalGraph(nextView);
-      setMemory(response.payload);
-      setNoticeText('节点已从记忆图移除。');
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : '删除节点失败。');
-    } finally {
-      setBusyAction('');
-    }
-  }
+  const artifacts: ProductArtifact[] = memory?.recentArtifacts ?? [];
+  const images: GeneratedImageRecord[] = memory?.generatedImages ?? [];
+  const storeNotes: ArchiveNote[] = memory?.archiveNotes ?? [];
+
+  // 笔记子图：archiveNotes → note 节点 + 关联（idea 子图 artifact 通过 relatedContextIds）
+  const notesGraph = useMemo<GraphView>(() => {
+    const filtered = storeNotes.filter((n) => {
+      if (sourceTypeFilter !== 'all' && n.sourceType !== sourceTypeFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return n.title.toLowerCase().includes(q) || n.summary.toLowerCase().includes(q);
+      }
+      return true;
+    });
+    return buildNotesGraph(filtered, artifacts);
+  }, [storeNotes, artifacts, sourceTypeFilter, searchQuery]);
+
+  // idea 成果子图：artifacts + images 关联
+  const ideaGraph = useMemo<GraphView>(() => buildIdeaGraph(artifacts, images), [artifacts, images]);
+
+  const filteredNotes = notesGraph.nodes
+    .map((n) => storeNotes.find((note) => note.id === n.sourceId))
+    .filter((n): n is ArchiveNote => Boolean(n));
+
+  const hasIdeaNodes = ideaGraph.nodes.length > 0;
+  const hasNoteNodes = notesGraph.nodes.length > 0;
 
   async function handleDeleteNote(noteId: string) {
     if (confirmDeleteNoteId !== noteId) {
       setConfirmDeleteNoteId(noteId);
       return;
     }
-    setBusyAction(`note-delete-${noteId}`);
     try {
-      const response = await sendRuntimeMessage(createArchiveDeleteMessage(noteId));
-      if (!response.success) { setErrorText(response.error ?? '删除笔记失败。'); return; }
-      setMemory(response.payload);
-      setConfirmDeleteNoteId(null);
-      setNoticeText('笔记已删除。');
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : '删除笔记失败。');
-    } finally {
-      setBusyAction('');
+      const next = await (await import('@/lib/messaging/bus')).sendRuntimeMessage(
+        (await import('@/lib/messaging/bus')).createArchiveDeleteMessage(noteId),
+      );
+      if (next.success) {
+        setMemory(next.payload);
+        setAllNotes((cur) => cur.filter((n) => n.id !== noteId));
+        setConfirmDeleteNoteId(null);
+        await refreshMemory();
+      }
+    } catch {
+      /* ignore */
     }
   }
 
-  async function handleClearAll() {
-    if (!window.confirm('确定要清空所有记忆笔记和记忆图吗？')) return;
-    setBusyAction('memory-clear');
+  async function handleDeleteNode(nodeId: string) {
     try {
-      const r1 = await sendRuntimeMessage(createArchiveClearMessage());
-      if (!r1.success) { setErrorText(r1.error ?? '清空笔记失败。'); return; }
-      const r2 = await sendRuntimeMessage(createMemoryDeleteMessage('graphViews'));
-      if (!r2.success) { setErrorText(r2.error ?? '清空图失败。'); return; }
-      setMemory(r2.payload);
-      setGlobalGraph((g) => (g ? { ...g, nodes: [], edges: [] } : g));
-      setNoticeText('记忆库与记忆图已清空。');
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : '清空失败。');
-    } finally {
-      setBusyAction('');
+      const next = await (await import('@/lib/messaging/bus')).sendRuntimeMessage(
+        (await import('@/lib/messaging/bus')).createPocketGraphDeleteMessage(nodeId),
+      );
+      if (next.success) {
+        await refreshMemory();
+      }
+    } catch {
+      /* ignore */
     }
   }
-
-  const allNotes = memory?.archiveNotes ?? [];
-  const filteredNotes = useMemo(() => allNotes.filter((note) => {
-    if (sourceTypeFilter !== 'all' && note.sourceType !== sourceTypeFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return note.title.toLowerCase().includes(q) || note.summary.toLowerCase().includes(q);
-    }
-    return true;
-  }), [allNotes, sourceTypeFilter, searchQuery]);
-
-  const hasNodes = (globalGraph?.nodes.length ?? 0) > 0;
 
   return (
-    <StaggerStack triggerKey="memory" className="tab-panel">
-      <section className="panel-card">
+    <div className="tab-panel">
+      {/* idea 成果子图 */}
+      <motion.section
+        className="panel-card"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
         <div className="panel-head">
           <div>
-            <p className="section-label">Memory Graph</p>
-            <h2>记忆图</h2>
+            <p className="section-label">Idea Graph</p>
+            <h2>idea 成果</h2>
           </div>
-          <LineButton variant="ghost" onClick={handleClearAll} disabled={Boolean(busyAction) || (!hasNodes && allNotes.length === 0)}>
-            清空记忆
-          </LineButton>
+          <span className="timeline-badge timeline-badge--pipeline">{ideaGraph.nodes.length} 节点</span>
         </div>
-        {hasNodes && globalGraph ? (
-          <GraphCanvas
-            graph={globalGraph}
-            onDeleteNode={handleDeleteNode}
-            emptyHint="记忆图还没有节点。"
-          />
+        {hasIdeaNodes ? (
+          <>
+            <GraphCanvas graph={ideaGraph} emptyHint="还没有 idea 成果，去发明页生成想法。" onDeleteNode={handleDeleteNode} />
+            <p className="soft-text" style={{ marginTop: 8 }}>
+              节点是 agent 发明产物（点开看 PlanBoard 执行计划+图片）；蓝边节点是生图模型返回的成品。
+            </p>
+          </>
         ) : (
-          <p className="soft-text">还没有记忆节点。去发明或喂养几条，这里会长出关联图。点击节点可查看详情或删除。</p>
+          <p className="soft-text">还没有 idea 成果。点发明页输入想法，生成后会在此展示。</p>
         )}
-      </section>
+      </motion.section>
 
+      {/* 笔记子图 */}
+      <motion.section
+        className="panel-card"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="panel-head">
+          <div>
+            <p className="section-label">Notes Graph</p>
+            <h2>网页笔记</h2>
+          </div>
+          <span className="timeline-badge timeline-badge--pipeline">{notesGraph.nodes.length} 节点</span>
+        </div>
+        {hasNoteNodes ? (
+          <GraphCanvas graph={notesGraph} emptyHint="还没有网页笔记，去喂养页归档或划词归纳。" onDeleteNode={handleDeleteNode} />
+        ) : (
+          <p className="soft-text">还没有网页笔记。点喂养页归档阅读笔记，或划词积累后归纳成文档。</p>
+        )}
+      </motion.section>
+
+      {/* 笔记列表（次面板：搜索/过滤/删除） */}
       <section className="panel-card">
         <div className="panel-head">
           <div>
             <p className="section-label">Note Library</p>
             <h2>笔记库（列表视图）</h2>
           </div>
-          <span className="micro-status">{allNotes.length} 条</span>
+          <span className="micro-status">{allNotes.length || storeNotes.length} 条</span>
         </div>
 
         <input
@@ -167,14 +153,14 @@ export default function MemoryPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         <div className="filter-chips" style={{ margin: '8px 0' }}>
-          {(['all', 'paper', 'article', 'idea'] as SourceTypeFilter[]).map((type) => (
+          {(['all', 'paper', 'article', 'idea'] as const).map((type) => (
             <button
               key={type}
               type="button"
               className={`filter-chip ${sourceTypeFilter === type ? 'filter-chip--active' : ''}`}
               onClick={() => setSourceTypeFilter(type)}
             >
-              {type === 'all' ? '全部' : type === 'paper' ? '论文' : type === 'article' ? '文章' : '想法'}
+              {type === 'all' ? '全部' : type === 'paper' ? '论文' : type === 'article' ? '文章' : '想法/划词'}
             </button>
           ))}
         </div>
@@ -193,7 +179,7 @@ export default function MemoryPage() {
                   <LineButton
                     variant={confirmDeleteNoteId === note.id ? 'primary' : 'ghost'}
                     onClick={() => handleDeleteNote(note.id)}
-                    disabled={Boolean(busyAction)}
+                    disabled={false}
                   >
                     {confirmDeleteNoteId === note.id ? '确认删除' : '删除'}
                   </LineButton>
@@ -202,9 +188,56 @@ export default function MemoryPage() {
             ))}
           </div>
         ) : (
-          <EmptyCard title="暂无笔记" body="去喂养页归档阅读笔记，或去发明页生成想法。" />
+          <p className="soft-text">暂无匹配的笔记。</p>
         )}
       </section>
-    </StaggerStack>
+    </div>
   );
+}
+
+/** idea 成果子图：artifacts → structure + images → image（按 ideaId 关联）。 */
+function buildIdeaGraph(artifacts: ProductArtifact[], images: GeneratedImageRecord[]): GraphView {
+  const nodes = artifacts.map((a) =>
+    createGraphNode({
+      type: 'structure',
+      title: a.concept.name,
+      summary: a.concept.tagline,
+      payload: a,
+      sourceId: a.id,
+    }),
+  );
+  const edges = [];
+  for (const img of images) {
+    const imgNode = createGraphNode({
+      type: 'image',
+      title: img.request.title || '计划图片',
+      summary: (img.prompt ?? img.status).slice(0, 60),
+      payload: img,
+      sourceId: img.id,
+    });
+    nodes.push(imgNode);
+    // 关联到 artifact（按 ideaId 或 relatedNoteId 匹配）
+    const relatedArtifact = artifacts.find(
+      (a) => a.id === img.request.relatedNoteId || a.ideaId === (img.request as { relatedIdeaId?: string }).relatedIdeaId,
+    );
+    if (relatedArtifact) {
+      const related = nodes.find((n) => n.sourceId === relatedArtifact.id);
+      if (related) edges.push(createGraphEdge(imgNode.id, related.id, 'produces'));
+    }
+  }
+  return createGraphView({ scope: 'memory', title: 'idea 成果', nodes, edges });
+}
+
+/** 笔记子图：archiveNotes → note 节点。 */
+function buildNotesGraph(notes: ArchiveNote[], _artifacts: ProductArtifact[]): GraphView {
+  const nodes = notes.map((n) =>
+    createGraphNode({
+      type: 'note',
+      title: n.title,
+      summary: n.summary,
+      payload: n,
+      sourceId: n.id,
+    }),
+  );
+  return createGraphView({ scope: 'memory', title: '网页笔记', nodes, edges: [] });
 }

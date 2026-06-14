@@ -126,6 +126,21 @@ export async function saveContextSnippet(snippet: ContextSnippet): Promise<Conte
   return snippet;
 }
 
+/** 读取全部划词碎片（非 slice，供喂养页碎片管理与归纳用）。 */
+export async function getAllContextSnippets(): Promise<ContextSnippet[]> {
+  return readStorage('contextSnippets');
+}
+
+/** 删除单个划词碎片。 */
+export async function deleteContextSnippet(id: string): Promise<void> {
+  await removeById('contextSnippets', id);
+}
+
+/** 清空全部划词碎片（归纳成笔记后用）。 */
+export async function clearContextSnippets(): Promise<void> {
+  await clearArrayStorage('contextSnippets');
+}
+
 export async function savePageContext(record: PageContextRecord): Promise<PageContextRecord> {
   await appendLimited('pageContexts', record, 10);
   return record;

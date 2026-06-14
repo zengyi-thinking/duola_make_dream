@@ -43,6 +43,8 @@ import {
   saveSkill,
   deleteSkill,
   getExperiences,
+  getAllContextSnippets,
+  mergeIntoGlobalGraph,
 } from '@/lib/memory';
 import { buildArchiveNoteFromAnalysis, buildPageAnalysisResult } from '@/lib/agent/core';
 import { buildPipelineTrace, createPipelineStage } from '@/lib/agent/pipeline';
@@ -56,10 +58,13 @@ import { migrateLegacyToGraph } from '@/lib/graph/migrate';
 import { getActiveModelProfile } from '@/lib/agent/model-profiles';
 import { testModelConnection } from '@/lib/model/connection-test';
 import { PocketAgentDirector } from '@/lib/agent/runtime/director';
+import { getLlmClient } from '@/lib/llm';
+import { runSnippetSynthesizer } from '@/lib/agent/gadgets';
 import type { GraphView } from '@/lib/graph/types';
+import { createGraphEdge, createGraphNode } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
 import type { FeedInput, InventInput } from '@/lib/agent/runtime/types';
-import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult, PageAnalysisResult, PageContextRecord } from '@/lib/agent/types';
+import type { ArchiveNote, ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult, PageAnalysisResult, PageContextRecord } from '@/lib/agent/types';
 import type { AgentEvent } from '@/lib/agent/runtime/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
@@ -72,6 +77,7 @@ import type {
   InternalContentMessage,
   MessageSource,
   MindmapGenerateRequest,
+  SnippetsSynthesizeResult,
 } from '@/lib/messaging/types';
 
 /**
@@ -282,6 +288,8 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
       return successResponse('pocket.agent.image', message.requestId, await handlePocketAgentImage(message.payload.planGraph));
     case 'pocket.agent.feed':
       return successResponse('pocket.agent.feed', message.requestId, await handlePocketAgentFeed(message.payload));
+    case 'pocket.snippets.synthesize':
+      return successResponse('pocket.snippets.synthesize', message.requestId, await handleSnippetsSynthesize());
   }
 }
 
@@ -377,6 +385,50 @@ async function handlePocketAgentFeed(input: FeedInput) {
   };
   const { events, result } = await director.runFeedPipeline(input, onEvent);
   return { events, result, memorySummary: await getMemorySummary() };
+}
+
+/**
+ * 划词碎片归纳成文档（笔记节点）：取全部 contextSnippets → LLM 归纳 → ArchiveNote 入库 + 图节点。
+ * 图结构：note 中心节点 + 每条要点 research 子节点（relates），归档后在记忆页笔记子图可见。
+ */
+async function handleSnippetsSynthesize(): Promise<SnippetsSynthesizeResult> {
+  const snippets = await getAllContextSnippets();
+  if (snippets.length === 0) {
+    throw new Error('没有可归纳的划词碎片，请先在网页中划词保存。');
+  }
+  const client = await getLlmClient();
+  const synth = await runSnippetSynthesizer({ snippets }, client);
+
+  const note: ArchiveNote = {
+    id: crypto.randomUUID(),
+    sourceType: 'idea',
+    title: synth.title,
+    sourceTitle: `${snippets.length} 条划词碎片归纳`,
+    origin: 'snippets-synthesis',
+    summary: synth.summary,
+    bullets: synth.bullets,
+    tags: synth.tags,
+    createdAt: Date.now(),
+    savedByUser: true,
+    relatedContextIds: snippets.map((s) => s.id),
+  };
+  await saveArchiveNote(note);
+
+  // 图节点：note 中心 + 每条要点 research 子节点
+  const noteNode = createGraphNode({
+    type: 'note',
+    title: note.title,
+    summary: note.summary,
+    payload: note,
+    sourceId: note.id,
+  });
+  const subNodes = note.bullets.slice(0, 6).map((b, i) =>
+    createGraphNode({ type: 'research', title: `要点 ${i + 1}`, summary: b, payload: { kind: 'bullet', text: b } }),
+  );
+  const subEdges = subNodes.map((n) => createGraphEdge(n.id, noteNode.id, 'relates'));
+  await mergeIntoGlobalGraph([noteNode, ...subNodes], subEdges);
+
+  return { note, memorySummary: await getMemorySummary() };
 }
 
 async function handleFeedbackRecord(
@@ -1314,6 +1366,10 @@ function buildEmptyPayload(type: AppMessage['type']) {
 
   if (type === 'pocket.agent.invent' || type === 'pocket.agent.image' || type === 'pocket.agent.feed') {
     return { events: [], result: null, memorySummary: emptySummary };
+  }
+
+  if (type === 'pocket.snippets.synthesize') {
+    return { note: null, memorySummary: emptySummary };
   }
 
   return emptySummary;

@@ -3,6 +3,7 @@ import type { GadgetMeta } from './types';
 export { runAnywhereDoor } from './anywhere-door';
 export { runIdeaLens } from './idea-lens';
 export { runResearchLens } from './research-lens';
+export { runSnippetSynthesizer } from './snippet-synthesizer';
 export { runMemoryBread } from './memory-bread';
 export { runProductCamera } from './product-camera';
 export { runShrinkLight } from './shrink-light';
@@ -21,6 +22,7 @@ export const gadgetRegistry: GadgetMeta[] = [
   { id: 'anywhere-door', name: '任意门', describe: '拼接选中的网页片段作为上下文', needsLlm: false },
   { id: 'time-notebook', name: '时光笔记本', describe: '把页面分析转成归档笔记草稿', needsLlm: false },
   { id: 'research-lens', name: '调研放大镜', describe: '基于内置知识做调研发现（不联网，兜底关联图）', needsLlm: true },
+  { id: 'snippet-synthesizer', name: '碎片归纳镜', describe: '把划词碎片归纳成知识笔记', needsLlm: true },
 ];
 
 export function listGadgets(): GadgetMeta[] {
