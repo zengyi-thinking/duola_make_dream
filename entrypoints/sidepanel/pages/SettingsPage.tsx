@@ -269,7 +269,7 @@ export default function SettingsPage() {
                   key={candidateAvatarId}
                   type="button"
                   className={`avatar-card ${active ? 'avatar-card--active' : ''}`}
-                  onClick={() => updateConfigPatch({ avatarId: candidateAvatarId as RuntimeConfig['avatarId'] })}
+                  onClick={() => { setVoiceDirty(false); updateConfigPatch({ avatarId: candidateAvatarId as RuntimeConfig['avatarId'] }); }}
                   disabled={Boolean(busyAction)}
                   aria-pressed={active}
                 >

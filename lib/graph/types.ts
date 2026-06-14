@@ -74,9 +74,9 @@ export function createGraphNode(
   partial: Omit<GraphNode, 'id' | 'createdAt'> & { id?: string; createdAt?: number },
 ): GraphNode {
   return {
+    ...partial,
     id: partial.id ?? crypto.randomUUID(),
     createdAt: partial.createdAt ?? Date.now(),
-    ...partial,
   };
 }
 
@@ -100,9 +100,9 @@ export function createGraphView(
   partial: Omit<GraphView, 'id' | 'createdAt'> & { id?: string; createdAt?: number },
 ): GraphView {
   return {
+    ...partial,
     id: partial.id ?? crypto.randomUUID(),
     createdAt: partial.createdAt ?? Date.now(),
-    ...partial,
   };
 }
 

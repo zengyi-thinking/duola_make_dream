@@ -44,9 +44,9 @@ export function createSkillDefinition(
   partial: Omit<SkillDefinition, 'id' | 'createdAt'> & { id?: string; createdAt?: number },
 ): SkillDefinition {
   return {
+    ...partial,
     id: partial.id ?? crypto.randomUUID(),
     createdAt: partial.createdAt ?? Date.now(),
-    ...partial,
   };
 }
 
