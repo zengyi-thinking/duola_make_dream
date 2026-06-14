@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { motion } from 'framer-motion';
+import html2canvas from 'html2canvas-pro';
+import { jsPDF } from 'jspdf';
 import LineButton from '@/components/LineArt/LineButton';
 import StaggerStack from '@/components/StaggerStack/StaggerStack';
 import PocketBurst from '@/components/PocketBurst/PocketBurst';
@@ -60,6 +62,7 @@ export default function InventPage() {
   const [burstActive, setBurstActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const inkRef = useRef<InkRippleHandle | null>(null);
+  const planBoardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!ideaText || !textareaRef.current) return;
@@ -182,6 +185,66 @@ export default function InventPage() {
     }
   }
 
+  /** 导出 HTML 计划面板为 PDF：截图 PlanBoard DOM → jsPDF 分页 → 下载。 */
+  async function exportPlanPdf() {
+    const el = planBoardRef.current;
+    if (!el || !planBoard) return;
+    setBusyAction('export-pdf');
+    setErrorText('');
+    setStatusText('正在导出 PDF…');
+    try {
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#f4f8ff', useCORS: true, logging: false });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, 'PNG', 0, position, pageWidth, imgHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pageWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      pdf.save(`${planBoard.name || 'plan-board'}.pdf`);
+      setNoticeText('计划已导出为 PDF。');
+      setStatusText('计划已导出为 PDF。');
+    } catch (err) {
+      setErrorText('PDF 导出失败：' + (err instanceof Error ? err.message : String(err)));
+      setStatusText('PDF 导出失败。');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  /** 下载生成的计划图片：fetch → blob → 触发浏览器下载（降级：新标签打开）。 */
+  async function exportImage() {
+    if (!generatedImage?.imageUrl) return;
+    setBusyAction('export-image');
+    setErrorText('');
+    try {
+      const res = await fetch(generatedImage.imageUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${generatedImage.request.title || 'plan-image'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setNoticeText('计划图片已下载。');
+    } catch {
+      window.open(generatedImage.imageUrl, '_blank');
+      setNoticeText('已在新标签打开图片，可右键另存。');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
   const inventing = busyAction === 'invent';
   const planBoard = artifact?.planBoard;
 
@@ -248,11 +311,12 @@ export default function InventPage() {
 
       {planBoard && artifact ? (
         <StaggerStack triggerKey={artifact.id}>
-          {ideaText.trim() ? (
-            <p className="soft-text plan-source-idea">💡 你的想法：{ideaText.trim()}</p>
-          ) : null}
-
-          <PlanBoard board={planBoard} intentLabel={labelIntent(artifact.intent)} />
+          <div ref={planBoardRef}>
+            {ideaText.trim() ? (
+              <p className="soft-text plan-source-idea">💡 你的想法：{ideaText.trim()}</p>
+            ) : null}
+            <PlanBoard board={planBoard} intentLabel={labelIntent(artifact.intent)} />
+          </div>
 
           <section className="panel-card plan-actions">
             <div className="inline-actions">
@@ -264,6 +328,9 @@ export default function InventPage() {
                 onClick={() => handleCopy(artifact.imagePrompt, 'Prompt 已复制')}
               >
                 复制 Prompt
+              </LineButton>
+              <LineButton variant="ghost" onClick={exportPlanPdf} disabled={Boolean(busyAction)}>
+                {busyAction === 'export-pdf' ? '导出中…' : '导出 PDF'}
               </LineButton>
             </div>
             <div className="button-grid">
@@ -321,11 +388,18 @@ export default function InventPage() {
             <span className="micro-status">{generatedImage.model ?? 'image'}</span>
           </div>
           {generatedImage.status === 'done' && generatedImage.imageUrl ? (
-            <img
-              className="invent-image"
-              src={generatedImage.imageUrl}
-              alt={generatedImage.request.title}
-            />
+            <>
+              <img
+                className="invent-image"
+                src={generatedImage.imageUrl}
+                alt={generatedImage.request.title}
+              />
+              <div className="inline-actions" style={{ marginTop: 8 }}>
+                <LineButton variant="ghost" onClick={exportImage} disabled={Boolean(busyAction)}>
+                  {busyAction === 'export-image' ? '下载中…' : '下载图片'}
+                </LineButton>
+              </div>
+            </>
           ) : (
             <p className="soft-text">{generatedImage.previewText ?? `图片状态：${generatedImage.status}`}</p>
           )}
