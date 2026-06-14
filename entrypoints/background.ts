@@ -44,6 +44,7 @@ import { toPageContextRecord } from '@/lib/page/extractor';
 import { buildHarnessPatchFromFeedback, shouldCreateHarnessPatch } from '@/lib/agent/harness';
 import { processIdeaSubmission } from '@/lib/agent/orchestrators/idea';
 import { buildKnowledgeRecall } from '@/lib/agent/recall';
+import { migrateLegacyToGraph } from '@/lib/graph/migrate';
 import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult } from '@/lib/agent/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
@@ -82,6 +83,11 @@ export default defineBackground(() => {
   // SW 启动时清理孤儿 idea（>5 分钟仍 pending = 一定是被异常中止的）
   cleanupOrphanIdeas().catch((err) => {
     console.warn('[bg] cleanupOrphanIdeas failed:', err);
+  });
+
+  // SW 启动时把 legacy 列表数据幂等迁移进全局记忆图（见 lib/graph/migrate.ts）
+  migrateLegacyToGraph().catch((err) => {
+    console.warn('[bg] migrateLegacyToGraph failed:', err);
   });
 
   // 监听 content script 长连 → 缓存 tabId
