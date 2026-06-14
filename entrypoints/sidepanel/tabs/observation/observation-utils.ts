@@ -79,7 +79,7 @@ export function buildObservationTimeline(memory: MemorySummary | null): Timeline
       id: `backup-${backup.id}`,
       kind: 'backup',
       title: `快照 · ${backup.label}`,
-      detail: `创意 ${backup.snapshot.ideaHistory.length} · 归档 ${backup.snapshot.archiveNotes.length} · 补丁 ${backup.snapshot.harnessPatches.length}`,
+      detail: `创意 ${backup.snapshot.ideaHistory.length} · 记忆 ${backup.snapshot.archiveNotes.length} · 补丁 ${backup.snapshot.harnessPatches.length}`,
       createdAt: backup.createdAt,
       badgeLabel: 'Backup',
     });
@@ -90,7 +90,7 @@ export function buildObservationTimeline(memory: MemorySummary | null): Timeline
       id: `patch-${patch.id}`,
       kind: 'patch',
       title: `补丁 · ${patch.target}`,
-      detail: patch.reason,
+      detail: shorten(patch.reason, 28),
       createdAt: patch.createdAt,
       badgeLabel: patch.status,
     });

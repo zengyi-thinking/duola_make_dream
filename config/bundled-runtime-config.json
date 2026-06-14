@@ -1,0 +1,29 @@
+{
+  "agentName": "PocketAgent",
+  "defaultTone": "warm-product-designer",
+  "avatarId": "yunyu-main",
+  "maxSelectionChars": 280,
+  "maxMainTextChars": 3000,
+  "maxPageExcerptChars": 500,
+  "futurePermissionMode": "all_urls-dev",
+  "llmProfiles": [
+    {
+      "id": "llm-minimax-m3",
+      "name": "MiniMax M3",
+      "apiKey": "",
+      "endpoint": "https://api.minimaxi.com/anthropic",
+      "model": "MiniMax-M3"
+    }
+  ],
+  "activeLlmProfileId": "llm-minimax-m3",
+  "imageProfiles": [
+    {
+      "id": "image-gpt-image-2",
+      "name": "GPT Image 2",
+      "apiKey": "",
+      "endpoint": "https://api.apimart.ai/v1/images/generations",
+      "model": "gpt-image-2"
+    }
+  ],
+  "activeImageProfileId": "image-gpt-image-2"
+}

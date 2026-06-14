@@ -264,38 +264,40 @@ export default function ReadingTab(props: ReadingTabProps) {
 
       {pageAnalysis ? (
         <StaggerStack triggerKey={pageAnalysis.id} className="stack">
-          <ResultCard title="Page Summary">
-            <p className="soft-text strong">{pageAnalysis.pageSummary}</p>
-          </ResultCard>
-          <ResultCard title="Key Ideas">
-            <ListBlock items={pageAnalysis.keyIdeas} />
-          </ResultCard>
-          <ResultCard title="Key Takeaways">
-            <ListBlock items={pageAnalysis.keyTakeaways} />
-          </ResultCard>
-          <ResultCard title="Product Opportunities">
-            <ListBlock items={pageAnalysis.productOpportunities} />
-          </ResultCard>
-          <ResultCard title="Useful For Current Idea">
-            <ListBlock items={pageAnalysis.usefulForCurrentIdea} />
+          <ResultCard title="阅读地图">
+            <p className="result-tagline">{pageAnalysis.pageSummary}</p>
+            <div className="detail-grid reading-map__meta">
+              <InfoBlock label="标题" value={pageRead?.pageTitle ?? pageContext?.pageTitle ?? pageAnalysis.noteCard.title} />
+              <InfoBlock label="类型" value={pageRead?.pageType ?? 'page'} />
+              <InfoBlock label="来源" value={pageRead?.origin ?? pageContext?.origin ?? '当前页面'} />
+              <InfoBlock label="要点数" value={`${pageAnalysis.keyIdeas.length} / ${pageAnalysis.keyTakeaways.length} / ${pageAnalysis.productOpportunities.length}`} />
+            </div>
+
+            <div className="reading-map__columns">
+              <ChipColumn title="关键点" items={pageAnalysis.keyIdeas} />
+              <ChipColumn title="结论" items={pageAnalysis.keyTakeaways} />
+              <ChipColumn title="机会" items={pageAnalysis.productOpportunities} />
+              <ChipColumn title="对当前想法" items={pageAnalysis.usefulForCurrentIdea} />
+            </div>
+
+            {pageAnalysis.paperInsights ? (
+              <details className="reading-accordion">
+                <summary>论文深读</summary>
+                <div className="detail-grid" style={{ marginTop: 8 }}>
+                  <InfoBlock label="Problem" value={pageAnalysis.paperInsights.problem} />
+                  <InfoBlock label="Method" value={pageAnalysis.paperInsights.method} />
+                  <InfoBlock label="Contribution" value={pageAnalysis.paperInsights.contribution} />
+                  <InfoBlock label="Conclusion" value={pageAnalysis.paperInsights.conclusion} />
+                </div>
+                <div className="subsection">
+                  <h4>Relation To My Projects</h4>
+                  <ListBlock items={pageAnalysis.paperInsights.relationToMyProjects} />
+                </div>
+              </details>
+            ) : null}
           </ResultCard>
 
-          {pageAnalysis.paperInsights ? (
-            <ResultCard title="Paper Insights">
-              <div className="detail-grid">
-                <InfoBlock label="Problem" value={pageAnalysis.paperInsights.problem} />
-                <InfoBlock label="Method" value={pageAnalysis.paperInsights.method} />
-                <InfoBlock label="Contribution" value={pageAnalysis.paperInsights.contribution} />
-                <InfoBlock label="Conclusion" value={pageAnalysis.paperInsights.conclusion} />
-              </div>
-              <div className="subsection">
-                <h4>Relation To My Projects</h4>
-                <ListBlock items={pageAnalysis.paperInsights.relationToMyProjects} />
-              </div>
-            </ResultCard>
-          ) : null}
-
-          <ResultCard title="Memory Candidates">
+          <ResultCard title="记忆候选">
             <div className="inline-actions">
               <LineButton variant="secondary" onClick={handleApproveAllCandidates} disabled={currentAnalysisCandidates.length === 0 || Boolean(busyAction)}>
                 全部记住
@@ -313,7 +315,7 @@ export default function ReadingTab(props: ReadingTabProps) {
                       <span className={`status-pill status-pill--${candidate.status}`}>{candidate.status}</span>
                     </div>
                     <p className="soft-text">{candidate.content}</p>
-                    <p className="micro-copy">为什么建议记住：{candidate.reason}</p>
+                    <p className="micro-copy">{candidate.reason}</p>
                     <div className="inline-actions">
                       <LineButton variant="secondary" onClick={() => handleApproveCandidate(candidate.id)} disabled={candidate.status !== 'pending' || Boolean(busyAction)}>
                         单条记住
@@ -326,11 +328,11 @@ export default function ReadingTab(props: ReadingTabProps) {
                 ))}
               </div>
             ) : (
-              <p className="soft-text">分析后提炼出的可记住信息会显示在这里。</p>
+              <p className="soft-text">分析后的候选记忆会出现在这里。</p>
             )}
           </ResultCard>
 
-          <ResultCard title="Image Requests">
+          <ResultCard title="输出">
             <div className="button-grid">
               <LineButton variant="secondary" onClick={() => onGenerateImage({
                 sourceType: pageAnalysis.pageType === 'paper' ? 'paper-note' : 'article-note',
@@ -338,7 +340,7 @@ export default function ReadingTab(props: ReadingTabProps) {
                 content: `${pageAnalysis.pageSummary}\n${pageAnalysis.noteCard.bullets.join('\n')}`,
                 style: 'knowledge-card',
               })}>
-                生成知识卡片图
+                生成知识卡
               </LineButton>
               <LineButton variant="ghost" onClick={() => onGenerateImage({
                 sourceType: pageAnalysis.pageType === 'paper' ? 'paper-note' : 'article-note',
@@ -346,28 +348,23 @@ export default function ReadingTab(props: ReadingTabProps) {
                 content: pageAnalysis.pageSummary,
                 style: 'poster',
               })}>
-                生成学习海报
+                学习海报
               </LineButton>
-            </div>
-          </ResultCard>
-
-          <ResultCard title="Mindmap Requests">
-            <div className="button-grid">
               <LineButton variant="secondary" onClick={() => onGenerateMindmap({
                 sourceId: pageContext?.id ?? pageAnalysis.id,
                 sourceType: pageAnalysis.pageType === 'paper' ? 'paper' : 'article',
                 title: `${pageAnalysis.noteCard.title} 图谱`,
                 content: [pageAnalysis.pageSummary, ...pageAnalysis.keyIdeas, ...pageAnalysis.productOpportunities].join('；'),
               })}>
-                生成脉络图谱
+                生成图谱
               </LineButton>
               <LineButton variant="ghost" onClick={() => onGenerateMindmap({
                 sourceId: pageContext?.id ?? pageAnalysis.id,
                 sourceType: pageAnalysis.pageType === 'paper' ? 'paper' : 'article',
-                title: `${pageAnalysis.noteCard.title} 研究路线图`,
+                title: `${pageAnalysis.noteCard.title} 路线图`,
                 content: [...pageAnalysis.keyTakeaways, ...(pageAnalysis.paperInsights?.relationToMyProjects ?? [])].join('；'),
               })}>
-                生成研究路线图
+                研究路线
               </LineButton>
             </div>
           </ResultCard>
@@ -381,8 +378,24 @@ export default function ReadingTab(props: ReadingTabProps) {
           />
         </StaggerStack>
       ) : (
-        <EmptyCard avatar title="先读取，再喂养" body="点击「读取当前页」，小口袋云云会帮你提炼摘要、关键观点、产品机会和可记住信息。" />
+        <EmptyCard avatar title="先读取，再喂养" body="点击「读取当前页」，PocketBuddy 会提炼摘要和可记住信息。" />
       )}
     </div>
+  );
+}
+
+function ChipColumn({ title, items }: { title: string; items: string[] }) {
+  return (
+    <section className="reading-band">
+      <div className="reading-band__head">
+        <span className="memory-label">{title}</span>
+        <span className="micro-status">{items.length}</span>
+      </div>
+      <div className="token-list reading-band__chips">
+        {items.length > 0 ? items.slice(0, 5).map((item) => (
+          <span key={item} className="token-chip">{item}</span>
+        )) : <span className="soft-text">暂无</span>}
+      </div>
+    </section>
   );
 }

@@ -27,7 +27,7 @@ export type GeneratedImageRecord = {
   requestId: string;
   request: ImageGenerationRequest;
   prompt: string;
-  status: 'mocked' | 'queued' | 'done' | 'failed';
+  status: 'queued' | 'done' | 'failed' | 'mocked';
   previewText?: string;
   model?: string;
   /** 真实生成成功后的图片 URL（base64 data URL 或 https） */

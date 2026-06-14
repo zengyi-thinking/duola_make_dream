@@ -1,4 +1,4 @@
-import type { RuntimeConfig } from '@/lib/agent/types';
+import type { ModelProfile, RuntimeConfig } from '@/lib/agent/types';
 import type { GeneratedImageRecord, ImageGenerationRequest } from './types';
 
 export function buildImagePrompt(request: ImageGenerationRequest): string {
@@ -21,8 +21,8 @@ export function buildImagePrompt(request: ImageGenerationRequest): string {
 
 /**
  * 生成图片记录。
- * - imageMode === 'proxy' 且配置了 endpoint+key → 真实调用图片 API
- * - 否则 → mock，仅返回 prompt 文本
+ * - 读取激活的图片配置档 → 真实调用图片 API
+ * - 未配置 / 配置不完整 → 返回 mock 或 failed 记录，避免静默失联
  *
  * privacy-check: allow — 仅发送 prompt 文本到用户配置的图片端点
  */
@@ -31,33 +31,36 @@ export async function generateImageWithAdapter(
   runtimeConfig: RuntimeConfig,
 ): Promise<GeneratedImageRecord> {
   const prompt = buildImagePrompt(request);
+  const profile = runtimeConfig.imageProfiles.find((p) => p.id === runtimeConfig.activeImageProfileId)
+    ?? runtimeConfig.imageProfiles[0]
+    ?? null;
   const baseRecord = {
     id: crypto.randomUUID(),
     requestId: request.id,
     request,
     prompt,
-    model: runtimeConfig.imageModel,
+    model: profile?.model ?? 'gpt-image-2',
     createdAt: Date.now(),
   };
 
-  if (runtimeConfig.imageMode !== 'proxy' || !runtimeConfig.imageProxyEndpoint) {
+  if (!profile) {
     return {
       ...baseRecord,
       status: 'mocked',
-      previewText: '当前使用 mock。在设置中切换为「真实生成」可调用图片 API。',
+      previewText: '没有找到图片配置档，当前仅保留 Prompt 记录。',
     };
   }
 
-  if (!runtimeConfig.imageApiKey) {
+  if (!profile.apiKey || !profile.endpoint || !profile.model) {
     return {
       ...baseRecord,
       status: 'failed',
-      previewText: '图片 API Key 未配置。请在设置中填写。',
+      previewText: '图片配置档不完整，请在设置中补全模型、端点和 API Key。',
     };
   }
 
   try {
-    const imageUrl = await callImageApi(prompt, runtimeConfig);
+    const imageUrl = await callImageApi(prompt, profile);
     return {
       ...baseRecord,
       status: 'done',
@@ -84,13 +87,13 @@ const IMAGE_FETCH_TIMEOUT_MS = 20000;
  *
  * privacy-check: allow — 仅发送 prompt 文本，轮询任务状态，不附带本地其它用户数据
  */
-async function callImageApi(prompt: string, config: RuntimeConfig): Promise<string> {
-  const origin = new URL(config.imageProxyEndpoint).origin;
+async function callImageApi(prompt: string, profile: ModelProfile): Promise<string> {
+  const origin = new URL(profile.endpoint).origin;
 
   // 1. 提交任务
-  const submit = await postJson(config.imageProxyEndpoint, config.imageApiKey, {
+  const submit = await postJson(profile.endpoint, profile.apiKey, {
     // apimart gpt-image-2 接受宽高比（如 '16:9'）+ resolution，而非 OpenAI 像素格式。
-    model: config.imageModel,
+    model: profile.model,
     prompt,
     n: 1,
     size: '16:9',
@@ -111,7 +114,7 @@ async function callImageApi(prompt: string, config: RuntimeConfig): Promise<stri
   const tasksUrl = `${origin}/v1/tasks/${taskId}`;
   for (let i = 0; i < IMAGE_MAX_POLLS; i++) {
     await sleep(IMAGE_POLL_INTERVAL_MS);
-    const polled = await getJson(tasksUrl, config.imageApiKey);
+    const polled = await getJson(tasksUrl, profile.apiKey);
     const task = polled?.data;
     const status = task?.status;
 

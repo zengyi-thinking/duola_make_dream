@@ -9,6 +9,7 @@ import { createFeedbackMessage, createIdeaSubmitMessage, sendRuntimeMessage } fr
 import { buildKnowledgeRecall, type RecallItem } from '@/lib/agent/insights';
 import type { GeneratedImageRecord } from '@/lib/image/types';
 import { ResultCard, EmptyCard } from '../components/ResultCard';
+import { InfoBlock } from '../components/InfoBlock';
 import { ListBlock } from '../components/ListBlock';
 import { SelectionGroup, toggleSelection } from '../components/ContextSelector';
 import { RecallPanel } from '../components/RecallPanel';
@@ -177,8 +178,8 @@ export default function CreativeTab(props: CreativeTabProps) {
       <section className="panel-card">
         <div className="panel-head">
           <div>
-            <p className="section-label">Invention</p>
-            <h2>把想法变成产品雏形</h2>
+            <p className="section-label">Idea Generator</p>
+            <h2>想法生成器</h2>
           </div>
         </div>
 
@@ -240,38 +241,55 @@ export default function CreativeTab(props: CreativeTabProps) {
       {/* 特效3：artifact 出现后用 StaggerStack 错落入场 */}
       {artifact ? (
         <StaggerStack triggerKey={artifact.id}>
-          <ResultCard title={artifact.concept.name}>
-            <p className="result-tagline">{artifact.concept.tagline}</p>
+          <ResultCard title="结果板">
+            <p className="result-tagline">{artifact.concept.name}</p>
+            <p className="soft-text">{artifact.concept.tagline}</p>
             <p className="soft-text">{artifact.concept.positioning}</p>
+
             <div className="token-list">
-              {artifact.concept.features.map((f) => <span key={f} className="token-chip">{f}</span>)}
+              {artifact.concept.features.map((feature) => <span key={feature} className="token-chip">{feature}</span>)}
             </div>
+
+            <div className="detail-grid concept-board">
+              <InfoBlock label="方向" value={artifact.intent} />
+              <InfoBlock label="工具" value={artifact.appliedGadgets.length > 0 ? artifact.appliedGadgets.join(' / ') : '无'} />
+              <InfoBlock label="下一步" value={artifact.nextTasks.slice(0, 2).join(' / ') || '暂无'} />
+              <div className="concept-board__list">
+                <span className="memory-label">MVP 路径</span>
+                <ListBlock items={artifact.mvpPlan} ordered />
+              </div>
+            </div>
+
             <div className="inline-actions">
               <LineButton variant="ghost" onClick={() => onCopy(artifact.imagePrompt, 'Prompt 已复制')}>复制 Prompt</LineButton>
               <LineButton variant="secondary" onClick={() => onGenerateImage({
-                sourceType: 'idea', title: artifact.concept.name,
-                content: `${artifact.concept.positioning}\n${artifact.imagePrompt}`, style: 'product-ui',
-              })}>生成图片</LineButton>
+                sourceType: 'idea',
+                title: artifact.concept.name,
+                content: `${artifact.concept.positioning}\n${artifact.imagePrompt}`,
+                style: 'product-ui',
+              })}>
+                生成图片
+              </LineButton>
             </div>
-          </ResultCard>
 
-          <ResultCard title="MVP">
-            <ListBlock items={artifact.mvpPlan} ordered />
-          </ResultCard>
-
-          <ResultCard title="调整方向">
             <div className="button-grid">
               {FEEDBACK_OPTIONS.map((item) => (
-                <LineButton key={item.action} variant="secondary" onClick={() => handleFeedback(item.action)} disabled={Boolean(busyAction)}>
+                <LineButton
+                  key={item.action}
+                  variant="secondary"
+                  onClick={() => handleFeedback(item.action)}
+                  disabled={Boolean(busyAction)}
+                >
                   {item.label}
                 </LineButton>
               ))}
             </div>
-            {lastFeedback ? <p className="soft-text" style={{ marginTop: 6 }}>{lastFeedback}</p> : null}
+
+            {lastFeedback ? <p className="soft-text">{lastFeedback}</p> : null}
           </ResultCard>
         </StaggerStack>
       ) : (
-        <EmptyCard avatar title="输入想法开始发明" body="小口袋云云已就位，输入一句话就能生成产品概念、图片 Prompt 和 MVP 计划。" />
+        <EmptyCard avatar title="输入想法开始发明" body="输入一句话，PocketBuddy 就会给你一个产品雏形。" />
       )}
     </div>
   );

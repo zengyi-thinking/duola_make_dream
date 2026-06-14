@@ -7,11 +7,11 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
-    "compile": "tsc --noEmit",
+    "build": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs build",
+    "build:firefox": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs build -b firefox",
+    "zip": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs zip",
+    "zip:firefox": "node scripts/run-build-step.mjs ./node_modules/wxt/bin/wxt.mjs zip -b firefox",
+    "compile": "node scripts/run-build-step.mjs ./node_modules/typescript/bin/tsc --noEmit",
     "privacy-check": "node scripts/privacy-check.mjs",
     "postinstall": "wxt prepare"
   },
@@ -19,11 +19,13 @@
     "framer-motion": "^12.40.0",
     "idb": "^8.0.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.6",
+    "@types/three": "^0.184.1",
     "@wxt-dev/module-react": "^1.1.5",
     "puppeteer-core": "^25.1.0",
     "sharp": "^0.35.1",

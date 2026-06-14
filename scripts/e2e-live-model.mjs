@@ -5,7 +5,7 @@
  * 一次性验证三件事：
  *   Part A：真实 LLM —— idea.submit 走 minimax，结果与输入语义相关（非模板固定值）
  *   Part B：真实生图 —— image.generate 走 apimart gpt-image-2，返回真实图片
- *   Part C：失败降级 —— 故意注入错误 key，验证不崩、优雅降级
+ *   Part C：错误冒泡 —— 故意注入错误 key，验证不降级、错误可解释、不卡
  *
  * 凭据来源（安全约定）：
  *   优先 process.env.{MINIMAX_API_KEY, GPT_IMAGE_API_KEY}；
@@ -26,11 +26,14 @@ const EXT = join(ROOT, '.output/chrome-mv3').replace(/\\/g, '/');
 const PROFILE = join(ROOT, '.test-profile-live');
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const VIRTUEA_ENV = join(ROOT, '..', 'Virtuea', '.env');
+const BUNDLED_RUNTIME_CONFIG_FILE = join(ROOT, 'config', 'bundled-runtime-config.json');
 
 if (!existsSync(EXT)) {
   console.error(`❌ 找不到构建产物 ${EXT}，请先执行 npm run build`);
   process.exit(1);
 }
+
+const bundledRuntimeConfig = JSON.parse(readFileSync(BUNDLED_RUNTIME_CONFIG_FILE, 'utf8'));
 
 // ---------- 凭据加载 ----------
 function loadCreds() {
@@ -41,13 +44,15 @@ function loadCreds() {
       if (m && !env[m[1]]) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
     }
   }
+  const llmProfile = getActiveProfile(bundledRuntimeConfig.llmProfiles, bundledRuntimeConfig.activeLlmProfileId);
+  const imageProfile = getActiveProfile(bundledRuntimeConfig.imageProfiles, bundledRuntimeConfig.activeImageProfileId);
   return {
-    minimaxKey: env.MINIMAX_API_KEY,
-    minimaxModel: env.MINIMAX_TEXT_MODEL || 'MiniMax-M3',
-    minimaxEndpoint: env.MINIMAX_API_BASE_URL || 'https://api.minimaxi.com/anthropic',
-    imageKey: env.GPT_IMAGE_API_KEY,
-    imageModel: env.GPT_IMAGE_MODEL || 'gpt-image-2',
-    imageEndpoint: env.GPT_IMAGE_API_URL || 'https://api.apimart.ai/v1/images/generations',
+    minimaxKey: env.MINIMAX_API_KEY || llmProfile?.apiKey,
+    minimaxModel: env.MINIMAX_TEXT_MODEL || llmProfile?.model || 'MiniMax-M3',
+    minimaxEndpoint: env.MINIMAX_API_BASE_URL || llmProfile?.endpoint || 'https://api.minimaxi.com/anthropic',
+    imageKey: env.GPT_IMAGE_API_KEY || imageProfile?.apiKey,
+    imageModel: env.GPT_IMAGE_MODEL || imageProfile?.model || 'gpt-image-2',
+    imageEndpoint: env.GPT_IMAGE_API_URL || imageProfile?.endpoint || 'https://api.apimart.ai/v1/images/generations',
   };
 }
 
@@ -64,22 +69,23 @@ console.log(`   图片: ${creds.imageModel} @ ${creds.imageEndpoint}`);
 
 // ---------- runtimeConfig 构造 ----------
 function buildConfig({ llmKey, imageKey }) {
+  const llmProfiles = (bundledRuntimeConfig.llmProfiles ?? []).map((profile) => (
+    profile.id === bundledRuntimeConfig.activeLlmProfileId
+      ? { ...profile, apiKey: llmKey, model: creds.minimaxModel, endpoint: creds.minimaxEndpoint }
+      : { ...profile }
+  ));
+  const imageProfiles = (bundledRuntimeConfig.imageProfiles ?? []).map((profile) => (
+    profile.id === bundledRuntimeConfig.activeImageProfileId
+      ? { ...profile, apiKey: imageKey, model: creds.imageModel, endpoint: creds.imageEndpoint }
+      : { ...profile }
+  ));
+
   return {
-    agentName: 'PocketAgent',
-    defaultTone: 'warm-product-designer',
-    avatarId: 'yunyu-main',
-    maxSelectionChars: 280,
-    maxMainTextChars: 3000,
-    maxPageExcerptChars: 500,
-    futurePermissionMode: 'all_urls-dev',
-    llmProvider: 'minimax',
-    llmModel: creds.minimaxModel,
-    llmApiKey: llmKey,
-    llmEndpoint: creds.minimaxEndpoint,
-    imageMode: 'proxy',
-    imageModel: creds.imageModel,
-    imageProxyEndpoint: creds.imageEndpoint,
-    imageApiKey: imageKey,
+    ...bundledRuntimeConfig,
+    llmProfiles,
+    activeLlmProfileId: bundledRuntimeConfig.activeLlmProfileId,
+    imageProfiles,
+    activeImageProfileId: bundledRuntimeConfig.activeImageProfileId,
   };
 }
 
@@ -121,7 +127,7 @@ async function injectConfig(config) {
     expression: `(async () => {
       await chrome.storage.local.set({ runtimeConfig: ${JSON.stringify(config)} });
       const got = (await chrome.storage.local.get('runtimeConfig')).runtimeConfig;
-      return { provider: got?.llmProvider, imageMode: got?.imageMode, model: got?.llmModel };
+      return { llmProfiles: got?.llmProfiles?.length, imageProfiles: got?.imageProfiles?.length, activeLlmProfileId: got?.activeLlmProfileId };
     })()`,
     returnByValue: true,
     awaitPromise: true,
@@ -200,25 +206,26 @@ if (rec) {
 }
 
 // ===== Part C：失败降级（错 key）=====
-console.log('\n=== Part C: 失败降级（注入错误 key）===');
-await injectConfig(buildConfig({ llmKey: 'sk-invalid-key-for-degrade-test', imageKey: 'sk-invalid-key-for-degrade-test' }));
+console.log('\n=== Part C: 错误冒泡（注入错误 key）===');
+await injectConfig(buildConfig({ llmKey: 'sk-invalid-key-for-test', imageKey: 'sk-invalid-key-for-test' }));
 
 const deIdea = await send('idea.submit', {
-  text: '随便一个想法用来测降级路径',
+  text: '随便一个想法用来测错误冒泡',
   selectedContextIds: [],
   selectedArchiveNoteIds: [],
 });
-console.log('  idea.submit success:', deIdea.success, '| name:', String(deIdea.payload?.artifact?.concept?.name ?? ''));
-results.degradeLlm = deIdea.success && !!deIdea.payload?.artifact?.concept?.name;
-console.log(results.degradeLlm ? '✅ LLM 失败降级正常（catch → 模板，不崩）' : '⚠️ LLM 失败未降级，需检查 gadget catch');
+console.log('  idea.submit success:', deIdea.success, '| error:', String(deIdea.error ?? '').slice(0, 80));
+// 删降级后：错 key 应让 idea.submit 失败（success:false），错误冒泡到 errorResponse，不卡
+results.degradeLlm = deIdea.success === false && !!deIdea.error;
+console.log(results.degradeLlm ? '✅ LLM 错误正确冒泡（不降级、不卡、可解释）' : '⚠️ LLM 错误未正确冒泡');
 
 const deImg = await send('image.generate', {
-  sourceType: 'idea', title: '降级测试', content: 'x', style: 'line-art',
+  sourceType: 'idea', title: '错误冒泡测试', content: 'x', style: 'line-art',
 });
 const deRec = deImg.payload?.record;
 console.log('  image.generate status:', deRec?.status, '| previewText:', String(deRec?.previewText ?? '').slice(0, 60));
 results.degradeImage = deRec?.status === 'failed';
-console.log(results.degradeImage ? '✅ 图片失败降级正常（status=failed，不崩）' : '⚠️ 图片失败处理异常');
+console.log(results.degradeImage ? '✅ 图片失败正常（status=failed，不崩）' : '⚠️ 图片失败处理异常');
 
 await browser.close();
 
@@ -226,8 +233,13 @@ await browser.close();
 console.log('\n========== 阶段1 smoke 汇总 ==========');
 console.log(`Part A 真实 LLM    : ${results.liveLlm ? '✅ PASS' : '❌ FAIL'}`);
 console.log(`Part B 真实生图    : ${results.liveImage ? '✅ PASS' : '❌ FAIL'}`);
-console.log(`Part C LLM 降级    : ${results.degradeLlm ? '✅ PASS' : '❌ FAIL'}`);
-console.log(`Part C 图片降级    : ${results.degradeImage ? '✅ PASS' : '❌ FAIL'}`);
+console.log(`Part C LLM 错误冒泡 : ${results.degradeLlm ? '✅ PASS' : '❌ FAIL'}`);
+console.log(`Part C 图片失败     : ${results.degradeImage ? '✅ PASS' : '❌ FAIL'}`);
 const allPass = Object.values(results).every(Boolean);
 console.log(allPass ? '\n🎉 阶段1 验收通过：真模型链路可用。' : '\n⚠️ 存在未通过项，见上方明细。');
 process.exit(allPass ? 0 : 1);
+
+function getActiveProfile(profiles, activeProfileId) {
+  if (!Array.isArray(profiles) || profiles.length === 0) return null;
+  return profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0];
+}

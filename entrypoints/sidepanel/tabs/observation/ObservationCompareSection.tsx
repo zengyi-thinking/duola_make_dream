@@ -76,8 +76,8 @@ export default function ObservationCompareSection(props: ObservationCompareSecti
   return (
     <CollapsibleCard
       sectionLabel="Version Compare"
-      title="产物与图片版本对比"
-      summary="把两个版本的方向变化一次看清。"
+      title="版本对比"
+      summary="产物和图片的变化压缩成两张卡。"
       badge="compare"
     >
       {effectiveArtifactHistory.length > 0 ? (
@@ -184,7 +184,7 @@ function CompareCard({
         <strong>{title}</strong>
         <span className="status-pill status-pill--spark">{badge}</span>
       </div>
-      <p className="soft-text">{comparison.summary}</p>
+      <p className="micro-copy">{comparison.summary}</p>
       <div className="detail-grid">
         <InfoBlock label="版本 A" value={comparison.leftLabel} />
         <InfoBlock label="版本 B" value={comparison.rightLabel} />

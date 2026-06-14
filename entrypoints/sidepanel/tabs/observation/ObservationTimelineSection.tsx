@@ -24,11 +24,11 @@ export default function ObservationTimelineSection({ memory }: ObservationTimeli
               <strong>{entry.title}</strong>
               <span className={`timeline-badge timeline-badge--${entry.kind}`}>{entry.badgeLabel}</span>
             </div>
-            <p className="soft-text">{entry.detail}</p>
+            <p className="micro-copy">{entry.detail}</p>
             <p className="micro-copy">{formatObservationDate(entry.createdAt)}</p>
           </article>
         )) : (
-          <p className="soft-text">还没有足够多的历史。先发一个想法、读一页网页，时间线就会开始长出来。</p>
+          <p className="soft-text">先发一个想法或读一页网页，时间线就会开始长出来。</p>
         )}
       </div>
     </section>

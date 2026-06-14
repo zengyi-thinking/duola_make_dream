@@ -77,8 +77,8 @@ export default function ObservationLibrarySection(props: ObservationLibrarySecti
   return (
     <CollapsibleCard
       sectionLabel="Library"
-      title="资源库与补丁"
-      summary="把长期记忆、图片、图谱和补丁收在一起。"
+      title="资源库"
+      summary="补丁、记忆、图片、图谱。"
       badge={`${memory?.approvedMemories.length ?? 0} memories`}
     >
       <div className="stack">
@@ -111,7 +111,7 @@ function PatchLibrary({
               <strong>{patch.target}</strong>
               <span className={`status-pill status-pill--${patch.status === 'applied' ? 'approved' : patch.status}`}>{patch.status}</span>
             </div>
-            <p className="soft-text">{patch.reason}</p>
+            <p className="micro-copy">{patch.reason}</p>
             <div className="detail-grid">
               <InfoBlock label="范围" value={patch.scope} />
               <InfoBlock label="风险" value={patch.riskLevel} />
@@ -159,7 +159,7 @@ function ApprovedMemoryLibrary({
               <strong>{item.title}</strong>
               <span className="status-pill status-pill--approved">{item.category}</span>
             </div>
-            <p className="soft-text">{item.content}</p>
+            <p className="micro-copy">{item.content}</p>
             <p className="micro-copy">{item.reason}</p>
             <div className="inline-actions">
               <LineButton variant="ghost" onClick={() => onDelete(item.id)} disabled={Boolean(busyAction)}>
@@ -205,7 +205,7 @@ function ImageLibrary({
               <img src={item.imageUrl} alt={item.prompt.slice(0, 40)} className="generated-image" />
             ) : null}
             <pre className="prompt-block">{item.prompt}</pre>
-            <p className="soft-text">{item.previewText}</p>
+            <p className="micro-copy">{item.previewText}</p>
             <div className="inline-actions">
               <LineButton variant="ghost" onClick={() => onCopy(item.prompt, '图片 Prompt 已复制。')}>复制 Prompt</LineButton>
               <LineButton variant="ghost" onClick={() => onDelete(item.id)} disabled={Boolean(busyAction)}>删除记录</LineButton>

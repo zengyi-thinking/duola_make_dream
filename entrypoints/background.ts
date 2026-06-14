@@ -335,7 +335,7 @@ async function handlePageAnalyze(mode: 'current-page' | 'study-archive') {
   const runtimeConfig = await readStorage('runtimeConfig');
   const savedContext = await savePageContext(toPageContextRecord(page, runtimeConfig));
   const profile = await ensureProfile();
-  const analysis = buildPageAnalysisResult(page, savedContext, profile);
+  const analysis = await buildPageAnalysisResult(page, savedContext, profile);
   await saveMemoryCandidates(analysis.memoryCandidates);
 
   return {

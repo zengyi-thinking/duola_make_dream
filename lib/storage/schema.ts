@@ -6,6 +6,7 @@ import type {
   HarnessPatch,
   IdeaRecord,
   MemoryCandidate,
+  ModelProfile,
   ProfileHistoryEntry,
   ProductArtifact,
   RuntimeConfig,
@@ -14,6 +15,7 @@ import type {
 import type { GeneratedImageRecord } from '@/lib/image/types';
 import type { MindmapRecord } from '@/lib/mindmap/types';
 import type { PageContextRecord } from '@/lib/page/types';
+import bundledRuntimeConfigJson from '../../config/bundled-runtime-config.json';
 
 export const STORAGE_KEYS = {
   profile: 'profile',
@@ -70,25 +72,16 @@ export const DEFAULT_PROFILE: UserProfile = {
   lastUpdated: Date.now(),
 };
 
-export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
-  agentName: 'PocketAgent',
-  defaultTone: 'warm-product-designer',
-  avatarId: 'yunyu-main',
-  maxSelectionChars: 280,
-  maxMainTextChars: 3000,
-  maxPageExcerptChars: 500,
-  futurePermissionMode: 'all_urls-dev',
+export function createBundledRuntimeConfig(): RuntimeConfig {
+  const bundled = bundledRuntimeConfigJson as RuntimeConfig;
+  return {
+    ...bundled,
+    llmProfiles: (bundled.llmProfiles ?? []).map(cloneModelProfile),
+    imageProfiles: (bundled.imageProfiles ?? []).map(cloneModelProfile),
+  };
+}
 
-  llmProvider: 'mock',
-  llmModel: 'MiniMax-M3',
-  llmApiKey: '',
-  llmEndpoint: 'https://api.minimaxi.com/anthropic',
-
-  imageMode: 'mock',
-  imageModel: 'gpt-image-2',
-  imageProxyEndpoint: 'https://api.apimart.ai/v1/images/generations',
-  imageApiKey: '',
-};
+export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = createBundledRuntimeConfig();
 
 export function createDefaultStorageState(): StorageSchema {
   return {
@@ -106,6 +99,10 @@ export function createDefaultStorageState(): StorageSchema {
     generatedMindmaps: [],
     harnessPatches: [],
     stateBackups: [],
-    runtimeConfig: { ...DEFAULT_RUNTIME_CONFIG },
+    runtimeConfig: createBundledRuntimeConfig(),
   };
+}
+
+function cloneModelProfile(profile: ModelProfile): ModelProfile {
+  return { ...profile };
 }

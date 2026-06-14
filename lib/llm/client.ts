@@ -76,7 +76,7 @@ export function createAnthropicCompatibleClient(config: AnthropicCompatibleConfi
           throw new Error('LLM 返回内容为空');
         }
 
-        return { text, raw: data, fromLiveApi: true };
+        return { text, raw: data };
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
           throw new Error(`LLM 请求超时（${timeoutMs}ms）`);

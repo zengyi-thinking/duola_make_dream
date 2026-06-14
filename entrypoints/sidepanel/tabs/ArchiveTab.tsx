@@ -99,7 +99,7 @@ export default function ArchiveTab(props: ArchiveTabProps) {
   }
 
   async function handleClearArchive() {
-    if (!window.confirm('确定要清空所有归档笔记吗？')) return;
+    if (!window.confirm('确定要清空所有记忆吗？')) return;
 
     setBusyAction('archive-clear');
     try {
@@ -109,7 +109,7 @@ export default function ArchiveTab(props: ArchiveTabProps) {
       setMemory(response.payload);
       setSelectedArchiveNoteId('');
       setDrawerNoteId(null);
-      setNoticeText('归档笔记已清空。');
+      setNoticeText('记忆库已清空。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '清空笔记失败。');
     } finally {
@@ -122,11 +122,11 @@ export default function ArchiveTab(props: ArchiveTabProps) {
       <section className="panel-card">
         <div className="panel-head">
           <div>
-            <p className="section-label">Archive Notes</p>
-            <h2>归档与笔记</h2>
+            <p className="section-label">Memory Library</p>
+            <h2>记忆库</h2>
           </div>
           <LineButton variant="ghost" onClick={handleClearArchive} disabled={Boolean(busyAction) || allNotes.length === 0}>
-            清空笔记
+            清空记忆库
           </LineButton>
         </div>
 
@@ -178,7 +178,7 @@ export default function ArchiveTab(props: ArchiveTabProps) {
                 <span className="soft-text">{note.summary}</span>
               </button>
             )) : (
-              <p className="soft-text">{searchQuery || sourceTypeFilter !== 'all' || tagFilter ? '没有匹配的笔记。' : '还没有保存的笔记。'}</p>
+              <p className="soft-text">{searchQuery || sourceTypeFilter !== 'all' || tagFilter ? '没有匹配的记忆。' : '还没有保存的记忆。'}</p>
             )}
           </div>
 
@@ -236,21 +236,12 @@ export default function ArchiveTab(props: ArchiveTabProps) {
                 </div>
               </div>
             ) : (
-              <EmptyCard title="选择一条笔记" body="点击左侧笔记查看详情，支持搜索、过滤和删除。" />
+              <EmptyCard title="选择一条记忆" body="点击左侧条目查看详情，支持搜索、过滤和删除。" />
             )}
           </div>
         </div>
       </section>
 
-      <section className="panel-card">
-        <div className="panel-head">
-          <div>
-            <p className="section-label">Archive Tips</p>
-            <h2>这里放什么</h2>
-          </div>
-        </div>
-        <p className="soft-text">归档页只负责整理笔记与它们的上下文。长期记忆、图片记录、图谱记录和历史回放已经移到观察页。</p>
-      </section>
     </StaggerStack>
   );
 }

@@ -1,21 +1,11 @@
 import type { ProductConcept } from '../types';
 import type { LlmClient } from '@/lib/llm';
 
-/**
- * 把产品概念翻译为图片生成 Prompt（英文）。
- * - 有真实 client → LLM 优化 prompt
- * - 无 client → 模板拼接
- */
-export async function runProductCamera(concept: ProductConcept, client?: LlmClient, hint?: string): Promise<string> {
-  if (client && client.kind !== 'mock') {
-    try {
-      const prompt = await generatePromptWithLlm(concept, client, hint);
-      if (prompt) return prompt;
-    } catch (err) {
-      console.warn('[ProductCamera] LLM 调用失败，降级到模板:', err);
-    }
-  }
-  return buildTemplatePrompt(concept);
+/** 把产品概念翻译为图片生成 Prompt（英文），失败抛错。 */
+export async function runProductCamera(concept: ProductConcept, client: LlmClient, hint?: string): Promise<string> {
+  const prompt = await generatePromptWithLlm(concept, client, hint);
+  if (prompt) return prompt;
+  throw new Error('ProductCamera 未能生成图片 Prompt');
 }
 
 async function generatePromptWithLlm(concept: ProductConcept, client: LlmClient, hint?: string): Promise<string | null> {
@@ -44,17 +34,4 @@ async function generatePromptWithLlm(concept: ProductConcept, client: LlmClient,
 
   const text = response.text.trim();
   return text ? text : null;
-}
-
-function buildTemplatePrompt(concept: ProductConcept): string {
-  return [
-    'Design a browser extension popup UI for an original pocket-style creative assistant.',
-    `Product name: ${concept.name}.`,
-    `Core mood: ${concept.tagline}.`,
-    `Visual direction: ${concept.visualDirection.join(', ')}.`,
-    'Palette: powder blue, white, deep ink blue.',
-    'Style: minimalist line art, soft paper texture, precise product framing, subtle pocket metaphor.',
-    'Show: input area, concept cards, prompt card, MVP checklist, feedback chips.',
-    'No copyrighted cartoon characters, no mascot resemblance, no bell, no whiskers, no round cat silhouette.',
-  ].join(' ');
 }

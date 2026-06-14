@@ -77,7 +77,7 @@ export default function ObservationBackupSection(props: ObservationBackupSection
     <CollapsibleCard
       sectionLabel="Backup"
       title="备份与回滚"
-      summary="创建快照并在需要时回到某个稳定版本。"
+      summary="快照、回滚、差异对比。"
       badge={`${memory?.stateBackups.length ?? 0} snapshots`}
     >
       <div className="settings-section">
@@ -104,9 +104,9 @@ export default function ObservationBackupSection(props: ObservationBackupSection
               <strong>{backup.label}</strong>
               <span className="timeline-badge timeline-badge--backup">{formatDate(backup.createdAt)}</span>
             </div>
-            <p className="soft-text">
+            <p className="micro-copy">
               画像 {backup.snapshot.profileHistory.length} ·
-              归档 {backup.snapshot.archiveNotes.length} ·
+              记忆 {backup.snapshot.archiveNotes.length} ·
               创意 {backup.snapshot.ideaHistory.length} ·
               补丁 {backup.snapshot.harnessPatches.length}
             </p>
@@ -130,7 +130,7 @@ export default function ObservationBackupSection(props: ObservationBackupSection
             <strong>最近两份快照差异</strong>
             <span className="status-pill status-pill--spark">compare</span>
           </div>
-          <p className="soft-text">{backupComparison.summary}</p>
+          <p className="micro-copy">{backupComparison.summary}</p>
           <div className="detail-grid">
             <InfoBlock label="较新快照" value={backupComparison.leftLabel} />
             <InfoBlock label="较旧快照" value={backupComparison.rightLabel} />

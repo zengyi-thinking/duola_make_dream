@@ -176,6 +176,18 @@ export type ArchiveNote = {
   relatedContextIds: string[];
 };
 
+/** 单个模型配置档（cc-switch 风格：name + apiKey + endpoint + model 三件套） */
+export interface ModelProfile {
+  id: string;
+  /** 用户起的中性别名，UI 不强制暴露底层提供商 */
+  name: string;
+  apiKey: string;
+  /** API base URL，如 https://api.minimaxi.com/anthropic */
+  endpoint: string;
+  /** 模型标识，如 MiniMax-M3 */
+  model: string;
+}
+
 export interface RuntimeConfig {
   agentName: string;
   defaultTone: string;
@@ -185,17 +197,13 @@ export interface RuntimeConfig {
   maxPageExcerptChars: number;
   futurePermissionMode: 'all_urls-dev' | 'activeTab-ready';
 
-  // LLM 配置
-  llmProvider: 'mock' | 'minimax' | 'anthropic' | 'custom';
-  llmModel: string;
-  llmApiKey: string;
-  llmEndpoint: string;
+  // LLM 配置档（多配置档切换，激活档决定实际调用）
+  llmProfiles: ModelProfile[];
+  activeLlmProfileId: string | null;
 
-  // 图片生成配置
-  imageMode: 'mock' | 'proxy';
-  imageModel: string;
-  imageProxyEndpoint: string;
-  imageApiKey: string;
+  // 图片生成配置档
+  imageProfiles: ModelProfile[];
+  activeImageProfileId: string | null;
 }
 
 export interface MemorySummary {

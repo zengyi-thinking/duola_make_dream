@@ -4,6 +4,7 @@ import { createContextCaptureMessage, sendRuntimeMessage } from '@/lib/messaging
 import type { InternalContentMessage } from '@/lib/messaging/types';
 import { extractCurrentPageContent, extractCurrentSelection } from '@/lib/page/extractor';
 import { readStorage } from '@/lib/storage/local';
+import { mountPocketBuddyFab } from './content/pocketbuddy-fab';
 
 const HOST_ID = 'pocketbuddy-content-root';
 const MAX_SELECTION_CHARS = 280;
@@ -25,13 +26,24 @@ export default defineContentScript({
       :host { all: initial; }
       .pb-fab, .pb-pocket-btn, .pb-toast { font-family: "Avenir Next", "Trebuchet MS", "PingFang SC", sans-serif; box-sizing: border-box; }
       .pb-fab {
-        position: fixed; right: 20px; bottom: 20px; width: 54px; height: 54px; border-radius: 20px;
-        border: 2px solid #15304a; background: linear-gradient(180deg, #ffffff, #e7f5ff);
-        box-shadow: 0 12px 30px rgba(18, 89, 139, 0.18); color: #15304a;
-        display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2147483647; transition: transform 120ms ease;
+        position: fixed; right: 18px; bottom: 18px; width: 64px; height: 64px; border-radius: 22px;
+        border: 1px solid rgba(21, 48, 74, 0.18); background: radial-gradient(circle at 28% 26%, rgba(255,255,255,0.96), rgba(223, 238, 255, 0.88));
+        box-shadow: 0 16px 34px rgba(18, 89, 139, 0.18), inset 0 0 0 1px rgba(255,255,255,0.4);
+        color: #15304a; display: block; cursor: pointer; z-index: 2147483647;
+        transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease; overflow: hidden; padding: 0;
       }
-      .pb-fab:hover { transform: translateY(-2px); }
-      .pb-fab__img { width: 100%; height: 100%; border-radius: 18px; object-fit: cover; display: block; pointer-events: none; }
+      .pb-fab:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 18px 38px rgba(18, 89, 139, 0.22), inset 0 0 0 1px rgba(255,255,255,0.5); }
+      .pb-fab:focus-visible { outline: 2px solid #2557da; outline-offset: 3px; }
+      .pb-fab__stage {
+        position: absolute; inset: 0; display: block; border-radius: inherit; overflow: hidden;
+        pointer-events: none;
+      }
+      .pb-fab__canvas,
+      .pb-fab__fallback {
+        width: 100% !important; height: 100% !important; display: block; object-fit: cover; pointer-events: none;
+      }
+      .pb-fab--three { background: radial-gradient(circle at 28% 24%, rgba(255,255,255,0.98), rgba(202, 234, 255, 0.9)); }
+      .pb-fab--fallback { background: linear-gradient(180deg, #ffffff, #e7f5ff); }
       .pb-pocket-btn {
         position: fixed; display: none; padding: 8px 12px; border-radius: 999px; border: 2px solid #15304a; background: #ffffff; color: #15304a;
         font-size: 12px; font-weight: 700; cursor: pointer; z-index: 2147483647; box-shadow: 0 10px 24px rgba(18, 89, 139, 0.16);
@@ -51,13 +63,11 @@ export default defineContentScript({
     fab.className = 'pb-fab';
     fab.type = 'button';
     fab.title = 'PocketBuddy';
+    fab.setAttribute('aria-label', 'PocketBuddy');
 
-    // 用蓝白口袋精灵头像作为浮动按钮图标
-    const fabImg = document.createElement('img');
-    fabImg.src = (browser.runtime as unknown as { getURL: (path: string) => string }).getURL('/avatars/pocketbuddy-lanling-icon.png');
-    fabImg.alt = '';
-    fabImg.className = 'pb-fab__img';
-    fab.append(fabImg);
+    const fabStage = document.createElement('span');
+    fabStage.className = 'pb-fab__stage';
+    fab.append(fabStage);
 
     const pocketButton = document.createElement('button');
     pocketButton.className = 'pb-pocket-btn';
@@ -68,6 +78,14 @@ export default defineContentScript({
     toast.className = 'pb-toast';
 
     shadowRoot.append(style, fab, pocketButton, toast);
+
+    void mountPocketBuddyFab({
+      button: fab,
+      stage: fabStage,
+      fallbackIconUrl: (browser.runtime as unknown as { getURL: (path: string) => string }).getURL('/avatars/pocketbuddy-lanling-icon.png'),
+      preferReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      onActivate: captureSelection,
+    });
 
     let toastTimer: number | undefined;
 
@@ -146,7 +164,7 @@ export default defineContentScript({
       pocketButton.dataset.visible = 'true';
     };
 
-    const captureSelection = async () => {
+    async function captureSelection() {
       if (isSensitiveSelection() || isSensitiveActiveElement()) {
         showToast('PocketBuddy 不会读取表单内容。');
         pocketButton.dataset.visible = 'false';
@@ -169,11 +187,7 @@ export default defineContentScript({
 
       showToast(response.success ? '这段灵感已经放进口袋。' : (response.error ?? '这次没有保存成功。'));
       pocketButton.dataset.visible = 'false';
-    };
-
-    fab.addEventListener('click', () => {
-      void captureSelection();
-    });
+    }
 
     pocketButton.addEventListener('click', () => {
       void captureSelection();

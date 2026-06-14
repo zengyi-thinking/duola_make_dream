@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import type { StateBackup, StorageSchema, StorageSnapshot } from './schema';
-import { DEFAULT_RUNTIME_CONFIG, STORAGE_KEYS, createDefaultStorageState } from './schema';
+import type { ModelProfile } from '@/lib/agent/types';
+import { STORAGE_KEYS, createBundledRuntimeConfig, createDefaultStorageState } from './schema';
 import type {
   GeneratedImageRecord,
   ImageGenerationRequest,
@@ -19,6 +20,7 @@ function normalizeStorageSnapshot(
   return {
     ...snapshot,
     generatedImages: normalizeGeneratedImages(snapshot.generatedImages),
+    runtimeConfig: normalizeRuntimeConfig(snapshot.runtimeConfig),
     stateBackups: snapshot.stateBackups ?? [],
   };
 }
@@ -37,7 +39,7 @@ function normalizeGeneratedImageRecord(record: GeneratedImageRecord): GeneratedI
     requestId: record.requestId || parsedRequest.id,
     request: parsedRequest,
     prompt: record.prompt || buildImagePromptFromRequest(parsedRequest),
-    status: record.status ?? 'mocked',
+    status: record.status ?? 'failed',
     createdAt: record.createdAt || parsedRequest.createdAt,
   };
 }
@@ -132,17 +134,124 @@ function buildImagePromptFromRequest(request: ImageGenerationRequest): string {
 function normalizeRuntimeConfig(
   runtimeConfig: Partial<StorageSchema['runtimeConfig']> | undefined,
 ): StorageSchema['runtimeConfig'] {
+  const bundled = createBundledRuntimeConfig();
+  const raw = runtimeConfig as Record<string, unknown> | undefined;
+
+  const llmLegacy = buildLegacyProfile({
+    id: 'legacy-llm',
+    name: '默认模型',
+    apiKey: readString(raw?.llmApiKey),
+    endpoint: readString(raw?.llmEndpoint),
+    model: readString(raw?.llmModel),
+  });
+  const imageLegacy = buildLegacyProfile({
+    id: 'legacy-image',
+    name: '默认生图',
+    apiKey: readString(raw?.imageApiKey),
+    endpoint: readString(raw?.imageProxyEndpoint),
+    model: readString(raw?.imageModel),
+  });
+
+  const llmProfiles = normalizeProfileList(raw?.llmProfiles, bundled.llmProfiles, llmLegacy);
+  const imageProfiles = normalizeProfileList(raw?.imageProfiles, bundled.imageProfiles, imageLegacy);
+
   return {
-    ...DEFAULT_RUNTIME_CONFIG,
-    ...runtimeConfig,
-    avatarId: runtimeConfig?.avatarId ?? DEFAULT_RUNTIME_CONFIG.avatarId,
+    agentName: readString(raw?.agentName, bundled.agentName),
+    defaultTone: readString(raw?.defaultTone, bundled.defaultTone),
+    avatarId: readString(raw?.avatarId, bundled.avatarId) as StorageSchema['runtimeConfig']['avatarId'],
+    maxSelectionChars: readNumber(raw?.maxSelectionChars, bundled.maxSelectionChars),
+    maxMainTextChars: readNumber(raw?.maxMainTextChars, bundled.maxMainTextChars),
+    maxPageExcerptChars: readNumber(raw?.maxPageExcerptChars, bundled.maxPageExcerptChars),
+    futurePermissionMode: readFuturePermissionMode(raw?.futurePermissionMode, bundled.futurePermissionMode),
+    llmProfiles,
+    activeLlmProfileId: resolveActiveProfileId(raw?.activeLlmProfileId, llmProfiles, bundled.activeLlmProfileId),
+    imageProfiles,
+    activeImageProfileId: resolveActiveProfileId(raw?.activeImageProfileId, imageProfiles, bundled.activeImageProfileId),
   };
+}
+
+function buildLegacyProfile(profile: ModelProfile): ModelProfile | null {
+  if (!profile.apiKey && !profile.endpoint && !profile.model) {
+    return null;
+  }
+
+  return {
+    id: profile.id || crypto.randomUUID(),
+    name: profile.name || '配置档',
+    apiKey: profile.apiKey.trim(),
+    endpoint: profile.endpoint.trim(),
+    model: profile.model.trim(),
+  };
+}
+
+function normalizeProfileList(
+  profiles: unknown,
+  fallbackProfiles: ModelProfile[],
+  legacyProfile: ModelProfile | null,
+): ModelProfile[] {
+  const normalized = Array.isArray(profiles)
+    ? profiles.map((profile, index) => normalizeProfile(profile, index)).filter((item): item is ModelProfile => Boolean(item))
+    : [];
+
+  if (normalized.length > 0) return normalized;
+  if (legacyProfile) return [legacyProfile];
+  return fallbackProfiles.map((profile) => ({ ...profile }));
+}
+
+function normalizeProfile(profile: unknown, index: number): ModelProfile | null {
+  if (!profile || typeof profile !== 'object') return null;
+  const raw = profile as Partial<ModelProfile>;
+  const hasValue = Boolean(raw.id || raw.name || raw.apiKey || raw.endpoint || raw.model);
+  if (!hasValue) return null;
+
+  return {
+    id: readString(raw.id, `profile-${index + 1}`),
+    name: readString(raw.name, `配置档 ${index + 1}`),
+    apiKey: readString(raw.apiKey),
+    endpoint: readString(raw.endpoint),
+    model: readString(raw.model),
+  };
+}
+
+function resolveActiveProfileId(
+  activeId: unknown,
+  profiles: ModelProfile[],
+  fallbackId: string | null,
+): string | null {
+  const candidate = readString(activeId);
+  if (candidate && profiles.some((profile) => profile.id === candidate)) {
+    return candidate;
+  }
+  if (fallbackId && profiles.some((profile) => profile.id === fallbackId)) {
+    return fallbackId;
+  }
+  return profiles[0]?.id ?? null;
+}
+
+function readString(value: unknown, fallback = ''): string {
+  if (typeof value !== 'string') return fallback;
+  const next = value.trim();
+  return next || fallback;
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function readFuturePermissionMode(
+  value: unknown,
+  fallback: StorageSchema['runtimeConfig']['futurePermissionMode'],
+): StorageSchema['runtimeConfig']['futurePermissionMode'] {
+  return value === 'all_urls-dev' || value === 'activeTab-ready' ? value : fallback;
 }
 
 export async function readStorage<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {
   try {
     const result = await browser.storage.local.get(key);
     const rawValue = result[key] as StorageSchema[K] | undefined;
+    if (key === 'runtimeConfig') {
+      return normalizeRuntimeConfig(rawValue as Partial<StorageSchema['runtimeConfig']> | undefined) as StorageSchema[K];
+    }
     if (key === 'generatedImages') {
       return normalizeGeneratedImages(rawValue as StorageSchema['generatedImages'] | undefined) as StorageSchema[K];
     }
@@ -286,7 +395,7 @@ export async function clearArrayStorage<K extends StorageKey>(key: K): Promise<S
  * privacy-check: allow — apiKey 存于扩展本地 storage，不上传第三方
  */
 export async function getRuntimeConfig(): Promise<StorageSchema['runtimeConfig']> {
-  return normalizeRuntimeConfig(await readStorage('runtimeConfig'));
+  return readStorage('runtimeConfig');
 }
 
 /**

@@ -13,8 +13,9 @@ import {
 } from '@/lib/memory';
 import { getLlmClient } from '@/lib/llm';
 import { buildHarnessHint } from '../harness';
-import { POCKET_AGENT_VOICE } from '../personality';
+import { buildToneHint, POCKET_AGENT_VOICE } from '../personality';
 import { routeIdeaIntent } from '../router';
+import { getRuntimeConfig } from '@/lib/storage/local';
 import type { IdeaSubmitResult, IdeaSource, ProductArtifact } from '../types';
 import { runAnywhereDoor, runIdeaLens, runMemoryBread, runProductCamera, runShrinkLight } from '../gadgets';
 
@@ -58,9 +59,10 @@ export async function processIdeaSubmission(
   };
 
   const client = await getLlmClient();
-  // 自学习闭环：读取有效 harness 补丁 → 生成 hint → 注入各 gadget 的 system prompt
+  // 自学习 + 个性语气：合并 harness 补丁与 defaultTone → 注入各 gadget 的 system prompt
   const activePatches = await getActiveHarnessPatches();
-  const hint = buildHarnessHint(activePatches);
+  const { defaultTone } = await getRuntimeConfig();
+  const hint = [buildToneHint(defaultTone), buildHarnessHint(activePatches)].filter(Boolean).join('\n');
   const concept = await runIdeaLens({
     idea: ideaText,
     intent,

@@ -1,6 +1,10 @@
-import { InfoBlock } from './InfoBlock';
 import type { MemorySummary, RuntimeConfig } from '@/lib/agent/types';
-import { pocketAvatars } from '@/lib/brand/avatars';
+import {
+  describeProfileHealth,
+  formatEndpointHost,
+  formatModelProfileSummary,
+  getActiveModelProfile,
+} from '@/lib/agent/model-profiles';
 
 interface ObservationSignalBoardProps {
   memory: MemorySummary | null;
@@ -8,8 +12,9 @@ interface ObservationSignalBoardProps {
 }
 
 export function ObservationSignalBoard({ memory, runtimeConfig }: ObservationSignalBoardProps) {
-  const avatarId = runtimeConfig?.avatarId ?? 'yunyu-main';
-  const avatarMeta = pocketAvatars[avatarId];
+  const avatarLabel = runtimeConfig?.agentName ?? 'PocketAgent';
+  const llmProfile = getActiveModelProfile(runtimeConfig, 'llm');
+  const imageProfile = getActiveModelProfile(runtimeConfig, 'image');
   const currentCounts = memory
     ? {
         feed: memory.recentContextSnippets.length + memory.recentPageContexts.length + memory.archiveNotes.length,
@@ -21,27 +26,19 @@ export function ObservationSignalBoard({ memory, runtimeConfig }: ObservationSig
 
   return (
     <section className="panel-card signal-board">
-      <div className="panel-head">
+      <div className="panel-head signal-board__head">
         <div>
           <p className="section-label">Signal Flow</p>
-          <h2>喂养 / 变化 / 产出</h2>
+          <h2>输入 / 变化 / 产出</h2>
         </div>
-        <span className="micro-status">把 Agent 的状态收成一眼能扫完的卡片</span>
+        <span className="micro-status">把 Agent 的状态压成一屏仪表</span>
       </div>
 
-      <div className="detail-grid signal-board__meta">
-        <InfoBlock label="Agent / Avatar" value={`${runtimeConfig?.agentName ?? 'PocketAgent'} · ${avatarMeta.name}`} />
-        <InfoBlock label="LLM" value={`${runtimeConfig?.llmProvider ?? 'mock'} / ${runtimeConfig?.llmModel ?? '未配置'}`} />
-        <InfoBlock label="Image" value={`${runtimeConfig?.imageMode ?? 'mock'} / ${runtimeConfig?.imageModel ?? '未配置'}`} />
-        <InfoBlock label="语气" value={runtimeConfig?.defaultTone ?? 'warm-product-designer'} />
-      </div>
-
-      <div className="signal-rail" aria-hidden="true">
-        <span>输入</span>
-        <span className="signal-rail__arrow">→</span>
-        <span>变化</span>
-        <span className="signal-rail__arrow">→</span>
-        <span>产出</span>
+      <div className="signal-chip-row">
+        <span className="signal-chip">{avatarLabel}</span>
+        <span className="signal-chip">{formatModelProfileSummary(llmProfile)}</span>
+        <span className="signal-chip">{formatModelProfileSummary(imageProfile)}</span>
+        <span className="signal-chip">{describeProfileHealth(llmProfile)} / {describeProfileHealth(imageProfile)}</span>
       </div>
 
       <div className="signal-grid">

@@ -7,21 +7,11 @@ interface ShrinkResult {
   nextTasks: string[];
 }
 
-/**
- * 把产品概念压缩成 3 步 MVP 和后续任务。
- * - 有真实 client → LLM 生成
- * - 无 client → 模板
- */
-export async function runShrinkLight(concept: ProductConcept, client?: LlmClient, hint?: string): Promise<ShrinkResult> {
-  if (client && client.kind !== 'mock') {
-    try {
-      const result = await generateWithLlm(concept, client, hint);
-      if (result) return result;
-    } catch (err) {
-      console.warn('[ShrinkLight] LLM 调用失败，降级到模板:', err);
-    }
-  }
-  return buildTemplate(concept);
+/** 把产品概念压缩成 3 步 MVP 和后续任务，失败抛错。 */
+export async function runShrinkLight(concept: ProductConcept, client: LlmClient, hint?: string): Promise<ShrinkResult> {
+  const result = await generateWithLlm(concept, client, hint);
+  if (result) return result;
+  throw new Error('ShrinkLight 未能生成 MVP 计划');
 }
 
 async function generateWithLlm(concept: ProductConcept, client: LlmClient, hint?: string): Promise<ShrinkResult | null> {
@@ -50,19 +40,4 @@ async function generateWithLlm(concept: ProductConcept, client: LlmClient, hint?
   const parsed = extractJson<ShrinkResult>(response.text);
   if (!parsed || !Array.isArray(parsed.mvpPlan) || !Array.isArray(parsed.nextTasks)) return null;
   return parsed;
-}
-
-function buildTemplate(concept: ProductConcept): ShrinkResult {
-  return {
-    mvpPlan: [
-      '先做一句话输入、结果卡片和本地记忆，不接任何外部 API。',
-      '把网页划词片段通过"放进口袋"送进 background，当成灵感上下文。',
-      '只输出 1 个主方向、1 段图片 Prompt、1 组 MVP 拆解，保证速度和闭环。',
-    ],
-    nextTasks: [
-      `给 ${concept.name} 增加 2 套结果风格模板，测试用户更偏爱哪种表达方式。`,
-      '为反馈按钮增加可解释的风格迁移逻辑，而不只是记录点击。',
-      '接入后端代理，再把本地 mock 规则替换成真实模型调用。',
-    ],
-  };
 }

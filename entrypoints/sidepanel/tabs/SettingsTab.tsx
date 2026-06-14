@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import LineButton from '@/components/LineArt/LineButton';
 import PocketBuddyAvatar from '@/components/PocketBuddyAvatar/PocketBuddyAvatar';
-import type { MemorySummary, RuntimeConfig, UserProfile } from '@/lib/agent/types';
+import type { MemorySummary, ModelProfile, RuntimeConfig, UserProfile } from '@/lib/agent/types';
+import {
+  describeProfileHealth,
+  formatEndpointHost,
+  formatModelProfileSummary,
+  getActiveModelProfile,
+  getModelProfiles,
+  maskApiKey,
+} from '@/lib/agent/model-profiles';
 import { pocketAvatarIds, pocketAvatars } from '@/lib/brand/avatars';
 import { saveProfile } from '@/lib/memory';
 import { createMemoryDeleteMessage, sendRuntimeMessage } from '@/lib/messaging/bus';
@@ -31,6 +39,14 @@ interface ProfileDraft {
   recentThemes: string;
 }
 
+interface ModelProfileDraft {
+  id: string;
+  name: string;
+  apiKey: string;
+  endpoint: string;
+  model: string;
+}
+
 export default function SettingsTab(props: SettingsTabProps) {
   const {
     config,
@@ -45,8 +61,6 @@ export default function SettingsTab(props: SettingsTabProps) {
     busyAction,
     setBusyAction,
   } = props;
-  const [showLlmKey, setShowLlmKey] = useState(false);
-  const [showImageKey, setShowImageKey] = useState(false);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => buildProfileDraft(DEFAULT_PROFILE));
   const [profileDirty, setProfileDirty] = useState(false);
 
@@ -55,14 +69,14 @@ export default function SettingsTab(props: SettingsTabProps) {
     setProfileDraft(buildProfileDraft(memory?.profile ?? DEFAULT_PROFILE));
   }, [memory?.profile.lastUpdated, profileDirty]);
 
-  async function updateField<K extends keyof RuntimeConfig>(key: K, value: RuntimeConfig[K]) {
+  async function updateConfigPatch(patch: Partial<RuntimeConfig>) {
     if (!config || busyAction) return;
 
-    const next = { ...config, [key]: value };
+    const next = { ...config, ...patch };
     setConfig(next);
 
     try {
-      await updateRuntimeConfig({ [key]: value } as Partial<RuntimeConfig>);
+      await updateRuntimeConfig(patch);
       setNoticeText('配置已保存。');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : '保存配置失败');
@@ -131,20 +145,27 @@ export default function SettingsTab(props: SettingsTabProps) {
     return <div className="tab-panel"><p className="soft-text">加载设置中...</p></div>;
   }
 
-  const llmIsReal = config.llmProvider !== 'mock';
-  const imageIsReal = config.imageMode === 'proxy';
   const avatarId = pocketAvatars[config.avatarId] ? config.avatarId : 'yunyu-main';
   const avatarMeta = pocketAvatars[avatarId];
   const currentProfile = memory?.profile ?? DEFAULT_PROFILE;
+  const llmActiveProfile = getActiveModelProfile(config, 'llm');
+  const imageActiveProfile = getActiveModelProfile(config, 'image');
+  const llmProfiles = getModelProfiles(config, 'llm');
+  const imageProfiles = getModelProfiles(config, 'image');
 
   return (
-    <div className="tab-panel">
+    <div className="tab-panel settings-panel">
       <section className="settings-cover">
         <PocketBuddyAvatar avatar={avatarId} mood="warm" size={64} />
         <div className="settings-cover__copy">
-          <p className="section-label">PocketBuddy</p>
-          <h2>设置中心</h2>
-          <p className="soft-text">这里配置模型、身份和头像，其他历史状态请去观察页查看。</p>
+          <p className="section-label">Identity Lab</p>
+          <h2>身份实验室</h2>
+          <p className="soft-text">头像、语气、画像和模型配置都在这里，默认只保留真正会影响输出的内容。</p>
+          <div className="settings-cover__chips">
+            <span className="status-pill status-pill--mocked">{avatarMeta.name}</span>
+            <span className="status-pill status-pill--approved">{llmProfiles.length} 个 LLM 档</span>
+            <span className="status-pill status-pill--spark">{imageProfiles.length} 个图片档</span>
+          </div>
         </div>
       </section>
 
@@ -154,7 +175,7 @@ export default function SettingsTab(props: SettingsTabProps) {
             <p className="section-label">Identity Console</p>
             <h2>Agent 身份</h2>
           </div>
-          <span className="micro-status">会同步到侧边栏标题和头像</span>
+          <span className="micro-status">同步到标题和头像</span>
         </div>
 
         <div className="settings-section">
@@ -163,7 +184,7 @@ export default function SettingsTab(props: SettingsTabProps) {
             type="text"
             className="settings-input"
             value={config.agentName}
-            onChange={(e) => updateField('agentName', e.target.value)}
+            onChange={(e) => updateConfigPatch({ agentName: e.target.value })}
             placeholder="PocketAgent"
             disabled={Boolean(busyAction)}
           />
@@ -175,7 +196,7 @@ export default function SettingsTab(props: SettingsTabProps) {
             type="text"
             className="settings-input"
             value={config.defaultTone}
-            onChange={(e) => updateField('defaultTone', e.target.value)}
+            onChange={(e) => updateConfigPatch({ defaultTone: e.target.value })}
             placeholder="warm-product-designer"
             disabled={Boolean(busyAction)}
           />
@@ -192,7 +213,7 @@ export default function SettingsTab(props: SettingsTabProps) {
                   key={candidateAvatarId}
                   type="button"
                   className={`avatar-card ${active ? 'avatar-card--active' : ''}`}
-                  onClick={() => updateField('avatarId', candidateAvatarId as RuntimeConfig['avatarId'])}
+                  onClick={() => updateConfigPatch({ avatarId: candidateAvatarId as RuntimeConfig['avatarId'] })}
                   disabled={Boolean(busyAction)}
                   aria-pressed={active}
                 >
@@ -219,20 +240,16 @@ export default function SettingsTab(props: SettingsTabProps) {
         <div className="panel-head">
           <div>
             <p className="section-label">Persona Lab</p>
-            <h2>用户画像 / 大雄画像</h2>
+            <h2>用户画像</h2>
           </div>
           <span className="micro-status">
             {memory ? `${memory.counts.profileChanges} 次历史变化` : '等待记忆加载'}
           </span>
         </div>
 
-        <p className="soft-text">
-          这些设置会直接影响 idea 收束、记忆更新和后续的生成结果。每次保存都会留下一个画像历史快照。
-        </p>
-
         <div className="settings-profile-summary">
           <div className="settings-profile-summary__item">
-            <span className="memory-label">当前视觉偏好</span>
+            <span className="memory-label">视觉偏好</span>
             <div className="token-list">
               {(currentProfile.visualLikes.length > 0 ? currentProfile.visualLikes : ['暂无']).map((item) => (
                 <span key={item} className="token-chip">{item}</span>
@@ -240,7 +257,7 @@ export default function SettingsTab(props: SettingsTabProps) {
             </div>
           </div>
           <div className="settings-profile-summary__item">
-            <span className="memory-label">当前产品偏好</span>
+            <span className="memory-label">产品偏好</span>
             <div className="token-list">
               {(currentProfile.productPreferences.length > 0 ? currentProfile.productPreferences : ['暂无']).map((item) => (
                 <span key={item} className="token-chip">{item}</span>
@@ -248,7 +265,7 @@ export default function SettingsTab(props: SettingsTabProps) {
             </div>
           </div>
           <div className="settings-profile-summary__item">
-            <span className="memory-label">当前近期主题</span>
+            <span className="memory-label">近期主题</span>
             <div className="token-list">
               {(currentProfile.recentThemes.length > 0 ? currentProfile.recentThemes : ['暂无']).map((item) => (
                 <span key={item} className="token-chip">{item}</span>
@@ -257,209 +274,109 @@ export default function SettingsTab(props: SettingsTabProps) {
           </div>
         </div>
 
-        <div className="settings-section">
-          <label>视觉偏好</label>
-          <textarea
-            className="settings-input settings-textarea"
-            value={profileDraft.visualLikes}
-            onChange={(e) => updateProfileField('visualLikes', e.target.value)}
-            placeholder="蓝白线条\n口袋感\n轻陪伴"
-            disabled={Boolean(busyAction)}
-          />
-        </div>
+        <details className="settings-advanced">
+          <summary className="settings-advanced__summary">
+            <span>编辑画像细项</span>
+            <span className="micro-status">折叠</span>
+          </summary>
+          <div className="settings-advanced__body">
+            <div className="settings-section">
+              <label>视觉偏好</label>
+              <textarea
+                className="settings-input settings-textarea"
+                value={profileDraft.visualLikes}
+                onChange={(e) => updateProfileField('visualLikes', e.target.value)}
+                placeholder="蓝白线条\n口袋感\n轻陪伴"
+                disabled={Boolean(busyAction)}
+              />
+            </div>
 
-        <div className="settings-section">
-          <label>视觉排斥</label>
-          <textarea
-            className="settings-input settings-textarea"
-            value={profileDraft.visualDislikes}
-            onChange={(e) => updateProfileField('visualDislikes', e.target.value)}
-            placeholder="太花哨\n太重科技感"
-            disabled={Boolean(busyAction)}
-          />
-        </div>
+            <div className="settings-section">
+              <label>视觉排斥</label>
+              <textarea
+                className="settings-input settings-textarea"
+                value={profileDraft.visualDislikes}
+                onChange={(e) => updateProfileField('visualDislikes', e.target.value)}
+                placeholder="太花哨\n太重科技感"
+                disabled={Boolean(busyAction)}
+              />
+            </div>
 
-        <div className="settings-section">
-          <label>语气偏好</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={profileDraft.tonePreference}
-            onChange={(e) => updateProfileField('tonePreference', e.target.value)}
-            placeholder="温暖、直接、产品化"
-            disabled={Boolean(busyAction)}
-          />
-        </div>
+            <div className="settings-section">
+              <label>语气偏好</label>
+              <input
+                type="text"
+                className="settings-input"
+                value={profileDraft.tonePreference}
+                onChange={(e) => updateProfileField('tonePreference', e.target.value)}
+                placeholder="温暖、直接、产品化"
+                disabled={Boolean(busyAction)}
+              />
+            </div>
 
-        <div className="settings-section">
-          <label>产品偏好</label>
-          <textarea
-            className="settings-input settings-textarea"
-            value={profileDraft.productPreferences}
-            onChange={(e) => updateProfileField('productPreferences', e.target.value)}
-            placeholder="轻量工具\n浏览器插件"
-            disabled={Boolean(busyAction)}
-          />
-        </div>
+            <div className="settings-section">
+              <label>产品偏好</label>
+              <textarea
+                className="settings-input settings-textarea"
+                value={profileDraft.productPreferences}
+                onChange={(e) => updateProfileField('productPreferences', e.target.value)}
+                placeholder="轻量工具\n浏览器插件"
+                disabled={Boolean(busyAction)}
+              />
+            </div>
 
-        <div className="settings-section">
-          <label>近期主题</label>
-          <textarea
-            className="settings-input settings-textarea"
-            value={profileDraft.recentThemes}
-            onChange={(e) => updateProfileField('recentThemes', e.target.value)}
-            placeholder="效率工具\n创作辅助\n学习工具"
-            disabled={Boolean(busyAction)}
-          />
-        </div>
+            <div className="settings-section">
+              <label>近期主题</label>
+              <textarea
+                className="settings-input settings-textarea"
+                value={profileDraft.recentThemes}
+                onChange={(e) => updateProfileField('recentThemes', e.target.value)}
+                placeholder="效率工具\n创作辅助\n学习工具"
+                disabled={Boolean(busyAction)}
+              />
+            </div>
 
-        <div className="inline-actions">
-          <LineButton variant="primary" onClick={handleSaveProfile} disabled={!profileDirty || Boolean(busyAction) || !memory}>
-            保存画像
-          </LineButton>
-          <LineButton variant="ghost" onClick={resetProfileDraft} disabled={!profileDirty || Boolean(busyAction)}>
-            恢复当前画像
-          </LineButton>
-        </div>
-      </section>
-
-      <section className="panel-card">
-        <div className="panel-head">
-          <div>
-            <p className="section-label">LLM Provider</p>
-            <h2>LLM 接入</h2>
+            <div className="inline-actions">
+              <LineButton variant="primary" onClick={handleSaveProfile} disabled={!profileDirty || Boolean(busyAction) || !memory}>
+                保存画像
+              </LineButton>
+              <LineButton variant="ghost" onClick={resetProfileDraft} disabled={!profileDirty || Boolean(busyAction)}>
+                恢复当前画像
+              </LineButton>
+            </div>
           </div>
-          <span className="micro-status">{config.llmProvider === 'mock' ? '本地模拟' : '已启用'}</span>
-        </div>
-
-        <div className="settings-section">
-          <label>选择供应商</label>
-          <select
-            className="settings-select"
-            value={config.llmProvider}
-            onChange={(e) => updateField('llmProvider', e.target.value as RuntimeConfig['llmProvider'])}
-          >
-            <option value="mock">Mock（本地模拟，无需 API）</option>
-            <option value="minimax">MiniMax（Anthropic 兼容）</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="custom">自定义端点</option>
-          </select>
-        </div>
-
-        {llmIsReal ? (
-          <>
-            <div className="settings-section">
-              <label>模型名</label>
-              <input
-                type="text"
-                className="settings-input"
-                value={config.llmModel}
-                onChange={(e) => updateField('llmModel', e.target.value)}
-                placeholder="MiniMax-M2.7"
-                disabled={Boolean(busyAction)}
-              />
-            </div>
-            <div className="settings-section">
-              <label>API Key</label>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <input
-                  type={showLlmKey ? 'text' : 'password'}
-                  className="settings-input"
-                  style={{ flex: 1 }}
-                  value={config.llmApiKey}
-                  onChange={(e) => updateField('llmApiKey', e.target.value)}
-                  placeholder="sk-..."
-                  disabled={Boolean(busyAction)}
-                />
-                <LineButton variant="ghost" onClick={() => setShowLlmKey(!showLlmKey)} disabled={Boolean(busyAction)}>
-                  {showLlmKey ? '隐藏' : '显示'}
-                </LineButton>
-              </div>
-            </div>
-            <div className="settings-section">
-              <label>API 端点</label>
-              <input
-                type="text"
-                className="settings-input"
-                value={config.llmEndpoint}
-                onChange={(e) => updateField('llmEndpoint', e.target.value)}
-                placeholder="https://api.minimaxi.com/anthropic"
-                disabled={Boolean(busyAction)}
-              />
-            </div>
-          </>
-        ) : (
-          <p className="soft-text">当前使用本地 Mock Agent，不会调用任何外部 API。</p>
-        )}
+        </details>
       </section>
 
-      <section className="panel-card">
-        <div className="panel-head">
-          <div>
-            <p className="section-label">Image Provider</p>
-            <h2>图片生成</h2>
-          </div>
-          <span className="micro-status">{config.imageMode === 'mock' ? '本地模拟' : '已启用'}</span>
-        </div>
+      <ModelProfileSection
+        kind="llm"
+        sectionLabel="LLM Profile Deck"
+        title="LLM 配置档"
+        summary="默认激活真实模型，必要时再切换到别的档。"
+        profiles={llmProfiles}
+        activeProfile={llmActiveProfile}
+        activeProfileId={config.activeLlmProfileId}
+        busyAction={busyAction}
+        disabled={Boolean(busyAction)}
+        onUpdate={updateConfigPatch}
+        setErrorText={setErrorText}
+        setNoticeText={setNoticeText}
+      />
 
-        <div className="settings-section">
-          <label>选择供应商</label>
-          <select
-            className="settings-select"
-            value={config.imageMode}
-            onChange={(e) => updateField('imageMode', e.target.value as RuntimeConfig['imageMode'])}
-          >
-            <option value="mock">Mock（仅生成 Prompt 文本）</option>
-            <option value="proxy">真实生成（GPT Image）</option>
-          </select>
-        </div>
-
-        {imageIsReal ? (
-          <>
-            <div className="settings-section">
-              <label>模型名</label>
-              <input
-                type="text"
-                className="settings-input"
-                value={config.imageModel}
-                onChange={(e) => updateField('imageModel', e.target.value)}
-                placeholder="gpt-image-2"
-                disabled={Boolean(busyAction)}
-              />
-            </div>
-            <div className="settings-section">
-              <label>API Key</label>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <input
-                  type={showImageKey ? 'text' : 'password'}
-                  className="settings-input"
-                  style={{ flex: 1 }}
-                  value={config.imageApiKey}
-                  onChange={(e) => updateField('imageApiKey', e.target.value)}
-                  placeholder="sk-..."
-                  disabled={Boolean(busyAction)}
-                />
-                <LineButton variant="ghost" onClick={() => setShowImageKey(!showImageKey)} disabled={Boolean(busyAction)}>
-                  {showImageKey ? '隐藏' : '显示'}
-                </LineButton>
-              </div>
-            </div>
-            <div className="settings-section">
-              <label>API 端点</label>
-              <input
-                type="text"
-                className="settings-input"
-                value={config.imageProxyEndpoint}
-                onChange={(e) => updateField('imageProxyEndpoint', e.target.value)}
-                placeholder="https://api.apimart.ai/v1/images/generations"
-                disabled={Boolean(busyAction)}
-              />
-            </div>
-          </>
-        ) : (
-          <p className="soft-text">当前使用 Mock，仅生成 Prompt 文本，不调用外部 API。</p>
-        )}
-      </section>
+      <ModelProfileSection
+        kind="image"
+        sectionLabel="Image Profile Deck"
+        title="图片配置档"
+        summary="这里直接连到真实生图端点，默认只保留一个最常用档。"
+        profiles={imageProfiles}
+        activeProfile={imageActiveProfile}
+        activeProfileId={config.activeImageProfileId}
+        busyAction={busyAction}
+        disabled={Boolean(busyAction)}
+        onUpdate={updateConfigPatch}
+        setErrorText={setErrorText}
+        setNoticeText={setNoticeText}
+      />
 
       <section className="panel-card">
         <div className="panel-head">
@@ -473,12 +390,341 @@ export default function SettingsTab(props: SettingsTabProps) {
             清除所有本地数据
           </LineButton>
         </div>
-        <p className="soft-text" style={{ marginTop: 4 }}>
-          所有数据仅存储在本地浏览器中。API Key 只保存在本地，不会上传到第三方服务器。
-        </p>
+        <p className="soft-text" style={{ marginTop: 4 }}>本地保存，模型配置和 API Key 也只留在本机。</p>
       </section>
     </div>
   );
+}
+
+function ModelProfileSection(props: {
+  kind: 'llm' | 'image';
+  sectionLabel: string;
+  title: string;
+  summary: string;
+  profiles: ModelProfile[];
+  activeProfile: ModelProfile | null;
+  activeProfileId: string | null;
+  busyAction: string;
+  disabled: boolean;
+  onUpdate: (patch: Partial<RuntimeConfig>) => Promise<void>;
+  setErrorText: Dispatch<SetStateAction<string>>;
+  setNoticeText: Dispatch<SetStateAction<string>>;
+}) {
+  const {
+    kind,
+    sectionLabel,
+    title,
+    summary,
+    profiles,
+    activeProfile,
+    activeProfileId,
+    busyAction,
+    disabled,
+    onUpdate,
+    setErrorText,
+    setNoticeText,
+  } = props;
+
+  const [selectedId, setSelectedId] = useState<string>(activeProfile?.id ?? profiles[0]?.id ?? '');
+  const [draft, setDraft] = useState<ModelProfileDraft>(() => createProfileDraft(kind, activeProfile ?? profiles[0] ?? null));
+  const [showKey, setShowKey] = useState(false);
+
+  useEffect(() => {
+    const current = profiles.find((profile) => profile.id === selectedId)
+      ?? activeProfile
+      ?? profiles[0]
+      ?? null;
+    if (!current) return;
+    if (current.id !== selectedId) {
+      setSelectedId(current.id);
+    }
+    setDraft(profileToDraft(current));
+  }, [activeProfile, profiles, selectedId]);
+
+  async function handleSave() {
+    if (disabled) return;
+
+    const nextProfile: ModelProfile = {
+      id: draft.id,
+      name: draft.name.trim() || defaultProfileName(kind),
+      apiKey: draft.apiKey.trim(),
+      endpoint: draft.endpoint.trim(),
+      model: draft.model.trim(),
+    };
+    const exists = profiles.some((profile) => profile.id === nextProfile.id);
+    const nextProfiles = exists
+      ? profiles.map((profile) => (profile.id === nextProfile.id ? nextProfile : profile))
+      : [...profiles, nextProfile];
+    const nextActiveId = activeProfileId && nextProfiles.some((profile) => profile.id === activeProfileId)
+      ? activeProfileId
+      : nextProfiles[0]?.id ?? nextProfile.id;
+
+    setErrorText('');
+    try {
+      await onUpdate(kind === 'llm'
+        ? { llmProfiles: nextProfiles, activeLlmProfileId: nextActiveId }
+        : { imageProfiles: nextProfiles, activeImageProfileId: nextActiveId });
+      setSelectedId(nextProfile.id);
+      setDraft(profileToDraft(nextProfile));
+      setNoticeText(`${title}已保存。`);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : `${title}保存失败`);
+    }
+  }
+
+  async function handleActivate() {
+    if (disabled || !draft.id) return;
+    try {
+      await onUpdate(kind === 'llm'
+        ? { activeLlmProfileId: draft.id }
+        : { activeImageProfileId: draft.id });
+      setNoticeText(`${title}已切换为活跃档。`);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : `${title}切换失败`);
+    }
+  }
+
+  async function handleDuplicate() {
+    if (disabled) return;
+    const seed = profiles.find((profile) => profile.id === selectedId) ?? activeProfile ?? profiles[0] ?? null;
+    const copy = createProfileDraft(kind, seed);
+    const duplicate: ModelProfile = {
+      id: copy.id,
+      name: copy.name,
+      apiKey: copy.apiKey,
+      endpoint: copy.endpoint,
+      model: copy.model,
+    };
+    const nextProfiles = [...profiles, duplicate];
+    try {
+      await onUpdate(kind === 'llm'
+        ? { llmProfiles: nextProfiles, activeLlmProfileId: activeProfileId }
+        : { imageProfiles: nextProfiles, activeImageProfileId: activeProfileId });
+      setSelectedId(duplicate.id);
+      setDraft(copy);
+      setNoticeText(`${title}副本已创建。`);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : `${title}复制失败`);
+    }
+  }
+
+  async function handleDelete() {
+    if (disabled || profiles.length <= 1) return;
+    const currentId = selectedId || activeProfileId || profiles[0]?.id;
+    if (!currentId) return;
+    const remaining = profiles.filter((profile) => profile.id !== currentId);
+    const nextActiveId = remaining.some((profile) => profile.id === activeProfileId)
+      ? activeProfileId
+      : remaining[0]?.id ?? null;
+    try {
+      await onUpdate(kind === 'llm'
+        ? { llmProfiles: remaining, activeLlmProfileId: nextActiveId }
+        : { imageProfiles: remaining, activeImageProfileId: nextActiveId });
+      const nextSelection = remaining.find((profile) => profile.id === nextActiveId) ?? remaining[0] ?? null;
+      if (nextSelection) {
+        setSelectedId(nextSelection.id);
+        setDraft(profileToDraft(nextSelection));
+      }
+      setNoticeText(`${title}已删除。`);
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : `${title}删除失败`);
+    }
+  }
+
+  function handleResetDraft() {
+    const current = profiles.find((profile) => profile.id === selectedId) ?? activeProfile ?? profiles[0] ?? null;
+    if (!current) return;
+    setDraft(profileToDraft(current));
+    setShowKey(false);
+  }
+
+  const selectionBadges = [
+    `${profiles.length} 个档`,
+    activeProfile ? `${activeProfile.model || '未命名模型'}` : '未激活',
+    activeProfile ? formatEndpointHost(activeProfile.endpoint) : '未配置端点',
+  ];
+
+  return (
+    <section className="panel-card model-profile-card">
+      <div className="panel-head">
+        <div>
+          <p className="section-label">{sectionLabel}</p>
+          <h2>{title}</h2>
+          <p className="soft-text">{summary}</p>
+        </div>
+        <span className={`status-pill status-pill--${activeProfile ? 'approved' : 'mocked'}`}>
+          {describeProfileHealth(activeProfile)}
+        </span>
+      </div>
+
+      <div className="profile-summary-row">
+        {selectionBadges.map((badge) => (
+          <span key={badge} className="token-chip">{badge}</span>
+        ))}
+      </div>
+
+      <div className="profile-rail" role="tablist" aria-label={`${title} 配置档`}>
+        {profiles.map((profile) => {
+          const active = profile.id === activeProfileId;
+          const selected = profile.id === selectedId;
+          return (
+            <button
+              key={profile.id}
+              type="button"
+              className={`profile-rail__chip ${selected ? 'profile-rail__chip--selected' : ''} ${active ? 'profile-rail__chip--active' : ''}`}
+              onClick={() => {
+                setSelectedId(profile.id);
+                setDraft(profileToDraft(profile));
+                setShowKey(false);
+              }}
+              disabled={disabled}
+              aria-pressed={selected}
+            >
+              <strong>{profile.name || defaultProfileName(kind)}</strong>
+              <span>{formatModelProfileSummary(profile)}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="profile-metrics">
+        <div className="profile-metric">
+          <span className="memory-label">当前档</span>
+          <strong>{draft.name || defaultProfileName(kind)}</strong>
+        </div>
+        <div className="profile-metric">
+          <span className="memory-label">模型</span>
+          <strong>{draft.model || '未配置'}</strong>
+        </div>
+        <div className="profile-metric">
+          <span className="memory-label">端点</span>
+          <strong>{formatEndpointHost(draft.endpoint)}</strong>
+        </div>
+        <div className="profile-metric">
+          <span className="memory-label">密钥</span>
+          <strong>{maskApiKey(draft.apiKey)}</strong>
+        </div>
+      </div>
+
+      <div className="profile-editor">
+        <div className="settings-section">
+          <label>配置档名称</label>
+          <input
+            type="text"
+            className="settings-input"
+            value={draft.name}
+            onChange={(e) => setDraft((current) => ({ ...current, name: e.target.value }))}
+            placeholder={defaultProfileName(kind)}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="settings-section">
+          <label>模型名</label>
+          <input
+            type="text"
+            className="settings-input"
+            value={draft.model}
+            onChange={(e) => setDraft((current) => ({ ...current, model: e.target.value }))}
+            placeholder={kind === 'llm' ? 'MiniMax-M3' : 'gpt-image-2'}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="settings-section">
+          <label>API 端点</label>
+          <input
+            type="text"
+            className="settings-input"
+            value={draft.endpoint}
+            onChange={(e) => setDraft((current) => ({ ...current, endpoint: e.target.value }))}
+            placeholder={kind === 'llm'
+              ? 'https://api.minimaxi.com/anthropic'
+              : 'https://api.apimart.ai/v1/images/generations'}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="settings-section">
+          <label>API Key</label>
+          <div className="inline-field">
+            <input
+              type={showKey ? 'text' : 'password'}
+              className="settings-input"
+              style={{ flex: 1 }}
+              value={draft.apiKey}
+              onChange={(e) => setDraft((current) => ({ ...current, apiKey: e.target.value }))}
+              placeholder="sk-..."
+              disabled={disabled}
+            />
+            <LineButton variant="ghost" onClick={() => setShowKey((current) => !current)} disabled={disabled}>
+              {showKey ? '隐藏' : '显示'}
+            </LineButton>
+          </div>
+        </div>
+      </div>
+
+      <div className="inline-actions">
+        <LineButton variant="primary" onClick={handleSave} disabled={disabled}>
+          保存档
+        </LineButton>
+        <LineButton variant="ghost" onClick={handleActivate} disabled={disabled}>
+          设为活跃
+        </LineButton>
+        <LineButton variant="ghost" onClick={handleDuplicate} disabled={disabled}>
+          复制一档
+        </LineButton>
+        <LineButton variant="ghost" onClick={handleDelete} disabled={disabled || profiles.length <= 1}>
+          删除当前
+        </LineButton>
+        <LineButton variant="ghost" onClick={handleResetDraft} disabled={disabled}>
+          恢复选中
+        </LineButton>
+      </div>
+    </section>
+  );
+}
+
+function createProfileDraft(kind: 'llm' | 'image', seed: ModelProfile | null): ModelProfileDraft {
+  if (seed) {
+    return {
+      id: crypto.randomUUID(),
+      name: `${seed.name || defaultProfileName(kind)} 副本`,
+      apiKey: seed.apiKey,
+      endpoint: seed.endpoint,
+      model: seed.model,
+    };
+  }
+
+  return kind === 'llm'
+    ? {
+        id: crypto.randomUUID(),
+        name: 'MiniMax 副本',
+        apiKey: '',
+        endpoint: 'https://api.minimaxi.com/anthropic',
+        model: 'MiniMax-M3',
+      }
+    : {
+        id: crypto.randomUUID(),
+        name: 'GPT Image 副本',
+        apiKey: '',
+        endpoint: 'https://api.apimart.ai/v1/images/generations',
+        model: 'gpt-image-2',
+      };
+}
+
+function profileToDraft(profile: ModelProfile): ModelProfileDraft {
+  return {
+    id: profile.id,
+    name: profile.name,
+    apiKey: profile.apiKey,
+    endpoint: profile.endpoint,
+    model: profile.model,
+  };
+}
+
+function defaultProfileName(kind: 'llm' | 'image'): string {
+  return kind === 'llm' ? 'LLM 配置档' : '图片配置档';
 }
 
 function buildProfileDraft(profile: UserProfile): ProfileDraft {

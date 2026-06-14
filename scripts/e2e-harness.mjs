@@ -20,8 +20,11 @@ const EXT = join(ROOT, '.output/chrome-mv3').replace(/\\/g, '/');
 const PROFILE = join(ROOT, '.test-profile-harness');
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const VIRTUEA_ENV = join(ROOT, '..', 'Virtuea', '.env');
+const BUNDLED_RUNTIME_CONFIG_FILE = join(ROOT, 'config', 'bundled-runtime-config.json');
 
 if (!existsSync(EXT)) { console.error(`❌ 找不到 ${EXT}，请先 npm run build`); process.exit(1); }
+
+const bundledRuntimeConfig = JSON.parse(readFileSync(BUNDLED_RUNTIME_CONFIG_FILE, 'utf8'));
 
 // 凭据
 const env = { ...process.env };
@@ -31,12 +34,14 @@ if (!env.MINIMAX_API_KEY && existsSync(VIRTUEA_ENV)) {
     if (m && !env[m[1]]) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
   }
 }
-if (!env.MINIMAX_API_KEY) {
-  console.error('❌ 缺少 MINIMAX_API_KEY（需真实 LLM 才能验证补丁注入）');
+const llmProfile = getActiveProfile(bundledRuntimeConfig.llmProfiles, bundledRuntimeConfig.activeLlmProfileId);
+const MODEL = env.MINIMAX_TEXT_MODEL || llmProfile?.model || 'MiniMax-M3';
+const ENDPOINT = env.MINIMAX_API_BASE_URL || llmProfile?.endpoint || 'https://api.minimaxi.com/anthropic';
+const API_KEY = env.MINIMAX_API_KEY || llmProfile?.apiKey;
+if (!API_KEY) {
+  console.error('❌ 缺少 LLM API Key（请检查 bundled-runtime-config.json 或环境变量）');
   process.exit(1);
 }
-const MODEL = env.MINIMAX_TEXT_MODEL || 'MiniMax-M3';
-const ENDPOINT = env.MINIMAX_API_BASE_URL || 'https://api.minimaxi.com/anthropic';
 console.log(`✅ 凭据已加载 | LLM: ${MODEL}`);
 
 // 注入：真实配置 + 一个 pending 补丁
@@ -46,9 +51,9 @@ const SEED = {
     agentName: 'PocketAgent', defaultTone: 'warm-product-designer', avatarId: 'yunyu-main',
     maxSelectionChars: 280, maxMainTextChars: 3000, maxPageExcerptChars: 500,
     futurePermissionMode: 'all_urls-dev',
-    llmProvider: 'minimax', llmModel: MODEL, llmApiKey: env.MINIMAX_API_KEY, llmEndpoint: ENDPOINT,
-    imageMode: 'mock', imageModel: 'gpt-image-2',
-    imageProxyEndpoint: 'https://api.apimart.ai/v1/images/generations', imageApiKey: '',
+    llmProfiles: [{ id: 'llm-test', name: '测试模型', apiKey: API_KEY, endpoint: ENDPOINT, model: MODEL }],
+    activeLlmProfileId: 'llm-test',
+    imageProfiles: [], activeImageProfileId: null,
   },
   harnessPatches: [{
     id: 'patch-test-1', target: 'prompt', scope: 'runtime-config',
@@ -128,3 +133,8 @@ if (A) console.log('   相关日志:', logs.filter((l) => l.includes('自学习'
 const pass = A && B;
 console.log(pass ? '\n🎉 harness 自学习闭环验证通过：补丁真正影响了下次输出。' : '\n⚠️ 闭环未完整，见上。');
 process.exit(pass ? 0 : 1);
+
+function getActiveProfile(profiles, activeProfileId) {
+  if (!Array.isArray(profiles) || profiles.length === 0) return null;
+  return profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0];
+}

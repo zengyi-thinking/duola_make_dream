@@ -40,23 +40,27 @@ export default function ObservationTab(props: ObservationTabProps) {
   return (
     <div className="tab-panel">
       <ObservationOverview memory={memory} runtimeConfig={runtimeConfig} />
-      <ObservationTimelineSection memory={memory} />
-      <ObservationProfileSection memory={memory} />
-      <ObservationBackupSection
-        memory={memory}
-        busyAction={busyAction}
-        setBusyAction={setBusyAction}
-        setErrorText={setErrorText}
-        setNoticeText={setNoticeText}
-        refreshWorkspace={refreshWorkspace}
-        resetWorkspaceState={resetWorkspaceState}
-      />
-      <ObservationCompareSection
-        memory={memory}
-        artifactHistory={artifactHistory}
-        imageHistory={imageHistory}
-        onCopy={onCopy}
-      />
+      <div className="observation-grid">
+        <ObservationTimelineSection memory={memory} />
+        <ObservationProfileSection memory={memory} />
+      </div>
+      <div className="observation-grid">
+        <ObservationBackupSection
+          memory={memory}
+          busyAction={busyAction}
+          setBusyAction={setBusyAction}
+          setErrorText={setErrorText}
+          setNoticeText={setNoticeText}
+          refreshWorkspace={refreshWorkspace}
+          resetWorkspaceState={resetWorkspaceState}
+        />
+        <ObservationCompareSection
+          memory={memory}
+          artifactHistory={artifactHistory}
+          imageHistory={imageHistory}
+          onCopy={onCopy}
+        />
+      </div>
       <ObservationLibrarySection
         memory={memory}
         busyAction={busyAction}

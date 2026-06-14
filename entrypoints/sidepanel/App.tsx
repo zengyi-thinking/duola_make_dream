@@ -36,7 +36,7 @@ type AppTab = 'creative' | 'reading' | 'archive' | 'observation' | 'settings';
 const TAB_DEFS: Array<{ key: AppTab; label: string }> = [
   { key: 'creative', label: '发明' },
   { key: 'reading', label: '喂养' },
-  { key: 'archive', label: '归档' },
+  { key: 'archive', label: '记忆' },
   { key: 'observation', label: '观察' },
   { key: 'settings', label: '设置' },
 ];

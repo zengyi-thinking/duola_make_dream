@@ -30,8 +30,8 @@ export default function ObservationOverview({ memory, runtimeConfig }: Observati
       <section className="observation-hero panel-card">
         <div className="observation-hero__copy">
           <p className="section-label">Observation</p>
-          <h2>观察 Agent 怎么变</h2>
-          <p className="soft-text">这里看画像、补丁、备份和历史回放。它告诉我们，喂进去的东西到底有没有改变 Agent。</p>
+          <h2>Agent 在变什么</h2>
+          <p className="soft-text">看输入、变化和产出三条线，判断这个 Agent 是否真的在学。</p>
           <div className="observation-hero__meta">
             <span className="status-pill status-pill--mocked">{runtimeConfig?.agentName ?? 'PocketAgent'}</span>
             <span className="status-pill status-pill--spark">{avatarMeta.name}</span>
@@ -42,26 +42,10 @@ export default function ObservationOverview({ memory, runtimeConfig }: Observati
       </section>
 
       <section className="status-grid">
-        <StatCard
-          label="创意"
-          value={counts.ideas}
-          hint={`产物 ${memory?.counts.artifacts ?? 0}`}
-        />
-        <StatCard
-          label="喂养"
-          value={counts.feed}
-          hint={`候选记忆 ${memory?.counts.memoryCandidates ?? 0}`}
-        />
-        <StatCard
-          label="画像"
-          value={counts.profile}
-          hint={`快照 ${memory?.counts.backups ?? 0}`}
-        />
-        <StatCard
-          label="补丁"
-          value={counts.patch}
-          hint={`历史 ${memory?.counts.feedback ?? 0}`}
-        />
+        <StatCard label="创意" value={counts.ideas} hint={`产物 ${memory?.counts.artifacts ?? 0}`} />
+        <StatCard label="喂养" value={counts.feed} hint={`候选记忆 ${memory?.counts.memoryCandidates ?? 0}`} />
+        <StatCard label="画像" value={counts.profile} hint={`快照 ${memory?.counts.backups ?? 0}`} />
+        <StatCard label="补丁" value={counts.patch} hint={`反馈 ${memory?.counts.feedback ?? 0}`} />
       </section>
 
       <ObservationSignalBoard memory={memory} runtimeConfig={runtimeConfig} />

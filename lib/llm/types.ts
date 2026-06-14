@@ -19,8 +19,6 @@ export interface LlmResponse {
   text: string;
   /** 原始响应，调试用 */
   raw?: unknown;
-  /** 本次调用是否真实命中外部 API（mock 时为 false） */
-  fromLiveApi: boolean;
 }
 
 export interface LlmClient {
