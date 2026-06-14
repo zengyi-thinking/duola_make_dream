@@ -30,3 +30,7 @@ Thumbs.db
 
 # Local dev config（inject-dev-config.mjs 从 .env 生成的 API Key 副本，不入库）
 config/local-runtime-config.json
+
+# Tool artifacts（codegraph 索引、cursor 编辑器缓存）
+.codegraph/
+.cursor/
