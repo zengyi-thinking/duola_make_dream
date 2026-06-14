@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import type { StateBackup, StorageSchema, StorageSnapshot } from './schema';
 import type { ModelProfile } from '@/lib/agent/types';
+import type { PocketAvatarId } from '@/lib/brand/avatars';
 import { STORAGE_KEYS, createBundledRuntimeConfig, createDefaultStorageState } from './schema';
 import type {
   GeneratedImageRecord,
@@ -171,7 +172,17 @@ function normalizeRuntimeConfig(
     activeLlmProfileId: resolveActiveProfileId(raw?.activeLlmProfileId, llmProfiles, bundled.activeLlmProfileId),
     imageProfiles,
     activeImageProfileId: resolveActiveProfileId(raw?.activeImageProfileId, imageProfiles, bundled.activeImageProfileId),
+    voiceOverrides: normalizeVoiceOverrides(raw?.voiceOverrides),
   };
+}
+
+function normalizeVoiceOverrides(value: unknown): Partial<Record<PocketAvatarId, string>> {
+  if (!value || typeof value !== 'object') return {};
+  const result: Partial<Record<PocketAvatarId, string>> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === 'string') result[k as PocketAvatarId] = v;
+  }
+  return result;
 }
 
 function buildLegacyProfile(profile: ModelProfile): ModelProfile | null {

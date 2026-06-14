@@ -254,6 +254,9 @@ export interface RuntimeConfig {
   // 图片生成配置档
   imageProfiles: ModelProfile[];
   activeImageProfileId: string | null;
+
+  /** 四人格 personaPrompt 用户覆盖（key=avatarId）；buildVoiceHint 注入时非空覆盖默认人格 */
+  voiceOverrides: Partial<Record<PocketAvatarId, string>>;
 }
 
 export interface MemorySummary {

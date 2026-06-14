@@ -12,6 +12,7 @@ import {
   maskApiKey,
 } from '@/lib/agent/model-profiles';
 import { pocketAvatarIds, pocketAvatars } from '@/lib/brand/avatars';
+import { getVoice } from '@/lib/agent/voices';
 import { saveProfile } from '@/lib/memory';
 import {
   createMemoryDeleteMessage,
@@ -62,6 +63,8 @@ export default function SettingsPage() {
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => buildProfileDraft(DEFAULT_PROFILE));
   const [profileDirty, setProfileDirty] = useState(false);
   const [skills, setSkills] = useState<SkillDefinition[]>([]);
+  const [voiceDraft, setVoiceDraft] = useState('');
+  const [voiceDirty, setVoiceDirty] = useState(false);
 
   useEffect(() => {
     if (profileDirty) return;
@@ -73,6 +76,13 @@ export default function SettingsPage() {
     void loadSkills();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (voiceDirty) return;
+    const aid = config?.avatarId ?? 'yunyu-main';
+    setVoiceDraft(config?.voiceOverrides?.[aid] ?? getVoice(aid).personaPrompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config?.avatarId, config?.voiceOverrides, voiceDirty]);
 
   async function loadSkills() {
     try {
@@ -174,6 +184,20 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveVoice() {
+    if (!config || busyAction) return;
+    const aid = config.avatarId;
+    const overrides: RuntimeConfig['voiceOverrides'] = { ...(config.voiceOverrides ?? {}) };
+    const trimmed = voiceDraft.trim();
+    if (trimmed && trimmed !== getVoice(aid).personaPrompt) {
+      overrides[aid] = trimmed;
+    } else {
+      delete overrides[aid];
+    }
+    await updateConfigPatch({ voiceOverrides: overrides });
+    setVoiceDirty(false);
+  }
+
   if (!config) {
     return <div className="tab-panel"><p className="soft-text">加载设置中...</p></div>;
   }
@@ -255,6 +279,27 @@ export default function SettingsPage() {
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <label>人格设定 · {getVoice(avatarId).name}</label>
+          <p className="micro-copy">编辑后会覆盖该人格的默认 personaPrompt，注入到所有加工链路的 system prompt。</p>
+          <textarea
+            className="settings-input settings-textarea"
+            value={voiceDraft}
+            onChange={(e) => { setVoiceDraft(e.target.value); setVoiceDirty(true); }}
+            placeholder={getVoice(avatarId).personaPrompt}
+            disabled={Boolean(busyAction)}
+            rows={4}
+          />
+          <div className="inline-actions">
+            <LineButton variant="primary" onClick={handleSaveVoice} disabled={Boolean(busyAction)}>
+              保存人格
+            </LineButton>
+            <LineButton variant="ghost" onClick={() => { setVoiceDraft(getVoice(avatarId).personaPrompt); setVoiceDirty(true); }} disabled={Boolean(busyAction)}>
+              恢复默认文案
+            </LineButton>
           </div>
         </div>
       </section>

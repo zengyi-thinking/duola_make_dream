@@ -102,7 +102,7 @@ async function buildContext(
   const voice = getVoice(runtimeConfig.avatarId);
   const patches = await getActiveHarnessPatches();
   const hint = [
-    buildVoiceHint(voice),
+    buildVoiceHint(voice, runtimeConfig.voiceOverrides?.[voice.id]),
     buildToneHint(runtimeConfig.defaultTone),
     buildHarnessHint(patches),
   ].filter(Boolean).join('\n');
