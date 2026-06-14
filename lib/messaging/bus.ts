@@ -30,6 +30,14 @@ import type {
   MindmapGenerateRequest,
   PageAnalyzeCurrentRequest,
   PageReadCurrentRequest,
+  PocketGraphLoadRequest,
+  PocketGraphSaveRequest,
+  PocketGraphDeleteRequest,
+  PocketSkillListRequest,
+  PocketSkillSaveRequest,
+  PocketSkillDeleteRequest,
+  PocketExperienceListRequest,
+  PocketModelTestRequest,
 } from './types';
 
 function createRequestId(type: MessageType): string {
@@ -300,6 +308,53 @@ export function createMemoryRecallMessage(
     requestId: createRequestId('memory.recall'),
     source,
     payload: limit !== undefined ? { query, limit } : { query },
+  };
+}
+
+export function createPocketGraphLoadMessage(source: MessageSource = 'popup'): PocketGraphLoadRequest {
+  return { type: 'pocket.graph.load', requestId: createRequestId('pocket.graph.load'), source, payload: {} };
+}
+
+export function createPocketGraphSaveMessage(
+  view: PocketGraphSaveRequest['payload']['view'],
+  source: MessageSource = 'popup',
+): PocketGraphSaveRequest {
+  return { type: 'pocket.graph.save', requestId: createRequestId('pocket.graph.save'), source, payload: { view } };
+}
+
+export function createPocketGraphDeleteMessage(viewId: string, source: MessageSource = 'popup'): PocketGraphDeleteRequest {
+  return { type: 'pocket.graph.delete', requestId: createRequestId('pocket.graph.delete'), source, payload: { viewId } };
+}
+
+export function createPocketSkillListMessage(source: MessageSource = 'popup'): PocketSkillListRequest {
+  return { type: 'pocket.skill.list', requestId: createRequestId('pocket.skill.list'), source, payload: {} };
+}
+
+export function createPocketSkillSaveMessage(
+  skill: PocketSkillSaveRequest['payload']['skill'],
+  source: MessageSource = 'popup',
+): PocketSkillSaveRequest {
+  return { type: 'pocket.skill.save', requestId: createRequestId('pocket.skill.save'), source, payload: { skill } };
+}
+
+export function createPocketSkillDeleteMessage(skillId: string, source: MessageSource = 'popup'): PocketSkillDeleteRequest {
+  return { type: 'pocket.skill.delete', requestId: createRequestId('pocket.skill.delete'), source, payload: { skillId } };
+}
+
+export function createPocketExperienceListMessage(source: MessageSource = 'popup'): PocketExperienceListRequest {
+  return { type: 'pocket.experience.list', requestId: createRequestId('pocket.experience.list'), source, payload: {} };
+}
+
+export function createPocketModelTestMessage(
+  kind: 'llm' | 'image',
+  profileId?: string,
+  source: MessageSource = 'popup',
+): PocketModelTestRequest {
+  return {
+    type: 'pocket.model.test',
+    requestId: createRequestId('pocket.model.test'),
+    source,
+    payload: profileId ? { kind, profileId } : { kind },
   };
 }
 

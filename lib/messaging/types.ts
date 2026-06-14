@@ -3,6 +3,7 @@ import type {
   ArchiveNoteSaveResult,
   ArtifactListResult,
   ContextCaptureResult,
+  ExperienceRecord,
   FeedbackAction,
   FeedbackRecordResult,
   IdeaSubmitResult,
@@ -19,6 +20,9 @@ import type {
 } from '@/lib/agent/types';
 import type { ImageGenerationSourceType, ImageGenerationStyle } from '@/lib/image/types';
 import type { MindmapRecord } from '@/lib/mindmap/types';
+import type { GraphView } from '@/lib/graph/types';
+import type { SkillDefinition } from '@/lib/skills/types';
+import type { ConnectionTestResult } from '@/lib/model/types';
 
 export type MessageSource = 'popup' | 'content' | 'background';
 
@@ -46,7 +50,15 @@ export type ExtensionMessageType =
   | 'memory.candidate.list'
   | 'memory.candidate.delete'
   | 'memory.recall'
-  | 'harness.reEvaluate';
+  | 'harness.reEvaluate'
+  | 'pocket.graph.load'
+  | 'pocket.graph.save'
+  | 'pocket.graph.delete'
+  | 'pocket.skill.list'
+  | 'pocket.skill.save'
+  | 'pocket.skill.delete'
+  | 'pocket.experience.list'
+  | 'pocket.model.test';
 
 export type MessageType = ExtensionMessageType;
 
@@ -75,7 +87,10 @@ export type MemoryDeleteScope =
   | 'approvedMemories'
   | 'generatedImages'
   | 'generatedMindmaps'
-  | 'harnessPatches';
+  | 'harnessPatches'
+  | 'graphViews'
+  | 'skillRegistry'
+  | 'experienceRecords';
 
 export type IdeaSubmitRequest = MessageEnvelope<
   'idea.submit',
@@ -229,6 +244,20 @@ export interface HarnessReEvaluateResult {
   evaluations: Array<{ patchId: string; score: number; source: string }>;
 }
 
+// ---------- Pocket Graph Agent 新增消息 ----------
+
+export type PocketGraphLoadRequest = MessageEnvelope<'pocket.graph.load', Record<string, never>>;
+export type PocketGraphSaveRequest = MessageEnvelope<'pocket.graph.save', { view: GraphView }>;
+export type PocketGraphDeleteRequest = MessageEnvelope<'pocket.graph.delete', { viewId: string }>;
+export type PocketSkillListRequest = MessageEnvelope<'pocket.skill.list', Record<string, never>>;
+export type PocketSkillSaveRequest = MessageEnvelope<'pocket.skill.save', { skill: SkillDefinition }>;
+export type PocketSkillDeleteRequest = MessageEnvelope<'pocket.skill.delete', { skillId: string }>;
+export type PocketExperienceListRequest = MessageEnvelope<'pocket.experience.list', Record<string, never>>;
+export type PocketModelTestRequest = MessageEnvelope<
+  'pocket.model.test',
+  { kind: 'llm' | 'image'; profileId?: string }
+>;
+
 export type AppMessage =
   | IdeaSubmitRequest
   | FeedbackRecordRequest
@@ -253,7 +282,15 @@ export type AppMessage =
   | MemoryCandidateListRequest
   | MemoryCandidateDeleteRequest
   | MemoryRecallRequest
-  | HarnessReEvaluateRequest;
+  | HarnessReEvaluateRequest
+  | PocketGraphLoadRequest
+  | PocketGraphSaveRequest
+  | PocketGraphDeleteRequest
+  | PocketSkillListRequest
+  | PocketSkillSaveRequest
+  | PocketSkillDeleteRequest
+  | PocketExperienceListRequest
+  | PocketModelTestRequest;
 
 export type InternalExtractCurrentMessage = {
   type: 'content.page.extract-current';
@@ -313,6 +350,14 @@ export type MessageResponseMap = {
   'memory.candidate.delete': ResponseEnvelope<'memory.candidate.delete', MemorySummary>;
   'memory.recall': ResponseEnvelope<'memory.recall', MemoryRecallResult>;
   'harness.reEvaluate': ResponseEnvelope<'harness.reEvaluate', HarnessReEvaluateResult>;
+  'pocket.graph.load': ResponseEnvelope<'pocket.graph.load', { view: GraphView; memorySummary: MemorySummary }>;
+  'pocket.graph.save': ResponseEnvelope<'pocket.graph.save', MemorySummary>;
+  'pocket.graph.delete': ResponseEnvelope<'pocket.graph.delete', MemorySummary>;
+  'pocket.skill.list': ResponseEnvelope<'pocket.skill.list', { skills: SkillDefinition[]; memorySummary: MemorySummary }>;
+  'pocket.skill.save': ResponseEnvelope<'pocket.skill.save', MemorySummary>;
+  'pocket.skill.delete': ResponseEnvelope<'pocket.skill.delete', MemorySummary>;
+  'pocket.experience.list': ResponseEnvelope<'pocket.experience.list', { experiences: ExperienceRecord[]; memorySummary: MemorySummary }>;
+  'pocket.model.test': ResponseEnvelope<'pocket.model.test', ConnectionTestResult>;
 };
 
 export type AppMessageResponse =
@@ -339,4 +384,12 @@ export type AppMessageResponse =
   | MessageResponseMap['memory.candidate.list']
   | MessageResponseMap['memory.candidate.delete']
   | MessageResponseMap['memory.recall']
-  | MessageResponseMap['harness.reEvaluate'];
+  | MessageResponseMap['harness.reEvaluate']
+  | MessageResponseMap['pocket.graph.load']
+  | MessageResponseMap['pocket.graph.save']
+  | MessageResponseMap['pocket.graph.delete']
+  | MessageResponseMap['pocket.skill.list']
+  | MessageResponseMap['pocket.skill.save']
+  | MessageResponseMap['pocket.skill.delete']
+  | MessageResponseMap['pocket.experience.list']
+  | MessageResponseMap['pocket.model.test'];

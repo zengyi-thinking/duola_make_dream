@@ -35,6 +35,13 @@ import {
   savePageContext,
   saveProfile,
   updateIdeaStatus,
+  getGlobalGraph,
+  saveGraphView,
+  deleteGraphView,
+  getSkillRegistry,
+  saveSkill,
+  deleteSkill,
+  getExperiences,
 } from '@/lib/memory';
 import { buildArchiveNoteFromAnalysis, buildPageAnalysisResult } from '@/lib/agent/core';
 import { buildPipelineTrace, createPipelineStage } from '@/lib/agent/pipeline';
@@ -45,6 +52,10 @@ import { buildHarnessPatchFromFeedback, shouldCreateHarnessPatch } from '@/lib/a
 import { processIdeaSubmission } from '@/lib/agent/orchestrators/idea';
 import { buildKnowledgeRecall } from '@/lib/agent/recall';
 import { migrateLegacyToGraph } from '@/lib/graph/migrate';
+import { getActiveModelProfile } from '@/lib/agent/model-profiles';
+import { testModelConnection } from '@/lib/model/connection-test';
+import type { GraphView } from '@/lib/graph/types';
+import type { SkillDefinition } from '@/lib/skills/types';
 import type { ContentPipelineKind, ContentPipelineTrace, MemoryRecallResult } from '@/lib/agent/types';
 import { readStorage } from '@/lib/storage/local';
 import { sendTabInternalMessage } from '@/lib/messaging/bus';
@@ -241,6 +252,23 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
 
     case 'harness.reEvaluate':
       return await handleHarnessReEvaluate();
+
+    case 'pocket.graph.load':
+      return successResponse('pocket.graph.load', message.requestId, await handlePocketGraphLoad());
+    case 'pocket.graph.save':
+      return successResponse('pocket.graph.save', message.requestId, await handlePocketGraphSave(message.payload.view));
+    case 'pocket.graph.delete':
+      return successResponse('pocket.graph.delete', message.requestId, await deleteGraphView(message.payload.viewId));
+    case 'pocket.skill.list':
+      return successResponse('pocket.skill.list', message.requestId, await handlePocketSkillList());
+    case 'pocket.skill.save':
+      return successResponse('pocket.skill.save', message.requestId, await handlePocketSkillSave(message.payload.skill));
+    case 'pocket.skill.delete':
+      return successResponse('pocket.skill.delete', message.requestId, await deleteSkill(message.payload.skillId));
+    case 'pocket.experience.list':
+      return successResponse('pocket.experience.list', message.requestId, await handlePocketExperienceList());
+    case 'pocket.model.test':
+      return successResponse('pocket.model.test', message.requestId, await handlePocketModelTest(message.payload.kind, message.payload.profileId));
   }
 }
 
@@ -250,6 +278,47 @@ async function handleMemoryRecall(query: string, limit?: number): Promise<Memory
   const images = await getGeneratedImages();
   const items = buildKnowledgeRecall({ query, memory, artifacts, images, limit });
   return { query, items };
+}
+
+// ---------- Pocket Graph Agent 消息 handler ----------
+
+async function handlePocketGraphLoad() {
+  const view = await getGlobalGraph();
+  return { view, memorySummary: await getMemorySummary() };
+}
+
+async function handlePocketGraphSave(view: GraphView) {
+  await saveGraphView(view);
+  return getMemorySummary();
+}
+
+async function handlePocketSkillList() {
+  const skills = await getSkillRegistry();
+  return { skills, memorySummary: await getMemorySummary() };
+}
+
+async function handlePocketSkillSave(skill: SkillDefinition) {
+  await saveSkill(skill);
+  return getMemorySummary();
+}
+
+async function handlePocketExperienceList() {
+  const experiences = await getExperiences();
+  return { experiences, memorySummary: await getMemorySummary() };
+}
+
+/**
+ * 模型连接测试：对配置档 endpoint 发 GET 探针，期望 HTTP 200。
+ * 指定 profileId 时测那一档，否则测激活档。
+ */
+async function handlePocketModelTest(kind: 'llm' | 'image', profileId?: string) {
+  const config = await readStorage('runtimeConfig');
+  const profiles = kind === 'llm' ? config.llmProfiles : config.imageProfiles;
+  const target = (profileId ? profiles.find((p) => p.id === profileId) : null) ?? getActiveModelProfile(config, kind);
+  if (!target) {
+    return { ok: false, reachable: false, status: 0, latencyMs: 0, error: '未找到匹配的配置档' };
+  }
+  return testModelConnection(target);
 }
 
 async function handleFeedbackRecord(
@@ -1164,6 +1233,25 @@ function buildEmptyPayload(type: AppMessage['type']) {
 
   if (type === 'memory.candidate.list') {
     return { candidates: [], memorySummary: emptySummary };
+  }
+
+  if (type === 'pocket.graph.load') {
+    return {
+      view: { id: '', scope: 'global', title: '', nodes: [], edges: [], createdAt: 0 },
+      memorySummary: emptySummary,
+    };
+  }
+
+  if (type === 'pocket.skill.list') {
+    return { skills: [], memorySummary: emptySummary };
+  }
+
+  if (type === 'pocket.experience.list') {
+    return { experiences: [], memorySummary: emptySummary };
+  }
+
+  if (type === 'pocket.model.test') {
+    return { ok: false, reachable: false, status: 0, latencyMs: 0, error: '' };
   }
 
   return emptySummary;
