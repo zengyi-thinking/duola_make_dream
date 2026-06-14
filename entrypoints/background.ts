@@ -4,6 +4,7 @@ import {
   applyApprovedMemoryToProfile,
   applyFeedbackToProfile,
   approveMemoryCandidate,
+  autoEvaluateAndApplyHarnessPatches,
   cleanupOrphanIdeas,
   clearArchiveNotes,
   convertCandidateToApprovedMemory,
@@ -231,6 +232,9 @@ async function handleMessage(message: AppMessage): Promise<AppMessageResponse> {
 
     case 'memory.recall':
       return successResponse('memory.recall', message.requestId, await handleMemoryRecall(message.payload.query, message.payload.limit));
+
+    case 'harness.reEvaluate':
+      return await handleHarnessReEvaluate();
   }
 }
 
@@ -266,9 +270,33 @@ async function handleFeedbackRecord(
     await saveHarnessPatch(patch);
   }
 
+  // 阶段 A：每次用户反馈都触发一次自学习评分。
+  // 评分达到阈值的 pending 补丁自动 applied —— 前端零按钮
+  await autoEvaluateAndApplyHarnessPatches().catch((err) => {
+    console.warn('[bg] harness 自学习评分失败：', err);
+  });
+
   return {
     feedback,
     memorySummary: await getMemorySummary(),
+  };
+}
+
+/**
+ * 阶段 A：手动重评 harness 补丁（用户在 Settings 改了 autoApplyThreshold 时调用）。
+ * 不暴露给前端的"批准/拒绝"按钮 —— 只暴露一个"重评"消息，让后端接管。
+ */
+async function handleHarnessReEvaluate(): Promise<AppMessageResponse> {
+  const result = await autoEvaluateAndApplyHarnessPatches().catch((err) => {
+    console.warn('[bg] harness 重评失败：', err);
+    return { applied: 0, evaluations: [] };
+  });
+  return {
+    type: 'harness.reEvaluate',
+    requestId: '',
+    source: 'background',
+    success: true,
+    payload: result,
   };
 }
 

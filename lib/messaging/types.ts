@@ -45,7 +45,8 @@ export type ExtensionMessageType =
   | 'memory.candidate.reject'
   | 'memory.candidate.list'
   | 'memory.candidate.delete'
-  | 'memory.recall';
+  | 'memory.recall'
+  | 'harness.reEvaluate';
 
 export type MessageType = ExtensionMessageType;
 
@@ -218,6 +219,16 @@ export type MemoryRecallRequest = MessageEnvelope<
   }
 >;
 
+export type HarnessReEvaluateRequest = MessageEnvelope<
+  'harness.reEvaluate',
+  Record<string, never>
+>;
+
+export interface HarnessReEvaluateResult {
+  applied: number;
+  evaluations: Array<{ patchId: string; score: number; source: string }>;
+}
+
 export type AppMessage =
   | IdeaSubmitRequest
   | FeedbackRecordRequest
@@ -241,7 +252,8 @@ export type AppMessage =
   | MemoryCandidateRejectRequest
   | MemoryCandidateListRequest
   | MemoryCandidateDeleteRequest
-  | MemoryRecallRequest;
+  | MemoryRecallRequest
+  | HarnessReEvaluateRequest;
 
 export type InternalExtractCurrentMessage = {
   type: 'content.page.extract-current';
@@ -300,6 +312,31 @@ export type MessageResponseMap = {
   'memory.candidate.list': ResponseEnvelope<'memory.candidate.list', { candidates: import('@/lib/agent/types').MemoryCandidate[]; memorySummary: MemorySummary }>;
   'memory.candidate.delete': ResponseEnvelope<'memory.candidate.delete', MemorySummary>;
   'memory.recall': ResponseEnvelope<'memory.recall', MemoryRecallResult>;
+  'harness.reEvaluate': ResponseEnvelope<'harness.reEvaluate', HarnessReEvaluateResult>;
 };
 
-export type AppMessageResponse = MessageResponseMap[ExtensionMessageType];
+export type AppMessageResponse =
+  | MessageResponseMap['idea.submit']
+  | MessageResponseMap['feedback.record']
+  | MessageResponseMap['memory.get']
+  | MessageResponseMap['memory.delete']
+  | MessageResponseMap['context.captureSelection']
+  | MessageResponseMap['page.readCurrent']
+  | MessageResponseMap['page.analyzeCurrent']
+  | MessageResponseMap['archive.note.save']
+  | MessageResponseMap['archive.note.list']
+  | MessageResponseMap['archive.note.delete']
+  | MessageResponseMap['archive.note.clear']
+  | MessageResponseMap['artifact.list']
+  | MessageResponseMap['image.generate']
+  | MessageResponseMap['image.list']
+  | MessageResponseMap['image.delete']
+  | MessageResponseMap['mindmap.generate']
+  | MessageResponseMap['mindmap.list']
+  | MessageResponseMap['mindmap.delete']
+  | MessageResponseMap['memory.candidate.approve']
+  | MessageResponseMap['memory.candidate.reject']
+  | MessageResponseMap['memory.candidate.list']
+  | MessageResponseMap['memory.candidate.delete']
+  | MessageResponseMap['memory.recall']
+  | MessageResponseMap['harness.reEvaluate'];

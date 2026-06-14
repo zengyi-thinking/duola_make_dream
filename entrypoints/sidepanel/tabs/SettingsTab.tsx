@@ -203,7 +203,7 @@ export default function SettingsTab(props: SettingsTabProps) {
         </div>
       </section>
 
-      <section className="panel-card">
+      <section className="panel-card settings-console-card">
         <div className="panel-head">
           <div>
             <p className="section-label">Identity Console</p>
@@ -212,28 +212,37 @@ export default function SettingsTab(props: SettingsTabProps) {
           <span className="micro-status">同步到标题和头像</span>
         </div>
 
-        <div className="settings-section">
-          <label>Agent 名称</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={config.agentName}
-            onChange={(e) => updateConfigPatch({ agentName: e.target.value })}
-            placeholder="PocketAgent"
-            disabled={Boolean(busyAction)}
-          />
+        <div className="signal-chip-row settings-console-rail">
+          <span className="signal-chip">{config.agentName || 'PocketAgent'}</span>
+          <span className="signal-chip">{config.defaultTone || '未设置语气'}</span>
+          <span className="signal-chip">{avatarMeta.name}</span>
+          <span className="signal-chip">{llmActiveProfile ? formatModelProfileSummary(llmActiveProfile) : 'LLM 未激活'}</span>
         </div>
 
-        <div className="settings-section">
-          <label>默认语气</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={config.defaultTone}
-            onChange={(e) => updateConfigPatch({ defaultTone: e.target.value })}
-            placeholder="warm-product-designer"
-            disabled={Boolean(busyAction)}
-          />
+        <div className="settings-console-grid">
+          <div className="settings-field">
+            <label>Agent 名称</label>
+            <input
+              type="text"
+              className="settings-input"
+              value={config.agentName}
+              onChange={(e) => updateConfigPatch({ agentName: e.target.value })}
+              placeholder="PocketAgent"
+              disabled={Boolean(busyAction)}
+            />
+          </div>
+
+          <div className="settings-field">
+            <label>默认语气</label>
+            <input
+              type="text"
+              className="settings-input"
+              value={config.defaultTone}
+              onChange={(e) => updateConfigPatch({ defaultTone: e.target.value })}
+              placeholder="warm-product-designer"
+              disabled={Boolean(busyAction)}
+            />
+          </div>
         </div>
 
         <div className="settings-section">
@@ -272,7 +281,7 @@ export default function SettingsTab(props: SettingsTabProps) {
         </div>
       </section>
 
-      <section className="panel-card">
+      <section className="panel-card settings-console-card">
         <div className="panel-head">
           <div>
             <p className="section-label">Persona Lab</p>
@@ -281,6 +290,13 @@ export default function SettingsTab(props: SettingsTabProps) {
           <span className="micro-status">
             {memory ? `${memory.counts.profileChanges} 次历史变化` : '等待记忆加载'}
           </span>
+        </div>
+
+        <div className="signal-chip-row settings-profile-summary__chips">
+          <span className="signal-chip">{currentProfile.visualLikes.length} 视觉偏好</span>
+          <span className="signal-chip">{currentProfile.visualDislikes.length} 视觉排斥</span>
+          <span className="signal-chip">{currentProfile.productPreferences.length} 产品偏好</span>
+          <span className="signal-chip">{currentProfile.recentThemes.length} 近期主题</span>
         </div>
 
         <div className="settings-profile-summary">
@@ -695,60 +711,71 @@ function ModelProfileSection(props: {
         </div>
       </div>
 
-      <div className="profile-editor">
-        <div className="settings-section">
-          <label>配置档名称</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={draft.name}
-            onChange={(e) => setDraft((current) => ({ ...current, name: e.target.value }))}
-            placeholder={defaultProfileName(kind)}
-            disabled={disabled}
-          />
+      <div className="profile-editor profile-editor--console">
+        <div className="profile-editor__head">
+          <span className="micro-status">控制台编辑</span>
+          <div className="token-list profile-editor__head-chips">
+            <span className="token-chip">{draft.model || '未配置'}</span>
+            <span className="token-chip">{formatEndpointHost(draft.endpoint)}</span>
+            <span className="token-chip">{maskApiKey(draft.apiKey)}</span>
+          </div>
         </div>
 
-        <div className="settings-section">
-          <label>模型名</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={draft.model}
-            onChange={(e) => setDraft((current) => ({ ...current, model: e.target.value }))}
-            placeholder={kind === 'llm' ? 'MiniMax-M3' : 'gpt-image-2'}
-            disabled={disabled}
-          />
-        </div>
-
-        <div className="settings-section">
-          <label>API 端点</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={draft.endpoint}
-            onChange={(e) => setDraft((current) => ({ ...current, endpoint: e.target.value }))}
-            placeholder={kind === 'llm'
-              ? 'https://api.minimaxi.com/anthropic'
-              : 'https://api.apimart.ai/v1/images/generations'}
-            disabled={disabled}
-          />
-        </div>
-
-        <div className="settings-section">
-          <label>API Key</label>
-          <div className="inline-field">
+        <div className="profile-editor__grid">
+          <div className="settings-field">
+            <label>配置档名称</label>
             <input
-              type={showKey ? 'text' : 'password'}
+              type="text"
               className="settings-input"
-              style={{ flex: 1 }}
-              value={draft.apiKey}
-              onChange={(e) => setDraft((current) => ({ ...current, apiKey: e.target.value }))}
-              placeholder="sk-..."
+              value={draft.name}
+              onChange={(e) => setDraft((current) => ({ ...current, name: e.target.value }))}
+              placeholder={defaultProfileName(kind)}
               disabled={disabled}
             />
-            <LineButton variant="ghost" onClick={() => setShowKey((current) => !current)} disabled={disabled}>
-              {showKey ? '隐藏' : '显示'}
-            </LineButton>
+          </div>
+
+          <div className="settings-field">
+            <label>模型名</label>
+            <input
+              type="text"
+              className="settings-input"
+              value={draft.model}
+              onChange={(e) => setDraft((current) => ({ ...current, model: e.target.value }))}
+              placeholder={kind === 'llm' ? 'MiniMax-M3' : 'gpt-image-2'}
+              disabled={disabled}
+            />
+          </div>
+
+          <div className="settings-field">
+            <label>API 端点</label>
+            <input
+              type="text"
+              className="settings-input"
+              value={draft.endpoint}
+              onChange={(e) => setDraft((current) => ({ ...current, endpoint: e.target.value }))}
+              placeholder={kind === 'llm'
+                ? 'https://api.minimaxi.com/anthropic'
+                : 'https://api.apimart.ai/v1/images/generations'}
+              disabled={disabled}
+            />
+          </div>
+
+          <div className="settings-field">
+            <label>API Key</label>
+            <div className="inline-field inline-field--compact">
+              <input
+                type={showKey ? 'text' : 'password'}
+                className="settings-input"
+                style={{ flex: 1, minWidth: 0 }}
+                value={draft.apiKey}
+                onChange={(e) => setDraft((current) => ({ ...current, apiKey: e.target.value }))}
+                placeholder="sk-..."
+                disabled={disabled}
+              />
+              <LineButton variant="ghost" onClick={() => setShowKey((current) => !current)} disabled={disabled}>
+                {showKey ? '隐藏' : '显示'}
+              </LineButton>
+            </div>
           </div>
         </div>
       </div>

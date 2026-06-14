@@ -88,6 +88,18 @@ export interface HarnessPatch {
   createdAt: number;
   appliedAt?: number;
   rollbackSnapshotId?: string;
+  /**
+   * 自学习评分（0-1）。由 [scoreHarnessPatch] 计算，反映"这次自调优的可信度"。
+   * - 基础分由 riskLevel 决定（low 0.6 / medium 0.4 / high 0.2）
+   * - 反馈加成：用户对同一方向累计点过 dislike-direction 越多分越高（最高 +0.3）
+   * - 时间衰减：超过 30 天的补丁 -0.1
+   * 评分 >= autoApplyThreshold 且 !requireUserApproval → 后端自动 apply
+   */
+  score?: number;
+  /** 自动生效阈值（默认 0.5，可由用户在 Settings 调整——但前端只有 1 个开关） */
+  autoApplyThreshold?: number;
+  /** 评分来源（用于 Observation Tab 解释"为啥这条 patch 被自动应用了"） */
+  scoreSource?: string;
 }
 
 export interface ContextSnippet {

@@ -109,13 +109,22 @@ function PatchLibrary({
           <div key={patch.id} className="list-card">
             <div className="candidate-head">
               <strong>{patch.target}</strong>
-              <span className={`status-pill status-pill--${patch.status === 'applied' ? 'approved' : patch.status}`}>{patch.status}</span>
+              <span className={`status-pill status-pill--${patch.status === 'applied' ? 'approved' : patch.status}`}>
+                {patch.status}
+              </span>
             </div>
             <p className="micro-copy">{shorten(patch.reason, 88)}</p>
             <div className="token-list">
+              {typeof patch.score === 'number' && (
+                <span className="token-chip" title={`自学习评分：${patch.score.toFixed(2)}（${patch.scoreSource ?? 'init'}）`}>
+                  评分 {patch.score.toFixed(2)}
+                </span>
+              )}
               <span className="token-chip">{patch.scope}</span>
-              <span className="token-chip">{patch.riskLevel}</span>
-              <span className="token-chip">{patch.requireUserApproval ? '需要审批' : '无需审批'}</span>
+              <span className="token-chip">{patch.riskLevel} 风险</span>
+              {patch.appliedAt && (
+                <span className="token-chip">生效于 {new Date(patch.appliedAt).toLocaleDateString('zh-CN')}</span>
+              )}
             </div>
             <details className="reading-accordion" style={{ marginTop: 8 }}>
               <summary>查看补丁内容</summary>
@@ -124,14 +133,9 @@ function PatchLibrary({
                 <pre className="prompt-block">{patch.after}</pre>
               </div>
             </details>
-            <div className="inline-actions">
-              <LineButton variant="ghost" onClick={() => onCopy(`${patch.before}\n\n${patch.after}`, '补丁内容已复制。')}>
-                复制补丁
-              </LineButton>
-            </div>
           </div>
         ))}
-        {(memory?.harnessPatches.length ?? 0) === 0 ? <p className="soft-text">还没有补丁历史。</p> : null}
+        {(memory?.harnessPatches.length ?? 0) === 0 ? <p className="soft-text">还没有补丁历史。出现"不喜欢"反馈后会自动生成。</p> : null}
       </div>
     </div>
   );

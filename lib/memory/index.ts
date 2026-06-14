@@ -1,5 +1,6 @@
 export {
   approveMemoryCandidate,
+  autoEvaluateAndApplyHarnessPatches,
   cleanupOrphanIdeas,
   clearApprovedMemories,
   clearArchiveNotes,

@@ -208,6 +208,54 @@ export async function markHarnessPatchesApplied(ids: string[]): Promise<void> {
   await writeStorage('harnessPatches', next);
 }
 
+/**
+ * 阶段 A：自动评分 + 自动 apply。
+ * - 重新计算每条 pending 补丁的 score
+ * - 评分 >= autoApplyThreshold 且 !requireUserApproval → 标记为 applied
+ * - 把 score/scoreSource 写回 storage，Observation Tab 可以解释"为啥这条生效"
+ *
+ * 替代之前的"用户手动批准"按钮（settings 里也没有按钮，纯后端决策）。
+ */
+export async function autoEvaluateAndApplyHarnessPatches(
+  autoApplyThreshold: number = 0.5,
+): Promise<{ applied: number; evaluations: Array<{ patchId: string; score: number; source: string }> }> {
+  const { annotatePatchWithScore } = await import('@/lib/agent/harness');
+  const patches = await readStorage('harnessPatches');
+  const feedbackLog = await readStorage('feedbackLog');
+
+  const now = Date.now();
+  let applied = 0;
+  const evaluations: Array<{ patchId: string; score: number; source: string }> = [];
+  const updated: typeof patches = [];
+
+  for (const patch of patches) {
+    const evaluated = annotatePatchWithScore(patch, feedbackLog);
+    const score = evaluated.score ?? 0;
+    const shouldAutoApply = patch.status === 'pending'
+      && !patch.requireUserApproval
+      && score >= autoApplyThreshold;
+
+    evaluations.push({ patchId: patch.id, score, source: evaluated.scoreSource ?? 'init' });
+
+    if (shouldAutoApply) {
+      updated.push({ ...evaluated, status: 'applied' as const, appliedAt: now });
+      applied++;
+    } else {
+      updated.push(evaluated);
+    }
+  }
+
+  if (applied > 0) {
+    await writeStorage('harnessPatches', updated);
+  } else {
+    // 即使没 apply 也要把评分写回（让 Observation 显示 score 变化）
+    const hasScoreChange = updated.some((p, i) => p.score !== patches[i].score);
+    if (hasScoreChange) await writeStorage('harnessPatches', updated);
+  }
+
+  return { applied, evaluations };
+}
+
 export async function getArchiveNotes(limit = 40): Promise<ArchiveNote[]> {
   const notes = await readStorage('archiveNotes');
   return notes.slice(0, limit);
