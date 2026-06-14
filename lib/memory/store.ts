@@ -20,6 +20,7 @@ import type { MindmapRecord } from '@/lib/mindmap/types';
 import type { PageContextRecord } from '@/lib/page/types';
 import type { GraphEdge, GraphNode, GraphView } from '@/lib/graph/types';
 import type { SkillDefinition } from '@/lib/skills/types';
+import { BUILTIN_SKILLS } from '@/lib/skills/builtin';
 import {
   appendLimited,
   clearArrayStorage,
@@ -552,8 +553,11 @@ export async function saveSkill(skill: SkillDefinition): Promise<SkillDefinition
 }
 
 export async function getSkillRegistry(limit = 60): Promise<SkillDefinition[]> {
-  const skills = await readStorage('skillRegistry');
-  return skills.slice(0, limit);
+  const userSkills = await readStorage('skillRegistry');
+  // 内置 skill 优先；用户自定义按 id 去重（不允许覆盖内置）
+  const builtinIds = new Set(BUILTIN_SKILLS.map((s) => s.id));
+  const filtered = userSkills.filter((s) => !builtinIds.has(s.id));
+  return [...BUILTIN_SKILLS, ...filtered].slice(0, limit);
 }
 
 export async function deleteSkill(skillId: string): Promise<MemorySummary> {
