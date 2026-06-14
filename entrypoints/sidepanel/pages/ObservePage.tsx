@@ -111,6 +111,10 @@ export default function ObservePage() {
             <span className="observe-stat__num">{experiences.length}</span>
             <span className="observe-stat__label">总计</span>
           </div>
+          <div className="observe-stat__card observe-stat__card--health">
+            <SuccessRing success={successCount} total={experiences.length} />
+            <span className="observe-stat__label">健康度</span>
+          </div>
         </div>
         {agentStats.length > 0 ? (
           <div className="observe-stat__agents">
@@ -121,10 +125,20 @@ export default function ObservePage() {
                 className={`observe-stat__agent-chip${agentFilter === agentId ? ' observe-stat__agent-chip--active' : ''}`}
                 onClick={() => setAgentFilter(agentFilter === agentId ? 'all' : agentId)}
               >
-                {AGENT_LABELS[agentId] ?? agentId}
-                <span className="observe-stat__agent-s">{s.success}</span>
-                <span className="observe-stat__agent-divider">/</span>
-                <span className="observe-stat__agent-f">{s.failure}</span>
+                <span className="observe-stat__agent-head">
+                  <span className="observe-stat__agent-name">{AGENT_LABELS[agentId] ?? agentId}</span>
+                  <span className="observe-stat__agent-counts">
+                    <span className="observe-stat__agent-s">{s.success}</span>
+                    <span className="observe-stat__agent-divider">/</span>
+                    <span className="observe-stat__agent-f">{s.failure}</span>
+                  </span>
+                </span>
+                {(s.success + s.failure) > 0 ? (
+                  <span className="observe-stat__agent-bar">
+                    <span className="observe-stat__agent-bar-s" style={{ flexGrow: s.success }} />
+                    <span className="observe-stat__agent-bar-f" style={{ flexGrow: s.failure }} />
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -230,4 +244,30 @@ function describeRelativeAge(createdAt: number): string {
   if (d < 7) return `${d} 天前`;
   if (d < 28) return `${Math.floor(d / 7)} 周前`;
   return `${Math.floor(d / 30)} 个月前`;
+}
+
+/** 成功率环形进度（绿环 + 红底，纯 SVG 无依赖） */
+function SuccessRing({ success, total }: { success: number; total: number }) {
+  const r = 24;
+  const c = 2 * Math.PI * r;
+  const rate = total > 0 ? success / total : 0;
+  return (
+    <svg className="observe-health-ring" width="62" height="62" viewBox="0 0 62 62">
+      <circle cx="31" cy="31" r={r} fill="none" stroke="var(--pb-tone-red-border)" strokeWidth="7" />
+      <circle
+        cx="31"
+        cy="31"
+        r={r}
+        fill="none"
+        stroke="var(--pb-tone-green)"
+        strokeWidth="7"
+        strokeDasharray={`${c * rate} ${c}`}
+        strokeLinecap="round"
+        transform="rotate(-90 31 31)"
+      />
+      <text x="31" y="35" textAnchor="middle" className="observe-health-ring__num">
+        {total > 0 ? `${Math.round(rate * 100)}%` : '—'}
+      </text>
+    </svg>
+  );
 }

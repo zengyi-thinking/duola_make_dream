@@ -241,8 +241,9 @@ button, textarea, input, select { font: inherit; }
 /* ===== Observation 反思时间线 ===== */
 .observe-stat__row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 8px;
+  align-items: stretch;
 }
 .observe-stat__card {
   padding: 12px 10px;
@@ -256,6 +257,13 @@ button, textarea, input, select { font: inherit; }
 }
 .observe-stat__card--success { background: var(--pb-tone-green-soft); border-color: var(--pb-tone-green-border); }
 .observe-stat__card--failure { background: var(--pb-tone-red-soft); border-color: var(--pb-tone-red-border); }
+.observe-stat__card--health {
+  flex-direction: column;
+  justify-content: center;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, var(--pb-tone-green-soft), var(--pb-tone-red-soft));
+  border-color: var(--pb-line);
+}
 .observe-stat__num {
   font-size: 22px;
   font-weight: 800;
@@ -269,6 +277,13 @@ button, textarea, input, select { font: inherit; }
   font-weight: 600;
   color: var(--pb-muted);
 }
+/* 成功率环形进度 */
+.observe-health-ring { display: block; }
+.observe-health-ring__num {
+  font-size: 13px;
+  font-weight: 800;
+  fill: var(--pb-ink);
+}
 .observe-stat__agents {
   display: flex;
   flex-wrap: wrap;
@@ -277,25 +292,48 @@ button, textarea, input, select { font: inherit; }
 }
 .observe-stat__agent-chip {
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 9px;
-  border-radius: 999px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 10px 6px;
+  border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
   background: var(--pb-bg);
   border: 1px solid var(--pb-line);
   color: var(--pb-ink);
   cursor: pointer;
+  min-width: 72px;
 }
 .observe-stat__agent-chip--active {
   background: var(--pb-primary-soft);
   border-color: var(--pb-tone-blue-border);
   color: var(--pb-primary);
 }
-.observe-stat__agent-s { color: var(--pb-tone-green); }
-.observe-stat__agent-f { color: var(--pb-tone-red); }
+.observe-stat__agent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.observe-stat__agent-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10.5px;
+}
+.observe-stat__agent-s { color: var(--pb-tone-green); font-weight: 700; }
+.observe-stat__agent-f { color: var(--pb-tone-red); font-weight: 700; }
 .observe-stat__agent-divider { color: var(--pb-muted); opacity: 0.5; }
+.observe-stat__agent-bar {
+  display: flex;
+  height: 4px;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--pb-line);
+}
+.observe-stat__agent-bar-s { background: var(--pb-tone-green); }
+.observe-stat__agent-bar-f { background: var(--pb-tone-red); }
 
 .observe-filter {
   display: flex;

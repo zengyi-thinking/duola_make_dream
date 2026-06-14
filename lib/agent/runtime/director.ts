@@ -121,17 +121,40 @@ async function buildContext(
   };
 }
 
-/** 把单个 SubAgent 的产物归集到全局收集器。 */
-function collectResult<O>(
-  result: AgentRunResult<O>,
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * 跑一个 SubAgent 并归集产物 + 即时落库经验（产品重设计：agent 健康日志）。
+ * - 成功：收集 stageNode/stageEdge，experience 即时 saveExperience（不等链路末尾，避免后续失败丢经验）。
+ * - 失败：saveExperience(outcome='failure', lesson=错误信息)，然后 throw 中止链路。
+ * 这样即使链路中途崩，已跑完 agent 的成功/失败经验都已入库，观察页有完整的健康日志。
+ */
+async function runAgentWithTrace<O>(
+  agentId: ExperienceSeed['agentId'],
+  label: string,
+  run: () => Promise<AgentRunResult<O>>,
   nodes: GraphNode[],
   edges: GraphEdge[],
-  experiences: ExperienceSeed[],
-): void {
+): Promise<AgentRunResult<O>> {
+  let result: AgentRunResult<O>;
+  try {
+    result = await run();
+  } catch (err) {
+    await saveExperience({
+      outcome: 'failure',
+      agentId,
+      summary: `${label}阶段执行失败`,
+      lesson: errMsg(err),
+    });
+    throw err;
+  }
   if (result.stageNode) nodes.push(result.stageNode);
   if (result.stageNodes) nodes.push(...result.stageNodes);
   if (result.stageEdges) edges.push(...result.stageEdges);
-  if (result.experience) experiences.push(result.experience);
+  if (result.experience) await saveExperience(result.experience);
+  return result;
 }
 
 // ---------- Director ----------
@@ -160,14 +183,12 @@ export class PocketAgentDirector {
       selectedNotes.length > 0 ? selectedNotes.map((n) => `${n.title}: ${n.summary}`).join(' + ') : undefined,
     ].filter(Boolean).join(' + ');
 
-    const experiences: ExperienceSeed[] = [];
     const stageNodes: GraphNode[] = [];
     const stageEdges: GraphEdge[] = [];
 
-    const planResult = await planAgent.run({ idea: input.text, contextLine }, ctx);
-    collectResult(planResult, stageNodes, stageEdges, experiences);
+    const planResult = await runAgentWithTrace('plan', '规划', () => planAgent.run({ idea: input.text, contextLine }, ctx), stageNodes, stageEdges);
 
-    const researchResult = await researchAgent.run(
+    const researchResult = await runAgentWithTrace('research', '调研', async () => researchAgent.run(
       {
         query: input.text,
         intent: planResult.output.intent,
@@ -176,17 +197,14 @@ export class PocketAgentDirector {
         images: await getGeneratedImages(),
       },
       ctx,
-    );
-    collectResult(researchResult, stageNodes, stageEdges, experiences);
+    ), stageNodes, stageEdges);
 
-    const reflectResult = await reflectAgent.run({ patches }, ctx);
-    collectResult(reflectResult, stageNodes, stageEdges, experiences);
+    const reflectResult = await runAgentWithTrace('reflect', '反思', () => reflectAgent.run({ patches }, ctx), stageNodes, stageEdges);
 
-    const structureResult = await structureAgent.run(
+    const structureResult = await runAgentWithTrace('structure', '编排', () => structureAgent.run(
       { idea: input.text, intent: planResult.output.intent, profile: ctx.profile, contextLine },
       ctx,
-    );
-    collectResult(structureResult, stageNodes, stageEdges, experiences);
+    ), stageNodes, stageEdges);
 
     // 连边：structure 派生自 plan，关联 research（多节点）/ reflect
     const planId = planResult.stageNode?.id;
@@ -248,7 +266,6 @@ export class PocketAgentDirector {
     if (patches.length > 0) {
       await markHarnessPatchesApplied(patches.map((p) => p.id));
     }
-    for (const exp of experiences) await saveExperience(exp);
 
     const planGraph = createGraphView({
       scope: 'invent',
@@ -284,14 +301,11 @@ export class PocketAgentDirector {
     const { ctx } = await buildContext('invent', `生图：${concept.name}`, (e) => events.push(e));
     const runtimeConfig = await getRuntimeConfig();
 
-    const imageResult = await imageAgent.run({ concept, planBoard, style: 'knowledge-card', runtimeConfig }, ctx);
-    const experiences: ExperienceSeed[] = [];
     const nodes: GraphNode[] = [];
     const edges: GraphEdge[] = [];
-    collectResult(imageResult, nodes, edges, experiences);
+    const imageResult = await runAgentWithTrace('image', '生图', () => imageAgent.run({ concept, planBoard, style: 'knowledge-card', runtimeConfig }, ctx), nodes, edges);
 
     await saveGeneratedImage(imageResult.output.imageRecord);
-    for (const exp of experiences) await saveExperience(exp);
     if (nodes.length > 0) await mergeIntoGlobalGraph(nodes, edges);
 
     return { events, result: { imageRecord: imageResult.output.imageRecord } };
@@ -309,21 +323,18 @@ export class PocketAgentDirector {
     };
     const { ctx, patches } = await buildContext('feed', input.page.pageTitle.slice(0, 40), emit);
 
-    const feedResult = await feedAgent.run(
-      { page: input.page, context: input.context, profile: ctx.profile },
-      ctx,
-    );
-    const experiences: ExperienceSeed[] = [];
     const stageNodes: GraphNode[] = [];
     const stageEdges: GraphEdge[] = [];
-    collectResult(feedResult, stageNodes, stageEdges, experiences);
+    const feedResult = await runAgentWithTrace('feed', '喂养', () => feedAgent.run(
+      { page: input.page, context: input.context, profile: ctx.profile },
+      ctx,
+    ), stageNodes, stageEdges);
 
     // 持久化（对应 handlePageAnalyze 的 savePipelineRun + saveMemoryCandidates + markHarnessPatchesApplied）
     await savePipelineRun(feedResult.output.analysis.pipelineTrace);
     if (patches.length > 0) {
       await markHarnessPatchesApplied(patches.map((p) => p.id));
     }
-    for (const exp of experiences) await saveExperience(exp);
 
     const feedGraph = createGraphView({
       scope: 'feed',
