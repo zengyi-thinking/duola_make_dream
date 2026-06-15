@@ -185,6 +185,7 @@ export default function MemoryPage() {
 function buildIdeaGraph(artifacts: ProductArtifact[], images: GeneratedImageRecord[]): GraphView {
   const nodes = artifacts.map((a) =>
     createGraphNode({
+      id: `artifact:${a.id}`,
       type: 'structure',
       title: a.concept.name,
       summary: a.concept.tagline,
@@ -195,6 +196,7 @@ function buildIdeaGraph(artifacts: ProductArtifact[], images: GeneratedImageReco
   const edges = [];
   for (const img of images) {
     const imgNode = createGraphNode({
+      id: `image:${img.id}`,
       type: 'image',
       title: img.request.title || '计划图片',
       summary: (img.prompt ?? img.status).slice(0, 60),
@@ -218,6 +220,7 @@ function buildIdeaGraph(artifacts: ProductArtifact[], images: GeneratedImageReco
 function buildNotesGraph(notes: ArchiveNote[], _artifacts: ProductArtifact[]): GraphView {
   const nodes = notes.map((n) =>
     createGraphNode({
+      id: `note:${n.id}`,
       type: 'note',
       title: n.title,
       summary: n.summary,

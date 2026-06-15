@@ -31,7 +31,7 @@ const MOOD_COLOR: Record<PocketBuddyMood, number> = {
  * three.js 真 3D 加工动画场景（产品重设计：旧版 PNG+CSS 太简陋，用户要求真 3D）。
  *
  * 组成：
- * - 3D mascot：avatar PNG 纹理贴 Plane（billboard），漂浮 + Y 轴摇摆（透视立体感）
+ * - 3D mascot：圆形徽章式 avatar 纹理，漂浮 + Y 轴摇摆（把方形头像感藏起来）
  * - 粒子系统：~40 粒子环绕 mascot 圆形轨道，mood 色变，阶段切换爆发外扩
  * - 光照：AmbientLight + PointLight（mood 色）
  * - 阶段转场：currentStage 变化 → mascot 旋转 + 粒子爆发 + 光变色
@@ -61,9 +61,10 @@ export default function ProcessingStage3D({
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !active) return;
+    let disposed = false;
 
     const width = container.clientWidth || 320;
-    const height = 200;
+    const height = 212;
 
     // ---- renderer ----
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
@@ -84,22 +85,83 @@ export default function ProcessingStage3D({
     pointLight.position.set(0, 2, 3);
     scene.add(pointLight);
 
-    // ---- mascot（PNG 纹理 Plane，billboard）----
-    const meta = pocketAvatars[avatar] ?? pocketAvatars['yunyu-main'];
-    const loader = new THREE.TextureLoader();
-    const tex = loader.load(meta.path);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const mascotMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
-    const mascot = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), mascotMat);
-    scene.add(mascot);
+    // ---- mascot（圆形悬浮徽章，替代方形头像贴图）----
+    const loadingAvatarId = mode === 'image'
+      ? avatar
+      : (avatar === 'yunyu-main' ? 'yunyun-chibi' : avatar);
+    const meta = pocketAvatars[loadingAvatarId] ?? pocketAvatars['yunyu-main'];
+    const mascotGroup = new THREE.Group();
+    mascotGroup.position.y = 0.06;
+    scene.add(mascotGroup);
 
-    // mascot 背后柔光晕（同色大平面，模糊感）
+    const mascotShadow = new THREE.Mesh(
+      new THREE.CircleGeometry(1.12, 48),
+      new THREE.MeshBasicMaterial({
+        color: 0x2557da,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+      }),
+    );
+    mascotShadow.scale.set(1.9, 0.34, 1);
+    mascotShadow.position.set(0, -1.66, -0.55);
+    mascotGroup.add(mascotShadow);
+
+    const badgeFrame = new THREE.Mesh(
+      new THREE.CircleGeometry(1.68, 72),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.96,
+        depthWrite: false,
+      }),
+    );
+    badgeFrame.position.z = 0.04;
+    mascotGroup.add(badgeFrame);
+
+    const badgeGlow = new THREE.Mesh(
+      new THREE.CircleGeometry(1.86, 72),
+      new THREE.MeshBasicMaterial({
+        color: MOOD_COLOR.thinking,
+        transparent: true,
+        opacity: 0.10,
+        depthWrite: false,
+      }),
+    );
+    badgeGlow.position.z = -0.08;
+    mascotGroup.add(badgeGlow);
+    const badgeGlowMat = badgeGlow.material as THREE.MeshBasicMaterial;
+
+    // mascot 背后柔光晕（更像一颗漂浮的口袋星球）
     const haloMat = new THREE.MeshBasicMaterial({
       color: MOOD_COLOR.thinking, transparent: true, opacity: 0.18, depthWrite: false,
     });
     const halo = new THREE.Mesh(new THREE.CircleGeometry(1.7, 32), haloMat);
     halo.position.z = -0.3;
     scene.add(halo);
+
+    let portraitMesh: THREE.Mesh | null = null;
+    let portraitTexture: THREE.CanvasTexture | null = null;
+    void (async () => {
+      try {
+        portraitTexture = await createPortraitBadgeTexture(meta.path, currentMood, mode);
+        if (disposed) {
+          portraitTexture.dispose();
+          portraitTexture = null;
+          return;
+        }
+        const portraitMat = new THREE.MeshBasicMaterial({
+          map: portraitTexture,
+          transparent: true,
+          depthWrite: false,
+        });
+        portraitMesh = new THREE.Mesh(new THREE.CircleGeometry(1.46, 72), portraitMat);
+        portraitMesh.position.z = 0.08;
+        mascotGroup.add(portraitMesh);
+      } catch (err) {
+        console.warn('[ProcessingStage3D] 头像贴图加载失败：', err);
+      }
+    })();
 
     // ---- 粒子系统（~40 粒子环绕）----
     const PARTICLE_COUNT = 44;
@@ -162,24 +224,27 @@ export default function ProcessingStage3D({
       lightColor.lerp(targetLightColor, 0.06);
       pointLight.color.copy(lightColor);
       haloMat.color.copy(lightColor);
+      badgeGlowMat.color.copy(lightColor);
       pMat.color.copy(lightColor);
       ringMat.color.copy(lightColor);
 
       // mascot 漂浮 + 摇摆
       if (!reducedMotion) {
-        mascot.position.y = Math.sin(t * 1.6) * 0.18;
-        const sway = Math.sin(t * 0.9) * 0.18; // ±10°
-        mascot.rotation.y = modeRef.current === 'image'
-          ? t * 2.2 // 生图：快速旋转庆祝
-          : sway + burstK * Math.PI * 2; // 阶段切换：旋转一周
-        mascot.rotation.z = Math.sin(t * 1.2) * 0.04;
+        mascotGroup.position.y = 0.06 + Math.sin(t * 1.6) * 0.14;
+        const sway = Math.sin(t * 0.9) * 0.16; // ±9°
+        mascotGroup.rotation.y = modeRef.current === 'image'
+          ? t * 1.7 // 生图：轻快转动
+          : sway + burstK * 1.5;
+        mascotGroup.rotation.z = Math.sin(t * 1.2) * 0.05;
+        mascotGroup.rotation.x = -0.12 + Math.sin(t * 0.75) * 0.03;
         // 阶段切换轻微缩放脉冲
-        const pulse = 1 + burstK * 0.12;
-        mascot.scale.setScalar(pulse);
+        const pulse = 1 + burstK * 0.10;
+        mascotGroup.scale.setScalar(pulse);
       }
 
       // halo 呼吸
       halo.scale.setScalar(1 + Math.sin(t * 1.4) * 0.06);
+      mascotShadow.scale.set(1.9 + Math.sin(t * 1.4) * 0.03, 0.34 + Math.sin(t * 1.4) * 0.01, 1);
 
       // 粒子轨道运动
       const posAttr = pGeo.attributes.position as THREE.BufferAttribute;
@@ -221,11 +286,34 @@ export default function ProcessingStage3D({
 
     // ---- cleanup ----
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
+      if (portraitMesh) {
+        mascotGroup.remove(portraitMesh);
+        portraitMesh.geometry.dispose();
+        const portraitMaterial = portraitMesh.material;
+        if (Array.isArray(portraitMaterial)) {
+          portraitMaterial.forEach((m) => m.dispose());
+        } else {
+          portraitMaterial.dispose();
+        }
+        portraitMesh = null;
+      }
+      if (portraitTexture) {
+        portraitTexture.dispose();
+        portraitTexture = null;
+      }
+      mascotGroup.remove(mascotShadow);
+      mascotGroup.remove(badgeFrame);
+      mascotGroup.remove(badgeGlow);
+      mascotShadow.geometry.dispose();
+      (mascotShadow.material as THREE.Material).dispose();
+      badgeFrame.geometry.dispose();
+      (badgeFrame.material as THREE.Material).dispose();
+      badgeGlow.geometry.dispose();
+      (badgeGlow.material as THREE.Material).dispose();
       renderer.dispose();
-      mascotMat.dispose();
-      mascot.geometry.dispose();
       haloMat.dispose();
       halo.geometry.dispose();
       pMat.dispose();
@@ -233,12 +321,11 @@ export default function ProcessingStage3D({
       pTex.dispose();
       ringMat.dispose();
       ring.geometry.dispose();
-      tex.dispose();
       if (renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [active, avatar, reducedMotion]);
+  }, [active, avatar, mode, reducedMotion]);
 
   return (
     <div className={`processing-3d${mode === 'image' ? ' processing-3d--image' : ''}`}>
@@ -264,6 +351,135 @@ export default function ProcessingStage3D({
       ) : null}
     </div>
   );
+}
+
+function resolveAssetUrl(path: string): string {
+  return new URL(path, window.location.href).toString();
+}
+
+async function loadImageElement(src: string): Promise<HTMLImageElement> {
+  return await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`头像加载失败：${src}`));
+    img.src = src;
+  });
+}
+
+async function createPortraitBadgeTexture(
+  src: string,
+  mood: PocketBuddyMood,
+  mode: ProcessingStage3DProps['mode'],
+): Promise<THREE.CanvasTexture> {
+  const img = await loadImageElement(resolveAssetUrl(src));
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('无法创建头像画布');
+
+  const center = size / 2;
+  const portraitRadius = size * 0.34;
+  const frameRadius = portraitRadius * 1.08;
+  const accent = new THREE.Color(MOOD_COLOR[mood]);
+  const accentRgb = `rgba(${Math.round(accent.r * 255)}, ${Math.round(accent.g * 255)}, ${Math.round(accent.b * 255)},`;
+  const modeTint = mode === 'image' ? 'rgba(241, 196, 15,' : accentRgb;
+
+  // 背景：一层干净的泡泡底
+  const bg = ctx.createRadialGradient(center * 0.98, center * 0.82, size * 0.08, center, center, size * 0.55);
+  bg.addColorStop(0, 'rgba(255,255,255,0.98)');
+  bg.addColorStop(0.55, 'rgba(246,250,255,0.94)');
+  bg.addColorStop(1, 'rgba(220,234,255,0.70)');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, size, size);
+
+  const aura = ctx.createRadialGradient(center * 0.82, center * 0.72, 0, center, center * 0.48, size * 0.52);
+  aura.addColorStop(0, `${modeTint}0.28)`);
+  aura.addColorStop(0.55, `${modeTint}0.12)`);
+  aura.addColorStop(1, `${modeTint}0)`);
+  ctx.fillStyle = aura;
+  ctx.fillRect(0, 0, size, size);
+
+  // 下方漂浮影子
+  ctx.fillStyle = 'rgba(37, 87, 218, 0.10)';
+  ctx.beginPath();
+  ctx.ellipse(center, size * 0.79, size * 0.23, size * 0.048, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 头像主体：圆形裁切，避免方块贴图感
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(center, center * 0.52 + 20, portraitRadius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  const frameFill = ctx.createRadialGradient(center * 0.88, center * 0.46, size * 0.08, center, center * 0.5, portraitRadius * 1.1);
+  frameFill.addColorStop(0, 'rgba(255,255,255,0.86)');
+  frameFill.addColorStop(1, 'rgba(255,255,255,0.06)');
+  ctx.fillStyle = frameFill;
+  ctx.fillRect(center - frameRadius, center - frameRadius, frameRadius * 2, frameRadius * 2);
+
+  drawImageCover(ctx, img, center - portraitRadius, center * 0.52 + 20 - portraitRadius, portraitRadius * 2, portraitRadius * 2);
+
+  const shine = ctx.createRadialGradient(center * 0.78, center * 0.30, 0, center * 0.78, center * 0.30, portraitRadius * 0.85);
+  shine.addColorStop(0, 'rgba(255,255,255,0.48)');
+  shine.addColorStop(0.35, 'rgba(255,255,255,0.12)');
+  shine.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = shine;
+  ctx.fillRect(center - portraitRadius, center * 0.52 + 20 - portraitRadius, portraitRadius * 2, portraitRadius * 2);
+  ctx.restore();
+
+  // 外圈与高光
+  ctx.lineWidth = size * 0.028;
+  ctx.strokeStyle = 'rgba(255,255,255,0.96)';
+  ctx.beginPath();
+  ctx.arc(center, center * 0.52 + 20, frameRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.lineWidth = size * 0.012;
+  ctx.strokeStyle = 'rgba(37, 87, 218, 0.84)';
+  ctx.beginPath();
+  ctx.arc(center, center * 0.52 + 20, frameRadius + size * 0.006, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 轻轻加一点“口袋星尘”
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  ctx.beginPath();
+  ctx.arc(size * 0.27, size * 0.22, size * 0.014, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(size * 0.72, size * 0.18, size * 0.010, 0, Math.PI * 2);
+  ctx.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number,
+) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) {
+    ctx.drawImage(img, dx, dy, dw, dh);
+    return;
+  }
+  const scale = Math.max(dw / iw, dh / ih);
+  const sw = dw / scale;
+  const sh = dh / scale;
+  const sx = (iw - sw) / 2;
+  const sy = (ih - sh) / 2;
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
 /** 用 Canvas 生成圆形渐变粒子贴图（避免方块粒子）。 */

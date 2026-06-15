@@ -54,6 +54,7 @@ interface SimNode extends GraphNode {
   vy: number;
   fx?: number | null;
   fy?: number | null;
+  cacheKey: string;
 }
 interface SimLink {
   source: string | SimNode;
@@ -82,6 +83,7 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
   const nodeGRefs = useRef<Map<string, SVGGElement>>(new Map());
   const innerGRefs = useRef<Map<string, SVGGElement>>(new Map());
   const edgeRefs = useRef<Map<string, SVGLineElement>>(new Map());
+  const positionCacheRef = useRef<Map<string, { x: number; y: number; vx: number; vy: number }>>(new Map());
   const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
   /** 标记「首次出现」的 node id，触发 CSS 入场动画，动画结束后移除 */
   const [enteringIds, setEnteringIds] = useState<Set<string>>(new Set());
@@ -118,11 +120,29 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
     };
   }, []);
 
+  const graphSignature = useMemo(() => {
+    const nodeKey = graph.nodes.map((n) => `${n.id}:${n.sourceId ?? ''}:${n.type}`).join('|');
+    const edgeKey = graph.edges.map((e) => `${e.id}:${e.source}->${e.target}:${e.relation}`).join('|');
+    return `${graph.scope}::${nodeKey}::${edgeKey}`;
+  }, [graph]);
+
   const { nodes, links } = useMemo(() => {
     // 初值用固定中心布局（不依赖 dims），避免 dims 抖动重置节点位置
     const cx = 180;
     const cy = 150;
     const ns: SimNode[] = graph.nodes.map((n, i) => {
+      const cacheKey = n.sourceId ?? n.id;
+      const cached = positionCacheRef.current.get(cacheKey);
+      if (cached) {
+        return {
+          ...n,
+          x: cached.x,
+          y: cached.y,
+          vx: cached.vx,
+          vy: cached.vy,
+          cacheKey,
+        };
+      }
       const angle = (i / Math.max(1, graph.nodes.length)) * Math.PI * 2;
       return {
         ...n,
@@ -130,6 +150,7 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
         y: cy + Math.sin(angle) * 110,
         vx: 0,
         vy: 0,
+        cacheKey,
       };
     });
     const nodeMap = new Map(ns.map((n) => [n.id, n]));
@@ -137,7 +158,7 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
       .filter((e) => nodeMap.has(e.source) && nodeMap.has(e.target))
       .map((e) => ({ source: e.source, target: e.target, id: e.id }));
     return { nodes: ns, links: ls };
-  }, [graph]);
+  }, [graphSignature]);
 
   /**
    * 入场动画状态：每次 graph.nodes 变化时,把"首次出现"的 id 加入 enteringIds。
@@ -178,17 +199,23 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
 
     const simulation = forceSimulation<SimNode>(nodes)
       // 少节点时降低排斥强度，避免无边失衡拉锯
-      .force('charge', forceManyBody().strength(nodes.length <= 3 ? -140 : -300))
-      .force('link', forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(95).strength(0.5))
+      .force('charge', forceManyBody().strength(nodes.length <= 3 ? -120 : -240))
+      .force('link', forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(92).strength(0.48))
       .force('center', forceCenter(width / 2, height / 2))
-      .force('collide', forceCollide(42))
-      .velocityDecay(0.7)
-      .alphaMin(0.05)
-      .alphaDecay(0.04);
+      .force('collide', forceCollide(40))
+      .velocityDecay(0.82)
+      .alphaMin(0.03)
+      .alphaDecay(0.06);
     simRef.current = simulation;
 
     const syncDoms = () => {
       nodes.forEach((n) => {
+        positionCacheRef.current.set(n.cacheKey, {
+          x: n.x,
+          y: n.y,
+          vx: n.vx,
+          vy: n.vy,
+        });
         const g = nodeGRefs.current.get(n.id);
         if (g) g.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
       });
@@ -205,13 +232,14 @@ export default function GraphCanvas({ graph, emptyHint, onDeleteNode }: GraphCan
       });
     };
     simulation.on('tick', syncDoms);
+    simulation.on('end', syncDoms);
     syncDoms();
 
     return () => {
       simulation.stop();
       simRef.current = null;
     };
-  }, [nodes, links]);
+  }, [nodes, links, dims.width, dims.height]);
 
   // pointer 坐标 → SVG 坐标
   const toSvgPoint = (clientX: number, clientY: number): { x: number; y: number } | null => {
